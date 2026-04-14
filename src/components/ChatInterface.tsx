@@ -13,7 +13,7 @@ interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
   onWorkingDirectoryChange: (dir: string) => void;
-  onMessagesChange: (messages: Message[]) => void;
+  onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   onLoadingChange: (loading: boolean) => void;
 }
 
@@ -37,32 +37,37 @@ function ChatInterface({
     const setupListeners = async () => {
       // 监听消息片段
       unlistenChunk = await listen<string>('message-chunk', (event) => {
-        const last = messages[messages.length - 1];
-        if (last && last.role === 'assistant' && last.isStreaming) {
-          onMessagesChange([
-            ...messages.slice(0, -1),
-            { ...last, content: last.content + event.payload }
-          ]);
-        } else {
-          onMessagesChange([
-            ...messages,
-            {
-              id: Date.now().toString(),
-              role: 'assistant',
-              content: event.payload,
-              timestamp: Date.now(),
-              isStreaming: true,
-            }
-          ]);
-        }
+        onMessagesChange((currentMessages: Message[]) => {
+          const last = currentMessages[currentMessages.length - 1];
+          if (last && last.role === 'assistant' && last.isStreaming) {
+            return [
+              ...currentMessages.slice(0, -1),
+              { ...last, content: last.content + event.payload }
+            ];
+          } else {
+            return [
+              ...currentMessages,
+              {
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: event.payload,
+                timestamp: Date.now(),
+                isStreaming: true,
+              }
+            ];
+          }
+        });
       });
 
       // 监听消息完成
       unlistenComplete = await listen('message-complete', () => {
-        const last = messages[messages.length - 1];
-        if (last && last.isStreaming) {
-          onMessagesChange([...messages.slice(0, -1), { ...last, isStreaming: false }]);
-        }
+        onMessagesChange((currentMessages: Message[]) => {
+          const last = currentMessages[currentMessages.length - 1];
+          if (last && last.isStreaming) {
+            return [...currentMessages.slice(0, -1), { ...last, isStreaming: false }];
+          }
+          return currentMessages;
+        });
         onLoadingChange(false);
         setCurrentToolCall(null);
       });
