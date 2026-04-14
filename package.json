@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "tauri": "tauri",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
