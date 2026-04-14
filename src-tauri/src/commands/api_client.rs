@@ -27,14 +27,16 @@ struct ContentBlock {
 pub struct AnthropicClient {
     api_key: String,
     model: String,
+    base_url: String,
     client: Client,
 }
 
 impl AnthropicClient {
-    pub fn new(api_key: String, model: String) -> Self {
+    pub fn new(api_key: String, model: String, base_url: Option<String>) -> Self {
         Self {
             api_key,
             model,
+            base_url: base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string()),
             client: Client::new(),
         }
     }
@@ -49,9 +51,10 @@ impl AnthropicClient {
             }],
         };
 
+        let url = format!("{}/v1/messages", self.base_url);
         let response = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")

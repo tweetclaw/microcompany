@@ -56,7 +56,7 @@ pub async fn send_message(
 
     // Create API client and send message
     let api_key = config.anthropic_api_key.unwrap();
-    let client = AnthropicClient::new(api_key, config.model);
+    let client = AnthropicClient::new(api_key, config.model, config.base_url);
 
     match client.send_message(&message).await {
         Ok(response) => Ok(response),

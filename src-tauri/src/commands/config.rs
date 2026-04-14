@@ -7,6 +7,7 @@ use std::path::PathBuf;
 pub struct ApiConfig {
     pub anthropic_api_key: Option<String>,
     pub model: String,
+    pub base_url: Option<String>,
 }
 
 impl Default for ApiConfig {
@@ -14,6 +15,7 @@ impl Default for ApiConfig {
         Self {
             anthropic_api_key: None,
             model: "claude-sonnet-4-6".to_string(),
+            base_url: None,
         }
     }
 }
@@ -26,6 +28,7 @@ impl ApiConfig {
                 anthropic_api_key: Some(api_key),
                 model: env::var("ANTHROPIC_MODEL")
                     .unwrap_or_else(|_| "claude-sonnet-4-6".to_string()),
+                base_url: env::var("ANTHROPIC_BASE_URL").ok(),
             });
         }
 
