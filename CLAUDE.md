@@ -83,9 +83,3 @@ Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__*
 
 Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /design-shotgun, /design-html, /review, /ship, /land-and-deploy, /canary, /benchmark, /browse, /connect-chrome, /qa, /qa-only, /design-review, /setup-browser-cookies, /setup-deploy, /retro, /investigate, /document-release, /codex, /cso, /autoplan, /plan-devex-review, /devex-review, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, /learn, /pair-agent, /open-gstack-browser, /checkpoint, /health
 
-## Project Context
-
-This is the TweetPilot project - a Twitter/X automation and management tool.
-*   **Tech Stack**: Vite, Electron, TS, Vitest.
-*   **Architecture**: Slice-based vertical slices development.
-
