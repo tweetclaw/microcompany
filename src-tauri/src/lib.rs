@@ -1,7 +1,21 @@
+mod commands;
+
+use commands::session::{AppState, SessionState};
+use std::sync::Mutex;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .manage(AppState {
+      session: Mutex::new(SessionState::default()),
+    })
+    .invoke_handler(tauri::generate_handler![
+      commands::init_session,
+      commands::get_session_state,
+      commands::close_session,
+      commands::send_message,
+    ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

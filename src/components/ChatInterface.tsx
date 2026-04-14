@@ -1,4 +1,5 @@
 import React from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import Toolbar from './Toolbar';
 import MessageList from './MessageList';
 import InputBox from './InputBox';
@@ -22,7 +23,7 @@ function ChatInterface({
   onMessagesChange,
   onLoadingChange,
 }: ChatInterfaceProps) {
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -33,17 +34,32 @@ function ChatInterface({
     onMessagesChange([...messages, newMessage]);
     onLoadingChange(true);
 
-    // Mock AI response
-    setTimeout(() => {
+    try {
+      // Call the real Tauri command
+      const response = await invoke<string>('send_message', { message: content });
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'This is a mock response. The real implementation will connect to Claurst.',
+        content: response,
         timestamp: Date.now(),
       };
+
       onMessagesChange([...messages, newMessage, aiMessage]);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ 发送消息失败: ${error}`,
+        timestamp: Date.now(),
+      };
+
+      onMessagesChange([...messages, newMessage, errorMessage]);
+    } finally {
       onLoadingChange(false);
-    }, 1500);
+    }
   };
 
   return (

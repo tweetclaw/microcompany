@@ -1,5 +1,6 @@
 import React from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import './Toolbar.css';
 
 interface ToolbarProps {
@@ -22,10 +23,13 @@ function Toolbar({
       });
 
       if (selected && typeof selected === 'string') {
+        // Initialize session with the selected directory
+        await invoke('init_session', { workingDir: selected });
         onWorkingDirectoryChange(selected);
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
+      alert(`选择目录失败: ${error}`);
     }
   };
 
