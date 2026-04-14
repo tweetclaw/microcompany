@@ -1,6 +1,10 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { Message } from '../types';
 import './MessageItem.css';
+import 'highlight.js/styles/github-dark.css';
 
 interface MessageItemProps {
   message: Message;
@@ -15,7 +19,18 @@ function MessageItem({ message }: MessageItemProps) {
         {isUser ? '👤' : '🤖'}
       </div>
       <div className="message-content">
-        <div className="message-text">{message.content}</div>
+        {isUser ? (
+          <div className="message-text">{message.content}</div>
+        ) : (
+          <div className="message-markdown">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );

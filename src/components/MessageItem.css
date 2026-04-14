@@ -30,10 +30,98 @@
 }
 
 .message-user .message-avatar {
-  background: var(--accent-primary);
+  background: linear-gradient(135deg, var(--primary-blue-start) 0%, var(--primary-blue-end) 100%);
 }
 
 .message-assistant .message-avatar {
-  background: var(--bg-elevated);
+  background: linear-gradient(135deg, var(--primary-pink-start) 0%, var(--primary-pink-end) 100%);
+  border: none;
+}
+
+/* Markdown Styles */
+.message-markdown {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-primary);
+}
+
+.message-markdown p {
+  margin-bottom: var(--space-4);
+}
+
+.message-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3 {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.message-markdown h1 {
+  font-size: var(--text-xl);
+}
+
+.message-markdown h2 {
+  font-size: var(--text-lg);
+}
+
+.message-markdown h3 {
+  font-size: var(--text-base);
+}
+
+.message-markdown ul,
+.message-markdown ol {
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.message-markdown li {
+  margin-bottom: var(--space-2);
+}
+
+.message-markdown code {
+  background: var(--bg-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.message-markdown pre {
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: var(--space-4) 0;
+  overflow-x: auto;
+}
+
+.message-markdown pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.message-markdown blockquote {
+  border-left: 4px solid var(--primary-blue-start);
+  padding-left: var(--space-4);
+  margin: var(--space-4) 0;
+  color: var(--text-secondary);
+}
+
+.message-markdown a {
+  color: var(--primary-blue-start);
+  text-decoration: none;
+}
+
+.message-markdown a:hover {
+  text-decoration: underline;
 }

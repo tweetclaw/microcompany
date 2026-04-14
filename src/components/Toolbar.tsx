@@ -1,4 +1,5 @@
 import React from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
 import './Toolbar.css';
 
 interface ToolbarProps {
@@ -12,10 +13,20 @@ function Toolbar({
   onWorkingDirectoryChange,
   onClearChat,
 }: ToolbarProps) {
-  const handleSelectDirectory = () => {
-    // Mock directory selection
-    const mockDir = '/Users/example/project';
-    onWorkingDirectoryChange(mockDir);
+  const handleSelectDirectory = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: '选择工作目录',
+      });
+
+      if (selected && typeof selected === 'string') {
+        onWorkingDirectoryChange(selected);
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+    }
   };
 
   const handleClearChat = () => {
