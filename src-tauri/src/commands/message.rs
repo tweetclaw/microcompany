@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::commands::session::AppState;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,
