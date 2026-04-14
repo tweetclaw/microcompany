@@ -12,6 +12,7 @@ interface MessageItemProps {
 
 function MessageItem({ message }: MessageItemProps) {
   const isUser = message.role === 'user';
+  const isThinking = message.isStreaming && message.content.includes('思考中');
 
   return (
     <div className={`message-item ${isUser ? 'message-user' : 'message-assistant'}`}>
@@ -21,6 +22,8 @@ function MessageItem({ message }: MessageItemProps) {
       <div className="message-content">
         {isUser ? (
           <div className="message-text">{message.content}</div>
+        ) : isThinking ? (
+          <div className="message-thinking">{message.content}</div>
         ) : (
           <div className="message-markdown">
             <ReactMarkdown

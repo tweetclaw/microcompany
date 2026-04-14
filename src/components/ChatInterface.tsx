@@ -39,23 +39,23 @@ function ChatInterface({
       unlistenChunk = await listen<string>('message-chunk', (event) => {
         onMessagesChange((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
+
+          // If the last message is an assistant message that's streaming, append to it
           if (last && last.role === 'assistant' && last.isStreaming) {
+            // Replace "💭 思考中..." with actual content on first chunk
+            const newContent = last.content.includes('思考中')
+              ? event.payload
+              : last.content + event.payload;
+
             return [
               ...currentMessages.slice(0, -1),
-              { ...last, content: last.content + event.payload }
-            ];
-          } else {
-            return [
-              ...currentMessages,
-              {
-                id: Date.now().toString(),
-                role: 'assistant',
-                content: event.payload,
-                timestamp: Date.now(),
-                isStreaming: true,
-              }
+              { ...last, content: newContent }
             ];
           }
+
+          // This shouldn't happen if we always create a thinking message first
+          console.warn('Received message-chunk without streaming message');
+          return currentMessages;
         });
       });
 
@@ -121,7 +121,17 @@ function ChatInterface({
       timestamp: Date.now(),
     };
 
-    onMessagesChange([...messages, newMessage]);
+    // Add a "thinking" placeholder message
+    const thinkingMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '💭 思考中...',
+      timestamp: Date.now(),
+      isStreaming: true,
+    };
+
+    // Add both user message and thinking message at once
+    onMessagesChange([...messages, newMessage, thinkingMessage]);
     onLoadingChange(true);
 
     try {
@@ -130,15 +140,21 @@ function ChatInterface({
     } catch (error) {
       console.error('Failed to send message:', error);
 
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `❌ 发送消息失败: ${error}`,
-        timestamp: Date.now(),
-      };
-
-      onMessagesChange([...messages, newMessage, errorMessage]);
+      // Replace thinking message with error
+      onMessagesChange((prev) => {
+        const filtered = prev.filter(m => m.id !== thinkingMessage.id);
+        return [
+          ...filtered,
+          {
+            id: (Date.now() + 2).toString(),
+            role: 'assistant',
+            content: `❌ 发送消息失败: ${error}`,
+            timestamp: Date.now(),
+          }
+        ];
+      });
       onLoadingChange(false);
+      setCurrentToolCall(null);
     }
   };
 
