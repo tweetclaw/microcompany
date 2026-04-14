@@ -9,31 +9,27 @@ interface MessageListProps {
 }
 
 function MessageList({ messages, isLoading }: MessageListProps) {
-  const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   return (
     <div className="message-list">
-      {messages.length === 0 ? (
-        <div className="empty-state">
-          <h2>MicroCompany AI Assistant</h2>
-          <p>Please select a working directory and type a message to start.</p>
-        </div>
-      ) : (
-        messages.map((msg) => <MessageItem key={msg.id} message={msg} />)
-      )}
-      
-      {isLoading && (
-        <div className="loading-indicator">
-          <div className="pulse-dot"></div>
-          <div className="pulse-dot"></div>
-          <div className="pulse-dot"></div>
-        </div>
-      )}
-      <div ref={endOfMessagesRef} />
+      <div className="message-list-content">
+        {messages.map((message) => (
+          <MessageItem key={message.id} message={message} />
+        ))}
+        {isLoading && (
+          <div className="loading-indicator">
+            <span className="loading-dot"></span>
+            <span className="loading-dot"></span>
+            <span className="loading-dot"></span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 }

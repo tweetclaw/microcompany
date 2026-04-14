@@ -1,65 +1,70 @@
-.input-box-container {
-  padding: var(--space-6);
+.input-box {
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border-default);
+  padding: var(--space-4) var(--space-6);
+  flex-shrink: 0;
 }
 
-.input-box {
+.input-container {
+  max-width: 800px;
+  margin: 0 auto;
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.input-textarea {
+  flex: 1;
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-base);
+  font-family: inherit;
+  color: var(--text-primary);
+  resize: none;
+  min-height: 44px;
+  max-height: 200px;
   transition: var(--transition-all);
 }
 
-.input-box:focus-within {
-  border-color: var(--primary-blue-start);
-  box-shadow: var(--shadow-glow);
-}
-
-.input-box textarea {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--text-base);
-  resize: none;
-  padding: var(--space-2);
-  min-height: 44px;
-  max-height: 200px;
+.input-textarea:focus {
   outline: none;
+  border-color: var(--accent-primary);
 }
 
-.input-box textarea:disabled {
-  color: var(--text-disabled);
+.input-textarea:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.input-box textarea::placeholder {
-  color: var(--text-disabled);
+.input-textarea::placeholder {
+  color: var(--text-tertiary);
 }
 
 .send-button {
-  background: var(--primary-blue);
+  background: var(--accent-primary);
   color: white;
-  border: none;
+  padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-md);
-  padding: 0 var(--space-6);
-  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border: none;
   cursor: pointer;
   transition: var(--transition-all);
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.send-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.send-button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .send-button:disabled {
-  background: var(--bg-elevated);
-  color: var(--text-disabled);
+  opacity: 0.5;
   cursor: not-allowed;
-}
-
-.send-button:not(:disabled):hover {
-  filter: brightness(1.1);
-  box-shadow: 0 0 10px rgba(30, 64, 175, 0.4);
 }

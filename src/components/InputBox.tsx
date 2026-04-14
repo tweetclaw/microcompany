@@ -6,13 +6,13 @@ interface InputBoxProps {
   disabled?: boolean;
 }
 
-function InputBox({ onSendMessage, disabled }: InputBoxProps) {
-  const [content, setContent] = useState('');
+function InputBox({ onSendMessage, disabled = false }: InputBoxProps) {
+  const [input, setInput] = useState('');
 
   const handleSend = () => {
-    if (content.trim() && !disabled) {
-      onSendMessage(content.trim());
-      setContent('');
+    if (input.trim() && !disabled) {
+      onSendMessage(input.trim());
+      setInput('');
     }
   };
 
@@ -24,22 +24,23 @@ function InputBox({ onSendMessage, disabled }: InputBoxProps) {
   };
 
   return (
-    <div className="input-box-container">
-      <div className="input-box">
+    <div className="input-box">
+      <div className="input-container">
         <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
+          className="input-textarea"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? "请先选择工作目录再开始对话..." : "Type a message... (Press Enter to send, Shift+Enter for new line)"}
+          placeholder={disabled ? '请先选择工作目录...' : '输入消息... (Enter发送, Shift+Enter换行)'}
           disabled={disabled}
           rows={1}
         />
-        <button 
+        <button
           className="send-button"
           onClick={handleSend}
-          disabled={disabled || !content.trim()}
+          disabled={disabled || !input.trim()}
         >
-          Send
+          发送
         </button>
       </div>
     </div>

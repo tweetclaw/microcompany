@@ -8,14 +8,14 @@ interface MessageItemProps {
 
 function MessageItem({ message }: MessageItemProps) {
   const isUser = message.role === 'user';
-  
+
   return (
-    <div className={`message-item ${isUser ? 'user' : 'assistant'}`}>
+    <div className={`message-item ${isUser ? 'message-user' : 'message-assistant'}`}>
       <div className="message-avatar">
-        {isUser ? 'U' : 'AI'}
+        {isUser ? '👤' : '🤖'}
       </div>
       <div className="message-content">
-        {message.content}
+        <div className="message-text">{message.content}</div>
       </div>
     </div>
   );
