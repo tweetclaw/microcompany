@@ -4,6 +4,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  isStreaming?: boolean;
 }
 
 // Session configuration
@@ -16,6 +17,14 @@ export interface ChatState {
   messages: Message[];
   isLoading: boolean;
   error: string | null;
+}
+
+// Tool call types
+export interface ToolCall {
+  tool: string;
+  action: string;
+  status: 'running' | 'success' | 'error';
+  result?: string;
 }
 
 // App state

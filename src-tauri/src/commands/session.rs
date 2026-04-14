@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use std::sync::Mutex;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use crate::claurst::ClaurstSession;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
@@ -18,7 +20,7 @@ impl Default for SessionState {
 }
 
 pub struct AppState {
-    pub session: Mutex<SessionState>,
+    pub session: Arc<Mutex<Option<ClaurstSession>>>,
 }
 
 #[tauri::command]
@@ -26,15 +28,28 @@ pub async fn init_session(
     working_dir: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut session = state.session.lock().map_err(|e| e.to_string())?;
-
     // Validate directory exists
     if !std::path::Path::new(&working_dir).exists() {
         return Err(format!("Directory does not exist: {}", working_dir));
     }
 
-    session.working_directory = Some(working_dir.clone());
-    session.is_initialized = true;
+    // Load API configuration
+    let config = crate::commands::config::ApiConfig::load()
+        .map_err(|e| format!("Failed to load config: {}", e))?;
+
+    let api_key = config.anthropic_api_key
+        .ok_or("API key not configured")?;
+
+    // Create Claurst session
+    let session = ClaurstSession::new(
+        std::path::PathBuf::from(&working_dir),
+        api_key,
+        config.model,
+        config.base_url,
+    ).map_err(|e| format!("Failed to create session: {}", e))?;
+
+    // Save session
+    *state.session.lock().await = Some(session);
 
     Ok(())
 }
@@ -43,15 +58,22 @@ pub async fn init_session(
 pub async fn get_session_state(
     state: State<'_, AppState>,
 ) -> Result<SessionState, String> {
-    let session = state.session.lock().map_err(|e| e.to_string())?;
-    Ok(session.clone())
+    let session_guard = state.session.lock().await;
+
+    if let Some(session) = session_guard.as_ref() {
+        Ok(SessionState {
+            working_directory: Some(session.get_working_dir().display().to_string()),
+            is_initialized: true,
+        })
+    } else {
+        Ok(SessionState::default())
+    }
 }
 
 #[tauri::command]
 pub async fn close_session(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut session = state.session.lock().map_err(|e| e.to_string())?;
-    *session = SessionState::default();
+    *state.session.lock().await = None;
     Ok(())
 }

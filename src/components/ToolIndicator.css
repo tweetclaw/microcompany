@@ -1,0 +1,57 @@
+.tool-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.tool-indicator.tool-running {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+}
+
+.tool-indicator.tool-success {
+  background-color: #d4edda;
+  border: 1px solid #28a745;
+}
+
+.tool-indicator.tool-error {
+  background-color: #f8d7da;
+  border: 1px solid #dc3545;
+}
+
+.tool-icon {
+  font-size: 16px;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.tool-action {
+  color: #666;
+  flex: 1;
+}
+
+.spinner,
+.check,
+.error {
+  font-size: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
