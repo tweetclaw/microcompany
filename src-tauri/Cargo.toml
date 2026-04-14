@@ -26,3 +26,20 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+
+# Claurst dependencies
+claurst-core = { path = "../claurst/src-rust/crates/core" }
+claurst-api = { path = "../claurst/src-rust/crates/api" }
+claurst-query = { path = "../claurst/src-rust/crates/query" }
+claurst-tools = { path = "../claurst/src-rust/crates/tools" }
+claurst-plugins = { path = "../claurst/src-rust/crates/plugins" }
+claurst-mcp = { path = "../claurst/src-rust/crates/mcp" }
+
+# Additional dependencies required by Claurst
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1"
+thiserror = "1"
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4"] }
