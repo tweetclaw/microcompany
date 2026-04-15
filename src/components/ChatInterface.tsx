@@ -78,21 +78,7 @@ function ChatInterface({
         });
       });
 
-      // 监听消息完成
-      unlistenComplete = await listen('message-complete', () => {
-        // Delay marking as complete to ensure all chunks are processed
-        setTimeout(() => {
-          onMessagesChangeRef.current((currentMessages: Message[]) => {
-            const last = currentMessages[currentMessages.length - 1];
-            if (last && last.role === 'assistant') {
-              return [...currentMessages.slice(0, -1), { ...last, isStreaming: false }];
-            }
-            return currentMessages;
-          });
-          onLoadingChangeRef.current(false);
-          setCurrentToolCall(null);
-        }, 100);
-      });
+      // 监听消息完成 - 不再使用，因为 run_query_loop 完成后会自动返回
 
       // 监听工具调用开始
       unlistenToolStart = await listen<{ tool: string; action: string }>(
@@ -129,7 +115,6 @@ function ChatInterface({
 
     return () => {
       if (unlistenChunk) unlistenChunk();
-      if (unlistenComplete) unlistenComplete();
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
     };
@@ -150,6 +135,19 @@ function ChatInterface({
     try {
       // 调用 Tauri 命令，流式响应通过事件接收
       await invoke<string>('send_message', { message: content });
+
+      // 消息发送完成后，标记最后一条消息为非流式状态并隐藏加载指示器
+      setTimeout(() => {
+        onMessagesChange((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant') {
+            return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+          }
+          return prev;
+        });
+        onLoadingChange(false);
+        setCurrentToolCall(null);
+      }, 100);
     } catch (error) {
       console.error('Failed to send message:', error);
 

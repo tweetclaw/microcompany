@@ -60,7 +60,7 @@
 }
 
 .message-markdown p {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 
 .message-markdown p:last-child {
@@ -95,9 +95,8 @@
 }
 
 .message-markdown li {
-  margin-bottom: var(--space-3);
-  word-break: break-all;
-  line-height: 1.8;
+  margin-bottom: var(--space-2);
+  line-height: 1.6;
 }
 
 .message-markdown code {
