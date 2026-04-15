@@ -137,6 +137,7 @@ function ChatInterface({
       await invoke<string>('send_message', { message: content });
 
       // 消息发送完成后，标记最后一条消息为非流式状态并隐藏加载指示器
+      // 增加延迟确保所有流式事件都已处理完成
       setTimeout(() => {
         onMessagesChange((prev) => {
           const last = prev[prev.length - 1];
@@ -147,7 +148,7 @@ function ChatInterface({
         });
         onLoadingChange(false);
         setCurrentToolCall(null);
-      }, 100);
+      }, 500);
     } catch (error) {
       console.error('Failed to send message:', error);
 
