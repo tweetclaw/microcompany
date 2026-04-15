@@ -1,10 +1,7 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { Message } from '../types';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import './MessageItem.css';
-import 'highlight.js/styles/github-dark.css';
 
 interface MessageItemProps {
   message: Message;
@@ -25,14 +22,10 @@ function MessageItem({ message }: MessageItemProps) {
         ) : isThinking ? (
           <div className="message-thinking">{message.content}</div>
         ) : (
-          <div className="message-markdown">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          <MarkdownRenderer
+            content={message.content}
+            isStreaming={message.isStreaming}
+          />
         )}
       </div>
     </div>
