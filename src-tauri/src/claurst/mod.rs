@@ -118,14 +118,17 @@ impl ClaurstSession {
         self.messages.push(Message::user(message.to_string()));
 
         // 保存用户消息到存储
-        self.storage.save_message(
+        if let Err(e) = self.storage.save_message(
             &self.working_dir,
             StoredMessage {
                 role: "user".to_string(),
                 content: message.to_string(),
                 timestamp: chrono::Utc::now().timestamp(),
             },
-        )?;
+        ) {
+            log::warn!("Failed to save user message to storage: {}", e);
+            // Non-fatal: continue even if storage fails
+        }
 
         // 2. 创建事件通道
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
@@ -164,12 +167,19 @@ impl ClaurstSession {
                         }));
                     }
                     QueryEvent::TurnComplete { .. } => {}
+                    QueryEvent::Status(status) => {
+                        log::info!("Query status: {}", status);
+                    }
+                    QueryEvent::Error(err) => {
+                        log::error!("Query event error: {}", err);
+                    }
                     _ => {}
                 }
             }
         });
 
         // 5. 调用 run_query_loop
+        log::info!("Starting query loop with {} messages", self.messages.len());
         let outcome = run_query_loop(
             &self.client,
             &mut self.messages,
@@ -202,22 +212,30 @@ impl ClaurstSession {
                     }
                 };
 
+                log::info!("AI response received, length: {} chars", text.len());
+
                 // 保存助手消息到存储
-                self.storage.save_message(
+                if let Err(e) = self.storage.save_message(
                     &self.working_dir,
                     StoredMessage {
                         role: "assistant".to_string(),
                         content: text.clone(),
                         timestamp: chrono::Utc::now().timestamp(),
                     },
-                )?;
+                ) {
+                    log::warn!("Failed to save assistant message to storage: {}", e);
+                    // Non-fatal: still return the response
+                }
 
                 Ok(text)
             }
-            QueryOutcome::Error(e) => Err(e.into()),
-            QueryOutcome::Cancelled => Err(anyhow::anyhow!("Cancelled")),
-            QueryOutcome::BudgetExceeded { .. } => {
-                Err(anyhow::anyhow!("Budget exceeded"))
+            QueryOutcome::Error(e) => {
+                log::error!("Query loop error: {:?}", e);
+                Err(anyhow::anyhow!("API error: {}", e))
+            }
+            QueryOutcome::Cancelled => Err(anyhow::anyhow!("Request cancelled")),
+            QueryOutcome::BudgetExceeded { cost_usd, limit_usd } => {
+                Err(anyhow::anyhow!("Budget exceeded: ${:.4} / ${:.4}", cost_usd, limit_usd))
             }
             QueryOutcome::MaxTokens { .. } => {
                 Err(anyhow::anyhow!("Max tokens reached"))

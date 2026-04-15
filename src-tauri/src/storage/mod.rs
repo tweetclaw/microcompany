@@ -60,10 +60,26 @@ impl ConversationStorage {
     pub fn save_message(&self, working_dir: &Path, message: StoredMessage) -> anyhow::Result<()> {
         let file_path = self.get_conversation_file(working_dir);
 
-        // Load existing session data
+        // Load existing session data, handling both old and new formats
         let mut session_data = if file_path.exists() {
             let content = fs::read_to_string(&file_path)?;
-            serde_json::from_str::<SessionData>(&content)?
+            // Try new format (SessionData struct) first
+            if let Ok(data) = serde_json::from_str::<SessionData>(&content) {
+                data
+            } else if let Ok(messages) = serde_json::from_str::<Vec<StoredMessage>>(&content) {
+                // Fallback to old format (plain array of messages)
+                SessionData {
+                    working_directory: working_dir.to_string_lossy().to_string(),
+                    messages,
+                }
+            } else {
+                // If both formats fail, start fresh
+                log::warn!("Failed to parse conversation file, starting fresh: {:?}", file_path);
+                SessionData {
+                    working_directory: working_dir.to_string_lossy().to_string(),
+                    messages: Vec::new(),
+                }
+            }
         } else {
             SessionData {
                 working_directory: working_dir.to_string_lossy().to_string(),
