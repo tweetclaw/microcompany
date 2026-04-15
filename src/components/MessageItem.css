@@ -1,8 +1,8 @@
 .message-item {
   display: flex;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -60,7 +60,7 @@
 }
 
 .message-markdown p {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
 }
 
 .message-markdown p:last-child {
@@ -70,8 +70,8 @@
 .message-markdown h1,
 .message-markdown h2,
 .message-markdown h3 {
-  margin-top: var(--space-6);
-  margin-bottom: var(--space-3);
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
@@ -90,13 +90,13 @@
 
 .message-markdown ul,
 .message-markdown ol {
-  margin-bottom: var(--space-4);
-  padding-left: var(--space-6);
+  margin-bottom: var(--space-2);
+  padding-left: var(--space-5);
 }
 
 .message-markdown li {
-  margin-bottom: var(--space-2);
-  line-height: 1.6;
+  margin-bottom: var(--space-1);
+  line-height: 1.5;
 }
 
 .message-markdown code {
