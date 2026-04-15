@@ -6,6 +6,7 @@ use claurst_tools::{
     BashTool, GlobTool, GrepTool,
 };
 use claurst_api::{AnthropicClient, client::ClientConfig};
+use crate::storage::{ConversationStorage, StoredMessage};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,6 +22,7 @@ pub struct ClaurstSession {
     tools: Vec<Box<dyn Tool>>,
     context: ToolContext,
     cost_tracker: Arc<CostTracker>,
+    storage: ConversationStorage,
 }
 
 impl ClaurstSession {
@@ -82,14 +84,28 @@ impl ClaurstSession {
             completion_notifier: None,
         };
 
+        // 7. 创建存储层
+        let storage = ConversationStorage::new()?;
+
+        // 8. 加载历史消息
+        let stored_messages = storage.load_messages(&working_dir)?;
+        let messages: Vec<Message> = stored_messages.into_iter().map(|m| {
+            if m.role == "user" {
+                Message::user(m.content)
+            } else {
+                Message::assistant(m.content)
+            }
+        }).collect();
+
         Ok(Self {
             working_dir,
             client,
             config: query_config,
-            messages: Vec::new(),
+            messages,
             tools,
             context,
             cost_tracker: Arc::clone(&cost_tracker),
+            storage,
         })
     }
 
@@ -100,6 +116,16 @@ impl ClaurstSession {
     ) -> anyhow::Result<String> {
         // 1. 添加用户消息
         self.messages.push(Message::user(message.to_string()));
+
+        // 保存用户消息到存储
+        self.storage.save_message(
+            &self.working_dir,
+            StoredMessage {
+                role: "user".to_string(),
+                content: message.to_string(),
+                timestamp: chrono::Utc::now().timestamp(),
+            },
+        )?;
 
         // 2. 创建事件通道
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
@@ -176,6 +202,16 @@ impl ClaurstSession {
                     }
                 };
 
+                // 保存助手消息到存储
+                self.storage.save_message(
+                    &self.working_dir,
+                    StoredMessage {
+                        role: "assistant".to_string(),
+                        content: text.clone(),
+                        timestamp: chrono::Utc::now().timestamp(),
+                    },
+                )?;
+
                 Ok(text)
             }
             QueryOutcome::Error(e) => Err(e.into()),
@@ -192,6 +228,10 @@ impl ClaurstSession {
     pub fn get_working_dir(&self) -> &PathBuf {
         &self.working_dir
     }
+
+    pub fn clear_history(&mut self) -> anyhow::Result<()> {
+        self.storage.clear_messages(&self.working_dir)?;
+        self.messages.clear();
+        Ok(())
+    }
 }
-
-

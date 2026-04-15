@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
@@ -24,12 +24,6 @@ function App() {
     }
   };
 
-  const handleWorkingDirectoryChange = async (directory: string) => {
-    // Clear messages when changing directory
-    setMessages([]);
-    await handleDirectorySelected(directory);
-  };
-
   // Show welcome page if no working directory is selected
   if (!workingDirectory) {
     return (
@@ -52,7 +46,6 @@ function App() {
         workingDirectory={workingDirectory}
         messages={messages}
         isLoading={isLoading}
-        onWorkingDirectoryChange={handleWorkingDirectoryChange}
         onMessagesChange={setMessages}
         onLoadingChange={setIsLoading}
       />

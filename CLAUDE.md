@@ -76,6 +76,35 @@ Failure to display context usage or trigger auto-compaction is a **CRITICAL PROT
     *   如果目标文件是新创建的，直接调用 `write` 工具。
 4.  **自动创建目录**：在执行写入指令时，确保工具会自动创建不存在的父目录（`mkdir -p` 行为）。
 5.  **编码要求**：所有文件名和内容必须使用 UTF-8 编码，特别是包含中文字符的路径。
+## Working Directory Iron Law (工作目录铁律)
+
+**CRITICAL ARCHITECTURAL PRINCIPLE**: One working directory = One process = One project instance.
+
+This is a fundamental architectural constraint that MUST be enforced at all times:
+
+1.  **No In-Process Directory Switching**: The application MUST NOT allow changing the working directory after initialization. Once a working directory is selected, it is bound to that process for its entire lifetime.
+
+2.  **Process Isolation**: Each working directory corresponds to exactly one application process. To work with a different directory, the user must:
+    - Close the current application instance
+    - Launch a new application instance
+    - Select the new working directory
+
+3.  **Rationale**: This constraint ensures:
+    - Clean session isolation between projects
+    - No cross-contamination of conversation history
+    - Predictable state management
+    - Clear mental model for users
+
+4.  **Implementation Requirements**:
+    - Remove any UI controls for switching working directories
+    - The working directory is set once at startup via the welcome page
+    - No commands or APIs should allow changing the working directory
+    - Toolbar should display the current directory as read-only information only
+
+**Violation of this principle is a critical architectural error.**
+
+---
+
 ## Submodule Protection Protocol (子模块保护协议)
 
 **STRICT RULE**: The code in `claurst/` is a git submodule and MUST NOT be modified by any AI agent.

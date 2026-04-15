@@ -12,7 +12,6 @@ interface ChatInterfaceProps {
   workingDirectory: string | null;
   messages: Message[];
   isLoading: boolean;
-  onWorkingDirectoryChange: (dir: string) => void;
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   onLoadingChange: (loading: boolean) => void;
 }
@@ -21,7 +20,6 @@ function ChatInterface({
   workingDirectory,
   messages,
   isLoading,
-  onWorkingDirectoryChange,
   onMessagesChange,
   onLoadingChange,
 }: ChatInterfaceProps) {
@@ -77,8 +75,6 @@ function ChatInterface({
           ];
         });
       });
-
-      // 监听消息完成 - 不再使用，因为 run_query_loop 完成后会自动返回
 
       // 监听工具调用开始
       unlistenToolStart = await listen<{ tool: string; action: string }>(
@@ -167,12 +163,15 @@ function ChatInterface({
     }
   };
 
+  const handleClearChat = () => {
+    onMessagesChange([]);
+  };
+
   return (
     <div className="chat-interface">
       <Toolbar
         workingDirectory={workingDirectory}
-        onWorkingDirectoryChange={onWorkingDirectoryChange}
-        onClearChat={() => onMessagesChange([])}
+        onClearChat={handleClearChat}
       />
       <MessageList messages={messages} isLoading={isLoading} />
       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
