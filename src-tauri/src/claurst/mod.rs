@@ -124,6 +124,7 @@ impl ClaurstSession {
         &mut self,
         message: &str,
         window: Window,
+        cancel_token: CancellationToken,
     ) -> anyhow::Result<String> {
         // 1. 添加用户消息
         self.messages.push(Message::user(message.to_string()));
@@ -145,10 +146,7 @@ impl ClaurstSession {
         // 2. 创建事件通道
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
 
-        // 3. 创建取消令牌
-        let cancel_token = CancellationToken::new();
-
-        // 4. 启动事件处理任务
+        // 3. 启动事件处理任务
         let event_window = window.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {

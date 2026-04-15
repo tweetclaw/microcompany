@@ -80,7 +80,7 @@ impl ConversationStorage {
         let session_data = SessionData {
             session_id: session_id.clone(),
             working_directory: working_dir.to_string_lossy().to_string(),
-            title: "New Chat".to_string(), // Will be updated when first message is sent
+            title: "Untitled".to_string(), // Will be updated when first message is sent
             created_at: now,
             messages: Vec::new(),
         };
@@ -179,11 +179,9 @@ impl ConversationStorage {
                 let content = fs::read_to_string(&path)?;
 
                 if let Ok(session_data) = serde_json::from_str::<SessionData>(&content) {
-                    if session_data.messages.is_empty() {
-                        continue;
-                    }
-
-                    let last_activity = session_data.messages.last().map(|m| m.timestamp).unwrap_or(0);
+                    let last_activity = session_data.messages.last()
+                        .map(|m| m.timestamp)
+                        .unwrap_or(session_data.created_at);
                     let message_count = session_data.messages.len();
 
                     sessions.push(SessionInfo {

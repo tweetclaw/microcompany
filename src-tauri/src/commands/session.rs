@@ -21,6 +21,7 @@ impl Default for SessionState {
 
 pub struct AppState {
     pub session: Arc<Mutex<Option<ClaurstSession>>>,
+    pub cancel_token: Arc<Mutex<Option<tokio_util::sync::CancellationToken>>>,
 }
 
 #[tauri::command]

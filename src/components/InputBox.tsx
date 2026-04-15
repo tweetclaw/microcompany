@@ -3,21 +3,27 @@ import './InputBox.css';
 
 interface InputBoxProps {
   onSendMessage: (content: string) => void;
+  onCancelMessage: () => void;
   disabled?: boolean;
+  isLoading?: boolean;
 }
 
-function InputBox({ onSendMessage, disabled = false }: InputBoxProps) {
+function InputBox({ onSendMessage, onCancelMessage, disabled = false, isLoading = false }: InputBoxProps) {
   const [input, setInput] = useState('');
 
   const handleSend = () => {
-    if (input.trim() && !disabled) {
+    if (input.trim() && !disabled && !isLoading) {
       onSendMessage(input.trim());
       setInput('');
     }
   };
 
+  const handleCancel = () => {
+    onCancelMessage();
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSend();
     }
@@ -31,17 +37,27 @@ function InputBox({ onSendMessage, disabled = false }: InputBoxProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? '请先选择工作目录...' : '输入消息... (Enter发送, Shift+Enter换行)'}
-          disabled={disabled}
+          placeholder={disabled ? '请先选择工作目录...' : isLoading ? 'AI 正在思考中...' : '输入消息... (Enter发送, Shift+Enter换行)'}
+          disabled={disabled || isLoading}
           rows={1}
         />
-        <button
-          className="send-button"
-          onClick={handleSend}
-          disabled={disabled || !input.trim()}
-        >
-          发送
-        </button>
+        {isLoading ? (
+          <button
+            className="cancel-button"
+            onClick={handleCancel}
+            title="中断 AI 思考"
+          >
+            ⏹ 中断
+          </button>
+        ) : (
+          <button
+            className="send-button"
+            onClick={handleSend}
+            disabled={disabled || !input.trim()}
+          >
+            发送
+          </button>
+        )}
       </div>
     </div>
   );

@@ -71,3 +71,27 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.cancel-button {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-in-out);
+  height: 44px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.cancel-button:hover {
+  box-shadow: var(--shadow-md), 0 0 20px rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+}
+
+.cancel-button:active {
+  transform: translateY(1px);
+}

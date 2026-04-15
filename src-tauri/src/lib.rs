@@ -12,12 +12,14 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .manage(AppState {
       session: Arc::new(Mutex::new(None)),
+      cancel_token: Arc::new(Mutex::new(None)),
     })
     .invoke_handler(tauri::generate_handler![
       commands::init_session,
       commands::get_session_state,
       commands::close_session,
       commands::send_message,
+      commands::cancel_message,
       commands::list_sessions,
       commands::delete_session,
       commands::clear_session,

@@ -154,6 +154,15 @@ function ChatInterface({
         setCurrentToolCall(null);
       }, 500);
     } catch (error) {
+      const errorMessage = String(error);
+
+      // 如果是取消操作，不显示错误消息
+      if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
+        onLoadingChange(false);
+        setCurrentToolCall(null);
+        return;
+      }
+
       console.error('Failed to send message:', error);
 
       // Add error message
@@ -168,6 +177,27 @@ function ChatInterface({
       ]);
       onLoadingChange(false);
       setCurrentToolCall(null);
+    }
+  };
+
+  const handleCancelMessage = async () => {
+    try {
+      await invoke('cancel_message');
+      onLoadingChange(false);
+      setCurrentToolCall(null);
+
+      // Add cancellation message
+      onMessagesChange((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: '⏹ 已中断 AI 思考',
+          timestamp: Date.now(),
+        }
+      ]);
+    } catch (error) {
+      console.error('Failed to cancel message:', error);
     }
   };
 
@@ -200,7 +230,9 @@ function ChatInterface({
           {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
           <InputBox
             onSendMessage={handleSendMessage}
+            onCancelMessage={handleCancelMessage}
             disabled={!workingDirectory || isLoading}
+            isLoading={isLoading}
           />
         </>
       ) : (

@@ -14,23 +14,12 @@ function App() {
   const [hasActiveSession, setHasActiveSession] = useState(false);
 
   const handleDirectorySelected = async (directory: string) => {
-    setIsInitializing(true);
-    try {
-      // 初始化会话,不传 session_id 表示创建新会话
-      const sessionId = await invoke<string>('init_session', {
-        workingDir: directory,
-        sessionId: null
-      });
-      setWorkingDirectory(directory);
-      setCurrentSessionId(sessionId);
-      setMessages([]);
-      setHasActiveSession(false);
-    } catch (error) {
-      console.error('Failed to initialize session:', error);
-      alert(`Failed to initialize session: ${error}`);
-    } finally {
-      setIsInitializing(false);
-    }
+    // 只设置工作目录，不创建会话
+    // 会话将在用户点击"新建会话"按钮时创建
+    setWorkingDirectory(directory);
+    setCurrentSessionId(null);
+    setMessages([]);
+    setHasActiveSession(false);
   };
 
   const handleSessionSelected = async (sessionId: string) => {
@@ -70,10 +59,25 @@ function App() {
     }
   };
 
-  const handleNewChat = () => {
-    // 新建对话:清空消息列表,设置为有活动会话
-    setMessages([]);
-    setHasActiveSession(true);
+  const handleNewChat = async () => {
+    if (!workingDirectory) return;
+
+    setIsInitializing(true);
+    try {
+      // 创建新会话
+      const sessionId = await invoke<string>('init_session', {
+        workingDir: workingDirectory,
+        sessionId: null
+      });
+      setCurrentSessionId(sessionId);
+      setMessages([]);
+      setHasActiveSession(true);
+    } catch (error) {
+      console.error('Failed to create new session:', error);
+      alert(`创建新会话失败: ${error}`);
+    } finally {
+      setIsInitializing(false);
+    }
   };
 
   // Show welcome page if no working directory is selected
