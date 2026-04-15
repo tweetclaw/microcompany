@@ -50,8 +50,8 @@ function ChatInterface({
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
 
-          // If the last message is an assistant message that's streaming, append to it
-          if (last && last.role === 'assistant' && last.isStreaming) {
+          // If the last message is an assistant message (streaming or not), append to it
+          if (last && last.role === 'assistant') {
             // Replace "💭 思考中..." with actual content on first chunk
             const isThinking = last.content.includes('思考中');
             const newContent = isThinking
@@ -60,11 +60,11 @@ function ChatInterface({
 
             return [
               ...currentMessages.slice(0, -1),
-              { ...last, content: newContent }
+              { ...last, content: newContent, isStreaming: true }
             ];
           }
 
-          // If no streaming message exists, create one with the first chunk
+          // If no assistant message exists, create one with the first chunk
           return [
             ...currentMessages,
             {
@@ -80,15 +80,18 @@ function ChatInterface({
 
       // 监听消息完成
       unlistenComplete = await listen('message-complete', () => {
-        onMessagesChangeRef.current((currentMessages: Message[]) => {
-          const last = currentMessages[currentMessages.length - 1];
-          if (last && last.isStreaming) {
-            return [...currentMessages.slice(0, -1), { ...last, isStreaming: false }];
-          }
-          return currentMessages;
-        });
-        onLoadingChangeRef.current(false);
-        setCurrentToolCall(null);
+        // Delay marking as complete to ensure all chunks are processed
+        setTimeout(() => {
+          onMessagesChangeRef.current((currentMessages: Message[]) => {
+            const last = currentMessages[currentMessages.length - 1];
+            if (last && last.role === 'assistant') {
+              return [...currentMessages.slice(0, -1), { ...last, isStreaming: false }];
+            }
+            return currentMessages;
+          });
+          onLoadingChangeRef.current(false);
+          setCurrentToolCall(null);
+        }, 100);
       });
 
       // 监听工具调用开始

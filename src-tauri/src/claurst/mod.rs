@@ -108,6 +108,7 @@ impl ClaurstSession {
         let cancel_token = CancellationToken::new();
 
         // 4. 启动事件处理任务
+        let event_window = window.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -116,8 +117,7 @@ impl ClaurstSession {
                         match stream_event {
                             AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
                                 if let ContentDelta::TextDelta { text } = delta {
-                                    eprintln!("[DEBUG] Emitting chunk: {:?}", text);
-                                    let _ = window.emit("message-chunk", text);
+                                    let _ = event_window.emit("message-chunk", text);
                                 }
                             }
                             _ => {}
@@ -125,21 +125,19 @@ impl ClaurstSession {
                     }
                     QueryEvent::ToolStart { tool_name, .. } => {
                         let description = format!("Executing {}", tool_name);
-                        let _ = window.emit("tool-call-start", serde_json::json!({
+                        let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "tool": tool_name,
                             "action": description,
                         }));
                     }
                     QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
-                        let _ = window.emit("tool-call-end", serde_json::json!({
+                        let _ = event_window.emit("tool-call-end", serde_json::json!({
                             "tool": tool_name,
                             "success": !is_error,
                             "result": result,
                         }));
                     }
-                    QueryEvent::TurnComplete { .. } => {
-                        let _ = window.emit("message-complete", ());
-                    }
+                    QueryEvent::TurnComplete { .. } => {}
                     _ => {}
                 }
             }
