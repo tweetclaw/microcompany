@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import Toolbar from './Toolbar';
@@ -27,6 +27,16 @@ function ChatInterface({
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
 
+  // Use refs to always access the latest callbacks
+  const onMessagesChangeRef = useRef(onMessagesChange);
+  const onLoadingChangeRef = useRef(onLoadingChange);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onMessagesChangeRef.current = onMessagesChange;
+    onLoadingChangeRef.current = onLoadingChange;
+  }, [onMessagesChange, onLoadingChange]);
+
   // 设置事件监听器
   useEffect(() => {
     let unlistenChunk: (() => void) | null = null;
@@ -37,13 +47,14 @@ function ChatInterface({
     const setupListeners = async () => {
       // 监听消息片段
       unlistenChunk = await listen<string>('message-chunk', (event) => {
-        onMessagesChange((currentMessages: Message[]) => {
+        onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
 
           // If the last message is an assistant message that's streaming, append to it
           if (last && last.role === 'assistant' && last.isStreaming) {
             // Replace "💭 思考中..." with actual content on first chunk
-            const newContent = last.content.includes('思考中')
+            const isThinking = last.content.includes('思考中');
+            const newContent = isThinking
               ? event.payload
               : last.content + event.payload;
 
@@ -53,22 +64,30 @@ function ChatInterface({
             ];
           }
 
-          // This shouldn't happen if we always create a thinking message first
-          console.warn('Received message-chunk without streaming message');
-          return currentMessages;
+          // If no streaming message exists, create one with the first chunk
+          return [
+            ...currentMessages,
+            {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: event.payload,
+              timestamp: Date.now(),
+              isStreaming: true,
+            }
+          ];
         });
       });
 
       // 监听消息完成
       unlistenComplete = await listen('message-complete', () => {
-        onMessagesChange((currentMessages: Message[]) => {
+        onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
           if (last && last.isStreaming) {
             return [...currentMessages.slice(0, -1), { ...last, isStreaming: false }];
           }
           return currentMessages;
         });
-        onLoadingChange(false);
+        onLoadingChangeRef.current(false);
         setCurrentToolCall(null);
       });
 
@@ -111,7 +130,7 @@ function ChatInterface({
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
     };
-  }, [onMessagesChange, onLoadingChange]);
+  }, []); // Empty deps - listeners should only be set up once
 
   const handleSendMessage = async (content: string) => {
     const newMessage: Message = {
@@ -121,17 +140,8 @@ function ChatInterface({
       timestamp: Date.now(),
     };
 
-    // Add a "thinking" placeholder message
-    const thinkingMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '💭 思考中...',
-      timestamp: Date.now(),
-      isStreaming: true,
-    };
-
-    // Add both user message and thinking message at once
-    onMessagesChange([...messages, newMessage, thinkingMessage]);
+    // Add user message only
+    onMessagesChange((prev) => [...prev, newMessage]);
     onLoadingChange(true);
 
     try {
@@ -140,19 +150,16 @@ function ChatInterface({
     } catch (error) {
       console.error('Failed to send message:', error);
 
-      // Replace thinking message with error
-      onMessagesChange((prev) => {
-        const filtered = prev.filter(m => m.id !== thinkingMessage.id);
-        return [
-          ...filtered,
-          {
-            id: (Date.now() + 2).toString(),
-            role: 'assistant',
-            content: `❌ 发送消息失败: ${error}`,
-            timestamp: Date.now(),
-          }
-        ];
-      });
+      // Add error message
+      onMessagesChange((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `❌ 发送消息失败: ${error}`,
+          timestamp: Date.now(),
+        }
+      ]);
       onLoadingChange(false);
       setCurrentToolCall(null);
     }

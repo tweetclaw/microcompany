@@ -116,6 +116,7 @@ impl ClaurstSession {
                         match stream_event {
                             AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
                                 if let ContentDelta::TextDelta { text } = delta {
+                                    eprintln!("[DEBUG] Emitting chunk: {:?}", text);
                                     let _ = window.emit("message-chunk", text);
                                 }
                             }

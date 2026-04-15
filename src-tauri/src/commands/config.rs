@@ -46,31 +46,11 @@ impl ApiConfig {
         Ok(Self::default())
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        let config_path = Self::config_path()?;
-
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create config directory: {}", e))?;
-        }
-
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-        fs::write(&config_path, content)
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
-
-        Ok(())
-    }
-
     fn config_path() -> Result<PathBuf, String> {
         let home = env::var("HOME")
             .map_err(|_| "HOME environment variable not set".to_string())?;
         Ok(PathBuf::from(home).join(".microcompany").join("config.json"))
     }
 
-    pub fn has_api_key(&self) -> bool {
-        self.anthropic_api_key.is_some()
-    }
+
 }

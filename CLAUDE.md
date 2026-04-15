@@ -76,6 +76,14 @@ Failure to display context usage or trigger auto-compaction is a **CRITICAL PROT
     *   如果目标文件是新创建的，直接调用 `write` 工具。
 4.  **自动创建目录**：在执行写入指令时，确保工具会自动创建不存在的父目录（`mkdir -p` 行为）。
 5.  **编码要求**：所有文件名和内容必须使用 UTF-8 编码，特别是包含中文字符的路径。
+## Submodule Protection Protocol (子模块保护协议)
+
+**STRICT RULE**: The code in `claurst/` is a git submodule and MUST NOT be modified by any AI agent.
+
+1.  **Strictly Read-Only**: AI agents are forbidden from modifying any files within the `claurst/` directory.
+2.  **No Commits**: Never stage or commit changes to the submodule.
+3.  **Source of Truth**: The submodule must only be updated from its GitHub source.
+4.  **No Local Edits**: All project modifications must occur outside the `claurst/` directory.
 
 ## gstack
 
