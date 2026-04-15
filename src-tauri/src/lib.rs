@@ -21,6 +21,7 @@ pub fn run() {
       commands::list_sessions,
       commands::delete_session,
       commands::clear_session,
+      commands::load_messages,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

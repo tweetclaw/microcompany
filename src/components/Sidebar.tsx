@@ -6,31 +6,14 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   currentWorkingDirectory: string;
+  onSessionSelected: (sessionId: string) => void;
 }
 
-function Sidebar({ isOpen, onClose, currentWorkingDirectory }: SidebarProps) {
-  const handleSessionSelected = (directory: string) => {
-    // Check if it's the same directory
-    if (directory === currentWorkingDirectory) {
-      onClose();
-      return;
-    }
-
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      '切换会话需要重启应用。\n\n是否保存选择并关闭应用？\n（重新启动应用后将自动加载选中的会话）'
-    );
-
-    if (confirmed) {
-      // Save selected directory to localStorage
-      localStorage.setItem('pendingWorkingDirectory', directory);
-
-      // Show instruction to user
-      alert('请重新启动应用以加载选中的会话。');
-
-      // Close sidebar
-      onClose();
-    }
+function Sidebar({ isOpen, onClose, currentWorkingDirectory, onSessionSelected }: SidebarProps) {
+  const handleSessionSelected = (sessionId: string) => {
+    // 直接调用 onSessionSelected 加载会话
+    onSessionSelected(sessionId);
+    onClose();
   };
 
   if (!isOpen) return null;

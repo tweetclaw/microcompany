@@ -3,13 +3,16 @@ import { invoke } from '@tauri-apps/api/core';
 import './SessionList.css';
 
 interface SessionInfo {
+  session_id: string;
   working_directory: string;
+  title: string;
   message_count: number;
   last_activity: number;
+  created_at: number;
 }
 
 interface SessionListProps {
-  onSessionSelected: (directory: string) => void;
+  onSessionSelected: (sessionId: string) => void;
 }
 
 function SessionList({ onSessionSelected }: SessionListProps) {
@@ -31,7 +34,7 @@ function SessionList({ onSessionSelected }: SessionListProps) {
     }
   };
 
-  const handleDeleteSession = async (workingDir: string, event: React.MouseEvent) => {
+  const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
 
     if (!window.confirm('确定要删除这个会话吗？')) {
@@ -39,7 +42,7 @@ function SessionList({ onSessionSelected }: SessionListProps) {
     }
 
     try {
-      await invoke('delete_session', { workingDir });
+      await invoke('delete_session', { sessionId });
       await loadSessions();
     } catch (error) {
       console.error('Failed to delete session:', error);
@@ -88,22 +91,22 @@ function SessionList({ onSessionSelected }: SessionListProps) {
 
   return (
     <div className="session-list">
-      {sessions.map((session, index) => (
+      {sessions.map((session) => (
         <div
-          key={index}
+          key={session.session_id}
           className="session-item"
-          onClick={() => onSessionSelected(session.working_directory)}
+          onClick={() => onSessionSelected(session.session_id)}
         >
-          <div className="session-icon">📂</div>
+          <div className="session-icon">💬</div>
           <div className="session-info">
-            <div className="session-name">{getDirectoryName(session.working_directory)}</div>
+            <div className="session-name">{session.title}</div>
             <div className="session-meta">
               {session.message_count} 条消息 · {formatTime(session.last_activity)}
             </div>
           </div>
           <button
             className="session-delete"
-            onClick={(e) => handleDeleteSession(session.working_directory, e)}
+            onClick={(e) => handleDeleteSession(session.session_id, e)}
             title="删除会话"
           >
             🗑️

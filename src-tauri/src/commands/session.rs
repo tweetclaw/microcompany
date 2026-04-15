@@ -26,8 +26,9 @@ pub struct AppState {
 #[tauri::command]
 pub async fn init_session(
     working_dir: String,
+    session_id: Option<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     // Validate directory exists
     if !std::path::Path::new(&working_dir).exists() {
         return Err(format!("Directory does not exist: {}", working_dir));
@@ -40,8 +41,20 @@ pub async fn init_session(
     let api_key = config.anthropic_api_key
         .ok_or("API key not configured")?;
 
+    // Use provided session_id or create a new one
+    let session_id = if let Some(id) = session_id {
+        id
+    } else {
+        // Create a new session in storage
+        let storage = crate::storage::ConversationStorage::new()
+            .map_err(|e| format!("Failed to create storage: {}", e))?;
+        storage.create_session(&std::path::PathBuf::from(&working_dir))
+            .map_err(|e| format!("Failed to create session: {}", e))?
+    };
+
     // Create Claurst session
     let session = ClaurstSession::new(
+        session_id.clone(),
         std::path::PathBuf::from(&working_dir),
         api_key,
         config.model,
@@ -51,7 +64,7 @@ pub async fn init_session(
     // Save session
     *state.session.lock().await = Some(session);
 
-    Ok(())
+    Ok(session_id)
 }
 
 #[tauri::command]
@@ -88,12 +101,11 @@ pub async fn list_sessions() -> Result<Vec<crate::storage::SessionInfo>, String>
 }
 
 #[tauri::command]
-pub async fn delete_session(working_dir: String) -> Result<(), String> {
+pub async fn delete_session(session_id: String) -> Result<(), String> {
     let storage = crate::storage::ConversationStorage::new()
         .map_err(|e| format!("Failed to create storage: {}", e))?;
 
-    let path = std::path::PathBuf::from(working_dir);
-    storage.delete_session(&path)
+    storage.delete_session(&session_id)
         .map_err(|e| format!("Failed to delete session: {}", e))
 }
 
@@ -104,14 +116,25 @@ pub async fn clear_session(
     let session_guard = state.session.lock().await;
 
     if let Some(session) = session_guard.as_ref() {
-        let working_dir = session.get_working_dir();
+        let session_id = session.get_session_id();
 
         let storage = crate::storage::ConversationStorage::new()
             .map_err(|e| format!("Failed to create storage: {}", e))?;
 
-        storage.clear_messages(working_dir)
+        storage.clear_messages(session_id)
             .map_err(|e| format!("Failed to clear messages: {}", e))?;
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn load_messages(
+    session_id: String,
+) -> Result<Vec<crate::storage::StoredMessage>, String> {
+    let storage = crate::storage::ConversationStorage::new()
+        .map_err(|e| format!("Failed to create storage: {}", e))?;
+
+    storage.load_messages(&session_id)
+        .map_err(|e| format!("Failed to load messages: {}", e))
 }

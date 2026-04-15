@@ -4,11 +4,13 @@ import './Toolbar.css';
 interface ToolbarProps {
   workingDirectory: string | null;
   onMenuClick: () => void;
+  onNewChat: () => void;
 }
 
 function Toolbar({
   workingDirectory,
   onMenuClick,
+  onNewChat,
 }: ToolbarProps) {
   const getDirectoryName = (path: string) => {
     const parts = path.split('/');
@@ -31,6 +33,16 @@ function Toolbar({
             未选择
           </span>
         )}
+      </div>
+      <div className="toolbar-right">
+        <button
+          className="toolbar-new-chat-button"
+          onClick={onNewChat}
+          disabled={!workingDirectory}
+          title="新建对话"
+        >
+          ➕ 新建
+        </button>
       </div>
     </div>
   );

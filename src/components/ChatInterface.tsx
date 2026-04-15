@@ -15,6 +15,9 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   onLoadingChange: (loading: boolean) => void;
+  onSessionSelected: (directory: string) => void;
+  onNewChat: () => void;
+  hasActiveSession: boolean;
 }
 
 function ChatInterface({
@@ -23,6 +26,9 @@ function ChatInterface({
   isLoading,
   onMessagesChange,
   onLoadingChange,
+  onSessionSelected,
+  onNewChat,
+  hasActiveSession,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -181,17 +187,30 @@ function ChatInterface({
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         currentWorkingDirectory={workingDirectory || ''}
+        onSessionSelected={onSessionSelected}
       />
       <Toolbar
         workingDirectory={workingDirectory}
         onMenuClick={() => setSidebarOpen(true)}
+        onNewChat={onNewChat}
       />
-      <MessageList messages={messages} isLoading={isLoading} />
-      {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
-      <InputBox
-        onSendMessage={handleSendMessage}
-        disabled={!workingDirectory || isLoading}
-      />
+      {hasActiveSession ? (
+        <>
+          <MessageList messages={messages} isLoading={isLoading} />
+          {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
+          <InputBox
+            onSendMessage={handleSendMessage}
+            disabled={!workingDirectory || isLoading}
+          />
+        </>
+      ) : (
+        <div className="no-session-placeholder">
+          <div className="placeholder-content">
+            <h2>欢迎使用 AI 助手</h2>
+            <p>请点击左上角的菜单选择一个会话,或点击"新建"按钮开始新的对话</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

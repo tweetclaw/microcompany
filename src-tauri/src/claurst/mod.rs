@@ -15,6 +15,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub struct ClaurstSession {
+    session_id: String,
     working_dir: PathBuf,
     client: AnthropicClient,
     config: QueryConfig,
@@ -27,21 +28,27 @@ pub struct ClaurstSession {
 
 impl ClaurstSession {
     pub fn new(
+        session_id: String,
         working_dir: PathBuf,
         api_key: String,
         model: String,
         base_url: Option<String>,
     ) -> anyhow::Result<Self> {
         // 1. 创建 ClientConfig
+        let api_base = base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string());
+        log::info!("Initializing Claurst session {} with api_base: {}, model: {}", session_id, api_base, model);
+
         let client_config = ClientConfig {
-            api_key,
-            api_base: base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string()),
+            api_key: api_key.clone(),
+            api_base,
             request_timeout: Duration::from_secs(120),
             ..Default::default()
         };
 
         // 2. 创建 AnthropicClient
+        log::info!("Creating AnthropicClient...");
         let client = AnthropicClient::new(client_config)?;
+        log::info!("AnthropicClient created successfully");
 
         // 3. 创建 Config
         let mut config = Config::default();
@@ -87,17 +94,21 @@ impl ClaurstSession {
         // 7. 创建存储层
         let storage = ConversationStorage::new()?;
 
-        // 8. 加载历史消息
-        let stored_messages = storage.load_messages(&working_dir)?;
-        let messages: Vec<Message> = stored_messages.into_iter().map(|m| {
-            if m.role == "user" {
-                Message::user(m.content)
-            } else {
-                Message::assistant(m.content)
-            }
-        }).collect();
+        // 8. 加载历史消息(如果会话已存在)
+        let messages: Vec<Message> = if let Ok(stored_messages) = storage.load_messages(&session_id) {
+            stored_messages.into_iter().map(|m| {
+                if m.role == "user" {
+                    Message::user(m.content)
+                } else {
+                    Message::assistant(m.content)
+                }
+            }).collect()
+        } else {
+            Vec::new()
+        };
 
         Ok(Self {
+            session_id,
             working_dir,
             client,
             config: query_config,
@@ -116,10 +127,11 @@ impl ClaurstSession {
     ) -> anyhow::Result<String> {
         // 1. 添加用户消息
         self.messages.push(Message::user(message.to_string()));
+        log::info!("User message added, total messages: {}", self.messages.len());
 
         // 保存用户消息到存储
         if let Err(e) = self.storage.save_message(
-            &self.working_dir,
+            &self.session_id,
             StoredMessage {
                 role: "user".to_string(),
                 content: message.to_string(),
@@ -166,7 +178,9 @@ impl ClaurstSession {
                             "result": result,
                         }));
                     }
-                    QueryEvent::TurnComplete { .. } => {}
+                    QueryEvent::TurnComplete { .. } => {
+                        log::info!("Turn complete event received");
+                    }
                     QueryEvent::Status(status) => {
                         log::info!("Query status: {}", status);
                     }
@@ -180,6 +194,8 @@ impl ClaurstSession {
 
         // 5. 调用 run_query_loop
         log::info!("Starting query loop with {} messages", self.messages.len());
+        log::info!("API config - model: {}", self.config.model);
+
         let outcome = run_query_loop(
             &self.client,
             &mut self.messages,
@@ -191,6 +207,8 @@ impl ClaurstSession {
             cancel_token,
             None, // pending_messages
         ).await;
+
+        log::info!("Query loop completed with outcome: {:?}", std::mem::discriminant(&outcome));
 
         // 6. 处理结果
         match outcome {
@@ -216,7 +234,7 @@ impl ClaurstSession {
 
                 // 保存助手消息到存储
                 if let Err(e) = self.storage.save_message(
-                    &self.working_dir,
+                    &self.session_id,
                     StoredMessage {
                         role: "assistant".to_string(),
                         content: text.clone(),
@@ -247,8 +265,12 @@ impl ClaurstSession {
         &self.working_dir
     }
 
+    pub fn get_session_id(&self) -> &str {
+        &self.session_id
+    }
+
     pub fn clear_history(&mut self) -> anyhow::Result<()> {
-        self.storage.clear_messages(&self.working_dir)?;
+        self.storage.clear_messages(&self.session_id)?;
         self.messages.clear();
         Ok(())
     }

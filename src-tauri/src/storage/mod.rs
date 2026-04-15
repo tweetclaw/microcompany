@@ -13,15 +13,21 @@ pub struct StoredMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
+    pub session_id: String,
     pub working_directory: String,
+    pub title: String,
+    pub created_at: i64,
     pub messages: Vec<StoredMessage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
+    pub session_id: String,
     pub working_directory: String,
+    pub title: String,
     pub message_count: usize,
     pub last_activity: i64,
+    pub created_at: i64,
 }
 
 pub struct ConversationStorage {
@@ -43,94 +49,116 @@ impl ConversationStorage {
         Ok(Self { storage_dir })
     }
 
-    /// Generate a hash for the working directory path
-    fn hash_path(path: &Path) -> String {
-        let mut hasher = DefaultHasher::new();
-        path.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
+    /// Get the conversation file path for a session
+    fn get_session_file(&self, session_id: &str) -> PathBuf {
+        self.storage_dir.join(format!("{}.json", session_id))
     }
 
-    /// Get the conversation file path for a working directory
-    fn get_conversation_file(&self, working_dir: &Path) -> PathBuf {
-        let hash = Self::hash_path(working_dir);
-        self.storage_dir.join(format!("{}.json", hash))
-    }
+    /// Generate a title from the first user message
+    fn generate_title(first_message: &str) -> String {
+        let max_length = 30;
+        let trimmed = first_message.trim();
 
-    /// Save a message to the conversation history
-    pub fn save_message(&self, working_dir: &Path, message: StoredMessage) -> anyhow::Result<()> {
-        let file_path = self.get_conversation_file(working_dir);
-
-        // Load existing session data, handling both old and new formats
-        let mut session_data = if file_path.exists() {
-            let content = fs::read_to_string(&file_path)?;
-            // Try new format (SessionData struct) first
-            if let Ok(data) = serde_json::from_str::<SessionData>(&content) {
-                data
-            } else if let Ok(messages) = serde_json::from_str::<Vec<StoredMessage>>(&content) {
-                // Fallback to old format (plain array of messages)
-                SessionData {
-                    working_directory: working_dir.to_string_lossy().to_string(),
-                    messages,
-                }
-            } else {
-                // If both formats fail, start fresh
-                log::warn!("Failed to parse conversation file, starting fresh: {:?}", file_path);
-                SessionData {
-                    working_directory: working_dir.to_string_lossy().to_string(),
-                    messages: Vec::new(),
-                }
-            }
+        if trimmed.len() <= max_length {
+            trimmed.to_string()
         } else {
-            SessionData {
-                working_directory: working_dir.to_string_lossy().to_string(),
-                messages: Vec::new(),
+            // Find the last space before max_length to avoid cutting words
+            let truncated = &trimmed[..max_length];
+            if let Some(last_space) = truncated.rfind(' ') {
+                format!("{}...", &trimmed[..last_space])
+            } else {
+                format!("{}...", truncated)
             }
+        }
+    }
+
+    /// Create a new session
+    pub fn create_session(&self, working_dir: &Path) -> anyhow::Result<String> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp();
+
+        let session_data = SessionData {
+            session_id: session_id.clone(),
+            working_directory: working_dir.to_string_lossy().to_string(),
+            title: "New Chat".to_string(), // Will be updated when first message is sent
+            created_at: now,
+            messages: Vec::new(),
         };
 
-        // Add new message
+        let file_path = self.get_session_file(&session_id);
+        let json = serde_json::to_string_pretty(&session_data)?;
+        fs::write(file_path, json)?;
+
+        Ok(session_id)
+    }
+
+    /// Save a message to a session
+    pub fn save_message(&self, session_id: &str, message: StoredMessage) -> anyhow::Result<()> {
+        let file_path = self.get_session_file(session_id);
+
+        if !file_path.exists() {
+            return Err(anyhow::anyhow!("Session not found: {}", session_id));
+        }
+
+        let content = fs::read_to_string(&file_path)?;
+        let mut session_data: SessionData = serde_json::from_str(&content)?;
+
+        // Update title if this is the first user message
+        if session_data.messages.is_empty() && message.role == "user" {
+            session_data.title = Self::generate_title(&message.content);
+        }
+
         session_data.messages.push(message);
 
-        // Save to file
         let json = serde_json::to_string_pretty(&session_data)?;
         fs::write(file_path, json)?;
 
         Ok(())
     }
 
-    /// Load all messages for a working directory
-    pub fn load_messages(&self, working_dir: &Path) -> anyhow::Result<Vec<StoredMessage>> {
-        let file_path = self.get_conversation_file(working_dir);
+    /// Load all messages for a session
+    pub fn load_messages(&self, session_id: &str) -> anyhow::Result<Vec<StoredMessage>> {
+        let file_path = self.get_session_file(session_id);
 
         if !file_path.exists() {
-            return Ok(Vec::new());
+            return Err(anyhow::anyhow!("Session not found: {}", session_id));
         }
 
         let content = fs::read_to_string(file_path)?;
+        let session_data: SessionData = serde_json::from_str(&content)?;
 
-        // Try to parse as SessionData first (new format)
-        if let Ok(session_data) = serde_json::from_str::<SessionData>(&content) {
-            return Ok(session_data.messages);
-        }
-
-        // Fallback to old format (just array of messages)
-        let messages: Vec<StoredMessage> = serde_json::from_str(&content)?;
-        Ok(messages)
+        Ok(session_data.messages)
     }
 
-    /// Clear all messages for a working directory
-    pub fn clear_messages(&self, working_dir: &Path) -> anyhow::Result<()> {
-        let file_path = self.get_conversation_file(working_dir);
+    /// Load session data
+    pub fn load_session(&self, session_id: &str) -> anyhow::Result<SessionData> {
+        let file_path = self.get_session_file(session_id);
 
-        if file_path.exists() {
-            // Create empty session data to preserve the working directory
-            let session_data = SessionData {
-                working_directory: working_dir.to_string_lossy().to_string(),
-                messages: Vec::new(),
-            };
-
-            let json = serde_json::to_string_pretty(&session_data)?;
-            fs::write(file_path, json)?;
+        if !file_path.exists() {
+            return Err(anyhow::anyhow!("Session not found: {}", session_id));
         }
+
+        let content = fs::read_to_string(file_path)?;
+        let session_data: SessionData = serde_json::from_str(&content)?;
+
+        Ok(session_data)
+    }
+
+    /// Clear all messages for a session
+    pub fn clear_messages(&self, session_id: &str) -> anyhow::Result<()> {
+        let file_path = self.get_session_file(session_id);
+
+        if !file_path.exists() {
+            return Err(anyhow::anyhow!("Session not found: {}", session_id));
+        }
+
+        let content = fs::read_to_string(&file_path)?;
+        let mut session_data: SessionData = serde_json::from_str(&content)?;
+
+        session_data.messages.clear();
+
+        let json = serde_json::to_string_pretty(&session_data)?;
+        fs::write(file_path, json)?;
 
         Ok(())
     }
@@ -148,10 +176,8 @@ impl ConversationStorage {
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                // Read the file to get session data
                 let content = fs::read_to_string(&path)?;
 
-                // Only parse new format (SessionData with working_directory)
                 if let Ok(session_data) = serde_json::from_str::<SessionData>(&content) {
                     if session_data.messages.is_empty() {
                         continue;
@@ -161,12 +187,14 @@ impl ConversationStorage {
                     let message_count = session_data.messages.len();
 
                     sessions.push(SessionInfo {
+                        session_id: session_data.session_id,
                         working_directory: session_data.working_directory,
+                        title: session_data.title,
                         message_count,
                         last_activity,
+                        created_at: session_data.created_at,
                     });
                 }
-                // Skip old format files - they don't have working_directory info
             }
         }
 
@@ -176,9 +204,9 @@ impl ConversationStorage {
         Ok(sessions)
     }
 
-    /// Delete a session by working directory
-    pub fn delete_session(&self, working_dir: &Path) -> anyhow::Result<()> {
-        let file_path = self.get_conversation_file(working_dir);
+    /// Delete a session by session ID
+    pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
+        let file_path = self.get_session_file(session_id);
         if file_path.exists() {
             fs::remove_file(file_path)?;
         }

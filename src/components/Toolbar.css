@@ -83,3 +83,30 @@
 .toolbar-menu-button:active {
   transform: scale(0.95);
 }
+
+.toolbar-new-chat-button {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: var(--transition-all);
+  white-space: nowrap;
+}
+
+.toolbar-new-chat-button:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+
+.toolbar-new-chat-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.toolbar-new-chat-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
