@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
@@ -10,6 +10,17 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+
+  // Check for pending working directory on startup
+  useEffect(() => {
+    const pendingDir = localStorage.getItem('pendingWorkingDirectory');
+    if (pendingDir) {
+      // Clear the pending directory
+      localStorage.removeItem('pendingWorkingDirectory');
+      // Auto-load this session
+      handleDirectorySelected(pendingDir);
+    }
+  }, []);
 
   const handleDirectorySelected = async (directory: string) => {
     setIsInitializing(true);

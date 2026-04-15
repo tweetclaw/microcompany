@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import Toolbar from './Toolbar';
 import MessageList from './MessageList';
 import InputBox from './InputBox';
+import Sidebar from './Sidebar';
 import { ToolIndicator } from './ToolIndicator';
 import { Message, ToolCall } from '../types';
 import './ChatInterface.css';
@@ -24,6 +25,7 @@ function ChatInterface({
   onLoadingChange,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Use refs to always access the latest callbacks
   const onMessagesChangeRef = useRef(onMessagesChange);
@@ -163,15 +165,26 @@ function ChatInterface({
     }
   };
 
-  const handleClearChat = () => {
-    onMessagesChange([]);
+  const handleClearChat = async () => {
+    try {
+      await invoke('clear_session');
+      onMessagesChange([]);
+    } catch (error) {
+      console.error('Failed to clear session:', error);
+      alert(`清空会话失败: ${error}`);
+    }
   };
 
   return (
     <div className="chat-interface">
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentWorkingDirectory={workingDirectory || ''}
+      />
       <Toolbar
         workingDirectory={workingDirectory}
-        onClearChat={handleClearChat}
+        onMenuClick={() => setSidebarOpen(true)}
       />
       <MessageList messages={messages} isLoading={isLoading} />
       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}

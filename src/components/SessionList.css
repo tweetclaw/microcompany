@@ -1,0 +1,97 @@
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.session-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-blue-start);
+  transform: translateX(4px);
+}
+
+.session-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-meta {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.session-delete {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: var(--space-1);
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.session-delete:hover {
+  opacity: 1;
+}
+
+.session-list-loading,
+.session-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--primary-blue-start);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--space-3);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.session-list-empty-hint {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin-top: var(--space-2);
+}

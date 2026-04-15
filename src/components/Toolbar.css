@@ -61,3 +61,25 @@
 .toolbar-button:active {
   transform: translateY(1px);
 }
+
+.toolbar-menu-button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+}
+
+.toolbar-menu-button:hover {
+  background: var(--bg-hover);
+}
+
+.toolbar-menu-button:active {
+  transform: scale(0.95);
+}

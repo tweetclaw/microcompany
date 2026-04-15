@@ -77,3 +77,41 @@ pub async fn close_session(
     *state.session.lock().await = None;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn list_sessions() -> Result<Vec<crate::storage::SessionInfo>, String> {
+    let storage = crate::storage::ConversationStorage::new()
+        .map_err(|e| format!("Failed to create storage: {}", e))?;
+    
+    storage.list_all_sessions()
+        .map_err(|e| format!("Failed to list sessions: {}", e))
+}
+
+#[tauri::command]
+pub async fn delete_session(working_dir: String) -> Result<(), String> {
+    let storage = crate::storage::ConversationStorage::new()
+        .map_err(|e| format!("Failed to create storage: {}", e))?;
+
+    let path = std::path::PathBuf::from(working_dir);
+    storage.delete_session(&path)
+        .map_err(|e| format!("Failed to delete session: {}", e))
+}
+
+#[tauri::command]
+pub async fn clear_session(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let session_guard = state.session.lock().await;
+
+    if let Some(session) = session_guard.as_ref() {
+        let working_dir = session.get_working_dir();
+
+        let storage = crate::storage::ConversationStorage::new()
+            .map_err(|e| format!("Failed to create storage: {}", e))?;
+
+        storage.clear_messages(working_dir)
+            .map_err(|e| format!("Failed to clear messages: {}", e))?;
+    }
+
+    Ok(())
+}
