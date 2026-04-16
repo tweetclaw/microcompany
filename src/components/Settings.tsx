@@ -222,25 +222,28 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                 <div className="add-provider-section">
                   <label>Add Provider:</label>
                   <select
+                    className="provider-select"
                     onChange={(e) => {
-                      handleProviderSelect(e.target.value);
+                      const value = e.target.value;
+                      if (value === '__custom__') {
+                        handleCreateCustomProvider();
+                      } else {
+                        handleProviderSelect(value);
+                      }
                       e.currentTarget.value = '';
                     }}
                     defaultValue=""
                   >
-                    <option value="" disabled>Select a provider...</option>
+                    <option value="" disabled>选择一个 Provider...</option>
                     {availableProviders.map((provider) => (
                       <option key={provider.id} value={provider.id}>
                         {provider.name}
                       </option>
                     ))}
+                    <option value="__custom__" className="custom-option">
+                      ➕ 自定义模型
+                    </option>
                   </select>
-                  <button
-                    className="btn-secondary"
-                    onClick={handleCreateCustomProvider}
-                  >
-                    自定义模型
-                  </button>
                 </div>
               </div>
             </>

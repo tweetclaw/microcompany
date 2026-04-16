@@ -147,10 +147,61 @@
 .add-provider-section label {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
 }
 
-.add-provider-section select {
+.provider-select {
   flex: 1;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='rgba(255,255,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.provider-select:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.provider-select:focus {
+  outline: none;
+  border-color: #58a6ff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+}
+
+.provider-select option {
+  background: #2d2d2d;
+  color: rgba(255, 255, 255, 0.95);
+  padding: 0.75rem;
+  font-weight: 500;
+}
+
+.provider-select option:hover {
+  background: #3d3d3d;
+}
+
+.provider-select option[disabled] {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.provider-select option.custom-option {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  font-weight: 600;
+  color: #58a6ff;
 }
 
 .form-group {
