@@ -98,10 +98,12 @@ function ChatInterface({
     console.log('🔄 [ChatInterface] currentSessionId changed:', currentSessionId);
     console.log('🔄 [ChatInterface] Current runState:', runState);
     console.log('🔄 [ChatInterface] Current activeRequestId:', activeRequestId);
+    console.log('🔄 [ChatInterface] Current activeRequestIdRef.current:', activeRequestIdRef.current);
 
     // 如果当前正在运行中（有活跃的请求），不要重置状态
     // 这样可以避免在草稿转换为真实 session 时中断流式显示
-    if (runState !== 'idle' && activeRequestId) {
+    // 注意：必须检查 ref 而不是状态，因为状态更新是异步的
+    if (runState !== 'idle' && activeRequestIdRef.current) {
       console.log('⏭️ [ChatInterface] Skipping reset - request is active');
       return;
     }
