@@ -6,7 +6,7 @@
 }
 
 .input-container {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   display: flex;
   gap: var(--space-3);
@@ -18,13 +18,13 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-4);
   font-size: var(--text-base);
   font-family: inherit;
   color: var(--text-primary);
   resize: none;
-  min-height: 44px;
-  max-height: 200px;
+  min-height: 120px;
+  max-height: 400px;
   transition: var(--transition-all);
 }
 

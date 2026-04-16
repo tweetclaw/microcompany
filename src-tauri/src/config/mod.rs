@@ -61,9 +61,44 @@ impl AppConfig {
         }
 
         let content = fs::read_to_string(&config_path)?;
-        let config: AppConfig = serde_json::from_str(&content)?;
 
-        Ok(config)
+        // 尝试解析新格式
+        match serde_json::from_str::<AppConfig>(&content) {
+            Ok(config) => Ok(config),
+            Err(_) => {
+                // 尝试解析旧格式并迁移
+                #[derive(Deserialize)]
+                struct LegacyConfig {
+                    anthropic_api_key: String,
+                    model: String,
+                    base_url: String,
+                }
+
+                if let Ok(legacy) = serde_json::from_str::<LegacyConfig>(&content) {
+                    let new_config = AppConfig {
+                        active_provider: "anthropic".to_string(),
+                        providers: vec![
+                            ProviderConfig {
+                                id: "anthropic".to_string(),
+                                name: "Anthropic Claude".to_string(),
+                                api_key: legacy.anthropic_api_key,
+                                base_url: Some(legacy.base_url),
+                                model: legacy.model,
+                                enabled: true,
+                            },
+                        ],
+                    };
+
+                    // 保存迁移后的配置
+                    new_config.save()?;
+
+                    Ok(new_config)
+                } else {
+                    // 如果都解析失败,返回默认配置
+                    Ok(Self::default())
+                }
+            }
+        }
     }
 
     pub fn save(&self) -> Result<()> {
