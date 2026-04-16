@@ -4,7 +4,7 @@ import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
 import { Settings } from './components/Settings';
 import { Message } from './types';
-import { ProviderConfig, SettingsData, normalizeSettingsData } from './types/settings';
+import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import './App.css';
 
@@ -24,6 +24,8 @@ function App() {
   const [currentProviderName, setCurrentProviderName] = useState<string | null>(null);
   const [currentModelName, setCurrentModelName] = useState<string | null>(null);
   const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
+  const [providerCatalog, setProviderCatalog] = useState<ProviderInfo[]>([]);
+  const [settingsConfig, setSettingsConfig] = useState<SettingsData | null>(null);
   const [selectedProviderValue, setSelectedProviderValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionListRefreshKey, setSessionListRefreshKey] = useState(0);
@@ -33,6 +35,7 @@ function App() {
 
   useEffect(() => {
     loadConfig();
+    loadProviderCatalog();
   }, []);
 
   useEffect(() => {
@@ -59,8 +62,9 @@ function App() {
   const loadConfig = async () => {
     try {
       const rawConfig = await invoke('get_config');
-      const config: SettingsData = normalizeSettingsData(rawConfig);
-      const enabledProviders = config.providers.filter((provider) => provider.enabled && (provider.apiKey || provider.id === 'ollama'));
+      const config = ensureValidActiveProvider(normalizeSettingsData(rawConfig));
+      const enabledProviders = config.providers.filter((provider) => isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id)));
+      setSettingsConfig(config);
       setAvailableProviders(config.providers);
 
       if (enabledProviders.length === 0) {
@@ -80,6 +84,41 @@ function App() {
       console.error('Failed to load config:', error);
     }
   };
+
+  const loadProviderCatalog = async () => {
+    try {
+      const providers = await invoke<unknown[]>('get_available_providers');
+      setProviderCatalog(providers.map(normalizeProviderInfo));
+    } catch (error) {
+      console.error('Failed to load available providers:', error);
+    }
+  };
+
+  const saveSettingsConfig = async (nextConfig: SettingsData) => {
+    const validConfig = ensureValidActiveProvider(nextConfig);
+    await invoke('save_config', { config: toBackendSettingsData(validConfig) });
+    setSettingsConfig(validConfig);
+    setAvailableProviders(validConfig.providers);
+
+    const enabledProviders = validConfig.providers.filter((provider) => isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id)));
+    if (enabledProviders.length === 0) {
+      setSelectedProviderValue('');
+      return;
+    }
+
+    const activeProvider = validConfig.providers.find((provider) => provider.id === validConfig.activeProvider) || enabledProviders[0];
+    const nextValue = `${activeProvider.id}::${activeProvider.model}`;
+    setSelectedProviderValue((prev) => {
+      const stillExists = enabledProviders.some((provider) => `${provider.id}::${provider.model}` === prev);
+      return stillExists ? prev : nextValue;
+    });
+  };
+
+  useEffect(() => {
+    if (providerCatalog.length > 0) {
+      void loadConfig();
+    }
+  }, [providerCatalog]);
 
   const handleDirectorySelected = async (directory: string) => {
     setWorkingDirectory(directory);
@@ -199,7 +238,13 @@ function App() {
         hasActiveSession={hasActiveSession}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
-      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        config={settingsConfig}
+        availableProviders={providerCatalog}
+        onSaveConfig={saveSettingsConfig}
+      />
     </div>
   );
 }

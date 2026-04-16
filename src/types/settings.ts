@@ -7,6 +7,12 @@ export interface ProviderConfig {
   enabled: boolean;
 }
 
+export type ProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'ollama' | 'custom';
+
+export interface ProviderDraft extends ProviderConfig {
+  type: ProviderType;
+}
+
 export interface SettingsData {
   activeProvider: string;
   providers: ProviderConfig[];
@@ -48,6 +54,115 @@ interface BackendProviderInfo {
   defaultBaseUrl?: string;
   default_models?: string[];
   defaultModels?: string[];
+}
+
+const BUILT_IN_PROVIDER_TYPES: Record<string, ProviderType> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  ollama: 'ollama',
+  deepseek: 'openai-compatible',
+  groq: 'openai-compatible',
+  moonshot: 'openai-compatible',
+  zhipuai: 'openai-compatible',
+};
+
+export function createCustomProviderId() {
+  return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function getProviderType(provider: Pick<ProviderConfig, 'id' | 'baseUrl'>, providerInfo?: ProviderInfo): ProviderType {
+  if (providerInfo && BUILT_IN_PROVIDER_TYPES[providerInfo.id]) {
+    return BUILT_IN_PROVIDER_TYPES[providerInfo.id];
+  }
+
+  if (BUILT_IN_PROVIDER_TYPES[provider.id]) {
+    return BUILT_IN_PROVIDER_TYPES[provider.id];
+  }
+
+  const normalizedBaseUrl = provider.baseUrl?.toLowerCase() ?? '';
+  if (normalizedBaseUrl.includes('localhost:11434') || normalizedBaseUrl.includes('127.0.0.1:11434')) {
+    return 'ollama';
+  }
+
+  return normalizedBaseUrl ? 'openai-compatible' : 'custom';
+}
+
+export function isProviderEditableType(providerId: string) {
+  return !BUILT_IN_PROVIDER_TYPES[providerId];
+}
+
+export function providerRequiresApiKey(type: ProviderType) {
+  return type !== 'ollama';
+}
+
+export function isProviderUsable(provider: ProviderConfig, providerInfo?: ProviderInfo) {
+  const type = getProviderType(provider, providerInfo);
+  return provider.enabled && (!providerRequiresApiKey(type) || provider.apiKey.trim().length > 0);
+}
+
+export function toProviderDraft(provider: ProviderConfig, providerInfo?: ProviderInfo): ProviderDraft {
+  return {
+    ...provider,
+    type: getProviderType(provider, providerInfo),
+  };
+}
+
+export function toProviderConfig(draft: ProviderDraft): ProviderConfig {
+  return {
+    id: draft.id,
+    name: draft.name,
+    apiKey: draft.apiKey,
+    baseUrl: draft.baseUrl,
+    model: draft.model,
+    enabled: draft.enabled,
+  };
+}
+
+export function getDefaultBaseUrlForType(type: ProviderType, providerInfo?: ProviderInfo) {
+  if (providerInfo?.defaultBaseUrl) {
+    return providerInfo.defaultBaseUrl;
+  }
+
+  switch (type) {
+    case 'anthropic':
+      return 'https://api.anthropic.com';
+    case 'openai':
+      return 'https://api.openai.com';
+    case 'ollama':
+      return 'http://localhost:11434';
+    case 'openai-compatible':
+      return '';
+    case 'custom':
+    default:
+      return '';
+  }
+}
+
+export function getProviderTypeLabel(type: ProviderType) {
+  switch (type) {
+    case 'anthropic':
+      return 'Anthropic';
+    case 'openai':
+      return 'OpenAI';
+    case 'openai-compatible':
+      return 'OpenAI Compatible';
+    case 'ollama':
+      return 'Ollama';
+    case 'custom':
+    default:
+      return 'Custom';
+  }
+}
+
+export function ensureValidActiveProvider(config: SettingsData): SettingsData {
+  if (config.providers.some((provider) => provider.id === config.activeProvider)) {
+    return config;
+  }
+
+  return {
+    ...config,
+    activeProvider: config.providers[0]?.id ?? '',
+  };
 }
 
 export function normalizeSettingsData(raw: unknown): SettingsData {
