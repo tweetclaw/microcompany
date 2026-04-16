@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { TitleBar } from './TitleBar';
@@ -115,10 +115,20 @@ function ChatInterface({
     });
   };
 
-  const resetRunIfTerminal = () => {
-    setCurrentToolCall(null);
-    activeRequestIdRef.current = null;
-    setActiveRequestId(null);
+  const resetRunIfTerminal = (delayMs = 0) => {
+    const applyReset = () => {
+      setCurrentToolCall(null);
+      activeRequestIdRef.current = null;
+      setActiveRequestId(null);
+      setRunState('idle');
+    };
+
+    if (delayMs > 0) {
+      window.setTimeout(applyReset, delayMs);
+      return;
+    }
+
+    applyReset();
   };
 
   const resetConversationRunState = () => {
@@ -283,13 +293,16 @@ function ChatInterface({
 
         if (payload.result === 'success') {
           setRunState('completed');
+          resetRunIfTerminal();
         } else if (payload.result === 'cancelled') {
           setRunState('cancelled');
+          resetRunIfTerminal(450);
         } else {
           setRunState('error');
           if (payload.error_message) {
             setLastError(payload.error_message);
           }
+          resetRunIfTerminal(450);
         }
 
         appendTimeline({
@@ -305,8 +318,6 @@ function ChatInterface({
           timestamp: payload.timestamp,
           result: payload.result,
         });
-
-        resetRunIfTerminal();
       });
     };
 
