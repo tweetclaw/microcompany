@@ -1,5 +1,5 @@
-import React from 'react';
-import { ToolCall } from '../types';
+import React, { useMemo } from 'react';
+import { AiRunState, ProcessTimelineItem, ToolCall } from '../types';
 import './InspectorPanel.css';
 
 interface InspectorPanelProps {
@@ -8,6 +8,9 @@ interface InspectorPanelProps {
   currentSessionId: string | null;
   messageCount: number;
   currentToolCall: ToolCall | null;
+  runState: AiRunState;
+  processTimeline: ProcessTimelineItem[];
+  lastError: string | null;
   providerLabel: string | null;
   modelLabel: string | null;
   collapsed: boolean;
@@ -20,6 +23,9 @@ function InspectorPanel({
   currentSessionId,
   messageCount,
   currentToolCall,
+  runState,
+  processTimeline,
+  lastError,
   providerLabel,
   modelLabel,
   collapsed,
@@ -30,6 +36,32 @@ function InspectorPanel({
     const parts = path.split('/');
     return parts[parts.length - 1] || path;
   };
+
+  const runStateLabel =
+    runState === 'idle'
+      ? 'Idle'
+      : runState === 'finalizing'
+        ? 'Cancelling'
+        : runState === 'error'
+          ? 'Error'
+          : runState === 'completed'
+            ? 'Completed'
+            : runState === 'cancelled'
+              ? 'Cancelled'
+              : 'Working';
+
+  const runStateClass =
+    runState === 'error'
+      ? 'activity-status-error'
+      : runState === 'finalizing'
+        ? 'activity-status-cancelling'
+        : runState === 'completed'
+          ? 'activity-status-success'
+          : runState === 'cancelled'
+            ? 'activity-status-cancelled'
+            : 'activity-status-running';
+
+  const recentTimeline = useMemo(() => processTimeline.slice(-8).reverse(), [processTimeline]);
 
   return (
     <aside
@@ -99,14 +131,35 @@ function InspectorPanel({
 
         <section className="inspector-card">
           <div className="inspector-card-title">Activity</div>
-          {currentToolCall ? (
-            <div className="inspector-activity">
-              <div className="activity-status activity-status-running">{currentToolCall.status}</div>
-              <div className="activity-tool">{currentToolCall.tool}</div>
-              <div className="activity-action">{currentToolCall.action || currentToolCall.result || '执行中'}</div>
+          <div className="inspector-activity">
+            <div className={`activity-status ${runStateClass}`}>{runStateLabel}</div>
+            {currentToolCall ? (
+              <>
+                <div className="activity-tool">{currentToolCall.tool}</div>
+                <div className="activity-action">{currentToolCall.action || currentToolCall.result || '执行中'}</div>
+              </>
+            ) : (
+              <div className="inspector-empty-state">当前没有工具调用</div>
+            )}
+            {lastError && <div className="activity-error">{lastError}</div>}
+          </div>
+        </section>
+
+        <section className="inspector-card">
+          <div className="inspector-card-title">Recent Process Events</div>
+          {recentTimeline.length > 0 ? (
+            <div className="inspector-timeline">
+              {recentTimeline.map((item) => (
+                <div key={item.id} className="inspector-timeline-item">
+                  <div className="inspector-timeline-time">
+                    {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                  <div className="inspector-timeline-text">{item.text}</div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="inspector-empty-state">当前没有工具调用</div>
+            <div className="inspector-empty-state">暂无过程事件</div>
           )}
         </section>
       </div>

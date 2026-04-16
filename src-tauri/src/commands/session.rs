@@ -22,6 +22,7 @@ impl Default for SessionState {
 pub struct AppState {
     pub session: Arc<Mutex<Option<ClaurstSession>>>,
     pub cancel_token: Arc<Mutex<Option<tokio_util::sync::CancellationToken>>>,
+    pub active_request_id: Arc<Mutex<Option<String>>>,
 }
 
 #[tauri::command]
@@ -92,6 +93,8 @@ pub async fn init_session(
     ).map_err(|e| format!("Failed to create session: {}", e))?;
 
     *state.session.lock().await = Some(session);
+    *state.cancel_token.lock().await = None;
+    *state.active_request_id.lock().await = None;
 
     Ok(session_id)
 }

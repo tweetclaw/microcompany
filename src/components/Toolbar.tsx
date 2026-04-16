@@ -1,4 +1,5 @@
 import React from 'react';
+import { AiRunState } from '../types';
 import './Toolbar.css';
 
 interface ModelOption {
@@ -14,6 +15,7 @@ interface ToolbarProps {
   selectedModelValue: string;
   modelStatusText: string | null;
   newChatDisabledReason: string | null;
+  runState: AiRunState;
   onModelChange: (value: string) => void;
   onSidebarToggle: () => void;
   onInspectorToggle: () => void;
@@ -28,6 +30,7 @@ function Toolbar({
   selectedModelValue,
   modelStatusText,
   newChatDisabledReason,
+  runState,
   onModelChange,
   onSidebarToggle,
   onInspectorToggle,
@@ -39,6 +42,24 @@ function Toolbar({
     const parts = path.split('/');
     return parts[parts.length - 1] || path;
   };
+
+  const runStateLabel =
+    runState === 'idle'
+      ? 'Idle'
+      : runState === 'finalizing'
+        ? 'Cancelling'
+        : runState === 'error'
+          ? 'Error'
+          : 'Working';
+
+  const runStateClass =
+    runState === 'idle'
+      ? 'toolbar-run-state-idle'
+      : runState === 'finalizing'
+        ? 'toolbar-run-state-cancelling'
+        : runState === 'error'
+          ? 'toolbar-run-state-error'
+          : 'toolbar-run-state-working';
 
   return (
     <div className="toolbar">
@@ -54,6 +75,10 @@ function Toolbar({
               未选择
             </span>
           )}
+        </div>
+        <div className={`toolbar-run-state ${runStateClass}`}>
+          <span className="toolbar-run-state-dot" />
+          <span>{runStateLabel}</span>
         </div>
       </div>
       <div className="toolbar-right">

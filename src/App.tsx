@@ -26,7 +26,6 @@ function App() {
   const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
   const [selectedProviderValue, setSelectedProviderValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -189,9 +188,7 @@ function App() {
         availableProviders={availableProviders}
         selectedProviderValue={selectedProviderValue}
         messages={messages}
-        isLoading={isLoading}
         onMessagesChange={setMessages}
-        onLoadingChange={setIsLoading}
         onSessionSelected={handleSessionSelected}
         onProviderChange={setSelectedProviderValue}
         onNewChat={handleNewChat}

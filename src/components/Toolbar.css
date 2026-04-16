@@ -44,8 +44,42 @@
   white-space: nowrap;
 }
 
-.toolbar-working-dir-empty {
+.toolbar-run-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  border: 1px solid var(--border-default);
+}
+
+.toolbar-run-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.toolbar-run-state-idle {
   color: var(--text-tertiary);
+  background: rgba(120, 129, 148, 0.12);
+}
+
+.toolbar-run-state-working {
+  color: #93c5fd;
+  background: rgba(30, 64, 175, 0.18);
+}
+
+.toolbar-run-state-cancelling {
+  color: #facc15;
+  background: rgba(161, 98, 7, 0.18);
+}
+
+.toolbar-run-state-error {
+  color: #fca5a5;
+  background: rgba(185, 28, 28, 0.2);
 }
 
 .toolbar-right {

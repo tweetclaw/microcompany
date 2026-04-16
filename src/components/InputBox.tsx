@@ -4,26 +4,37 @@ import './InputBox.css';
 interface InputBoxProps {
   onSendMessage: (content: string) => void;
   onCancelMessage: () => void;
-  disabled?: boolean;
-  isLoading?: boolean;
+  isInputDisabled?: boolean;
+  isBusy?: boolean;
+  canCancel?: boolean;
+  isCancelling?: boolean;
 }
 
-function InputBox({ onSendMessage, onCancelMessage, disabled = false, isLoading = false }: InputBoxProps) {
+function InputBox({
+  onSendMessage,
+  onCancelMessage,
+  isInputDisabled = false,
+  isBusy = false,
+  canCancel = false,
+  isCancelling = false,
+}: InputBoxProps) {
   const [input, setInput] = useState('');
 
   const handleSend = () => {
-    if (input.trim() && !disabled && !isLoading) {
+    if (input.trim() && !isInputDisabled && !isBusy) {
       onSendMessage(input.trim());
       setInput('');
     }
   };
 
   const handleCancel = () => {
-    onCancelMessage();
+    if (canCancel) {
+      onCancelMessage();
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
+    if (e.key === 'Enter' && !e.shiftKey && !isBusy) {
       e.preventDefault();
       handleSend();
     }
@@ -37,23 +48,24 @@ function InputBox({ onSendMessage, onCancelMessage, disabled = false, isLoading 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? '请先选择工作目录...' : isLoading ? 'AI 正在思考中...' : '输入消息... (Enter发送, Shift+Enter换行)'}
-          disabled={disabled || isLoading}
+          placeholder={isInputDisabled ? '请先选择工作目录...' : isBusy ? 'AI 正在处理中...' : '输入消息... (Enter发送, Shift+Enter换行)'}
+          disabled={isInputDisabled || isBusy}
           rows={1}
         />
-        {isLoading ? (
+        {isBusy ? (
           <button
             className="cancel-button"
             onClick={handleCancel}
-            title="中断 AI 思考"
+            disabled={!canCancel}
+            title={isCancelling ? '正在中断...' : '中断 AI 思考'}
           >
-            ⏹ 中断
+            {isCancelling ? '⏹ 中断中...' : '⏹ 中断'}
           </button>
         ) : (
           <button
             className="send-button"
             onClick={handleSend}
-            disabled={disabled || !input.trim()}
+            disabled={isInputDisabled || !input.trim()}
           >
             发送
           </button>

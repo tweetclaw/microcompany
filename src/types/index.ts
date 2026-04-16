@@ -5,6 +5,70 @@ export interface Message {
   content: string;
   timestamp: number;
   isStreaming?: boolean;
+  requestId?: string;
+}
+
+export type AiStatusPhase = 'thinking' | 'tool_running' | 'generating' | 'finalizing';
+export type AiRequestResult = 'success' | 'cancelled' | 'error';
+
+export type AiRunState =
+  | 'idle'
+  | 'running_thinking'
+  | 'running_tool'
+  | 'running_generating'
+  | 'finalizing'
+  | 'cancelled'
+  | 'error'
+  | 'completed';
+
+export interface AiRequestStartEvent {
+  request_id: string;
+  session_id: string;
+  timestamp: number;
+}
+
+export interface AiStatusEvent {
+  request_id: string;
+  phase: AiStatusPhase;
+  text: string;
+  timestamp: number;
+}
+
+export interface AiRequestEndEvent {
+  request_id: string;
+  result: AiRequestResult;
+  error_message?: string;
+  timestamp: number;
+}
+
+export interface AiMessageChunkEvent {
+  request_id: string;
+  chunk: string;
+}
+
+export interface AiToolStartEvent {
+  request_id: string;
+  tool: string;
+  action: string;
+}
+
+export interface AiToolEndEvent {
+  request_id: string;
+  tool: string;
+  success: boolean;
+  result: string;
+}
+
+export interface ProcessTimelineItem {
+  id: string;
+  requestId: string;
+  kind: 'request_start' | 'status' | 'tool_start' | 'tool_end' | 'request_end' | 'error';
+  text: string;
+  timestamp: number;
+  phase?: AiStatusPhase;
+  result?: AiRequestResult;
+  tool?: string;
+  success?: boolean;
 }
 
 // Session configuration

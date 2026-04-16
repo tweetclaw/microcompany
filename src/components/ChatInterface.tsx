@@ -8,7 +8,18 @@ import Sidebar from './Sidebar';
 import InspectorPanel from './InspectorPanel';
 import TerminalPanel from './TerminalPanel';
 import { ToolIndicator } from './ToolIndicator';
-import { Message, ToolCall } from '../types';
+import {
+  AiMessageChunkEvent,
+  AiRequestEndEvent,
+  AiRequestStartEvent,
+  AiRunState,
+  AiStatusEvent,
+  AiToolEndEvent,
+  AiToolStartEvent,
+  Message,
+  ProcessTimelineItem,
+  ToolCall,
+} from '../types';
 import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import './ChatInterface.css';
@@ -22,15 +33,20 @@ interface ChatInterfaceProps {
   availableProviders: ProviderConfig[];
   selectedProviderValue: string;
   messages: Message[];
-  isLoading: boolean;
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
-  onLoadingChange: (loading: boolean) => void;
   onSessionSelected: (sessionId: string) => void;
   onProviderChange: (value: string) => void;
   onNewChat: () => void;
   hasActiveSession: boolean;
   onSettingsClick: () => void;
 }
+
+const RUNNING_STATES: AiRunState[] = [
+  'running_thinking',
+  'running_tool',
+  'running_generating',
+  'finalizing',
+];
 
 function ChatInterface({
   workingDirectory,
@@ -41,9 +57,7 @@ function ChatInterface({
   availableProviders,
   selectedProviderValue,
   messages,
-  isLoading,
   onMessagesChange,
-  onLoadingChange,
   onSessionSelected,
   onProviderChange,
   onNewChat,
@@ -51,21 +65,54 @@ function ChatInterface({
   onSettingsClick,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
+  const [runState, setRunState] = useState<AiRunState>('idle');
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [processTimeline, setProcessTimeline] = useState<ProcessTimelineItem[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
+
   const initialLayout = useMemo(() => loadLayoutState(), []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialLayout.isSidebarCollapsed);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(initialLayout.isInspectorCollapsed);
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(initialLayout.isTerminalCollapsed);
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
-  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 1280 : false);
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1280 : false));
 
   const onMessagesChangeRef = useRef(onMessagesChange);
-  const onLoadingChangeRef = useRef(onLoadingChange);
+  const activeRequestIdRef = useRef<string | null>(activeRequestId);
 
   useEffect(() => {
     onMessagesChangeRef.current = onMessagesChange;
-    onLoadingChangeRef.current = onLoadingChange;
-  }, [onMessagesChange, onLoadingChange]);
+  }, [onMessagesChange]);
+
+  useEffect(() => {
+    activeRequestIdRef.current = activeRequestId;
+  }, [activeRequestId]);
+
+  const isBusy = RUNNING_STATES.includes(runState);
+  const canCancel = isBusy && Boolean(activeRequestId);
+  const isCancelling = runState === 'finalizing';
+  const isInputDisabled = !workingDirectory;
+
+  const appendTimeline = (item: ProcessTimelineItem) => {
+    setProcessTimeline((prev) => [...prev, item]);
+  };
+
+  const finalizeStreamingMessage = () => {
+    onMessagesChangeRef.current((prev: Message[]) => {
+      const last = prev[prev.length - 1];
+      if (last && last.role === 'assistant' && last.isStreaming) {
+        return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+      }
+      return prev;
+    });
+  };
+
+  const resetRunIfTerminal = () => {
+    setCurrentToolCall(null);
+    activeRequestIdRef.current = null;
+    setActiveRequestId(null);
+  };
 
   useEffect(() => {
     saveLayoutState({
@@ -94,54 +141,155 @@ function ChatInterface({
     let unlistenChunk: (() => void) | null = null;
     let unlistenToolStart: (() => void) | null = null;
     let unlistenToolEnd: (() => void) | null = null;
+    let unlistenRequestStart: (() => void) | null = null;
+    let unlistenStatus: (() => void) | null = null;
+    let unlistenRequestEnd: (() => void) | null = null;
 
     const setupListeners = async () => {
-      unlistenChunk = await listen<string>('message-chunk', (event) => {
+      unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
+        const payload = event.payload;
+        setActiveRequestId(payload.request_id);
+        setRunState('running_thinking');
+        setLastError(null);
+        setCurrentToolCall(null);
+        setProcessTimeline([]);
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-start`,
+          requestId: payload.request_id,
+          kind: 'request_start',
+          text: '请求开始',
+          timestamp: payload.timestamp,
+        });
+      });
+
+      unlistenStatus = await listen<AiStatusEvent>('ai-status', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+
+        if (payload.phase === 'thinking') {
+          setRunState((prev) => (prev === 'finalizing' ? prev : 'running_thinking'));
+        } else if (payload.phase === 'tool_running') {
+          setRunState('running_tool');
+        } else if (payload.phase === 'generating') {
+          setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
+        } else if (payload.phase === 'finalizing') {
+          setRunState('finalizing');
+        }
+
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-status-${Math.random().toString(36).slice(2, 8)}`,
+          requestId: payload.request_id,
+          kind: 'status',
+          text: payload.text,
+          timestamp: payload.timestamp,
+          phase: payload.phase,
+        });
+      });
+
+      unlistenChunk = await listen<AiMessageChunkEvent>('message-chunk', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+
+        setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
+
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
 
-          if (last && last.role === 'assistant') {
-            const isThinking = last.content.includes('思考中');
-            const newContent = isThinking ? event.payload : last.content + event.payload;
-
+          if (last && last.role === 'assistant' && last.requestId === payload.request_id) {
             return [
               ...currentMessages.slice(0, -1),
-              { ...last, content: newContent, isStreaming: true }
+              { ...last, content: last.content + payload.chunk, isStreaming: true },
             ];
           }
 
           return [
             ...currentMessages,
             {
-              id: Date.now().toString(),
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               role: 'assistant',
-              content: event.payload,
+              content: payload.chunk,
               timestamp: Date.now(),
               isStreaming: true,
-            }
+              requestId: payload.request_id,
+            },
           ];
         });
       });
 
-      unlistenToolStart = await listen<{ tool: string; action: string }>('tool-call-start', (event) => {
+      unlistenToolStart = await listen<AiToolStartEvent>('tool-call-start', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+
+        setRunState('running_tool');
         setCurrentToolCall({
-          tool: event.payload.tool,
-          action: event.payload.action,
+          tool: payload.tool,
+          action: payload.action,
           status: 'running',
+        });
+        appendTimeline({
+          id: `${payload.request_id}-${Date.now()}-tool-start`,
+          requestId: payload.request_id,
+          kind: 'tool_start',
+          text: payload.action,
+          timestamp: Date.now(),
+          tool: payload.tool,
         });
       });
 
-      unlistenToolEnd = await listen<{ tool: string; success: boolean; result: string }>('tool-call-end', (event) => {
+      unlistenToolEnd = await listen<AiToolEndEvent>('tool-call-end', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+
         setCurrentToolCall({
-          tool: event.payload.tool,
-          action: '',
-          status: event.payload.success ? 'success' : 'error',
-          result: event.payload.result,
+          tool: payload.tool,
+          action: payload.success ? '执行成功' : '执行失败',
+          status: payload.success ? 'success' : 'error',
+          result: payload.result,
+        });
+        setRunState((prev) => (prev === 'finalizing' ? prev : 'running_thinking'));
+        appendTimeline({
+          id: `${payload.request_id}-${Date.now()}-tool-end`,
+          requestId: payload.request_id,
+          kind: 'tool_end',
+          text: payload.success ? `${payload.tool} 执行成功` : `${payload.tool} 执行失败`,
+          timestamp: Date.now(),
+          tool: payload.tool,
+          success: payload.success,
+        });
+      });
+
+      unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+
+        finalizeStreamingMessage();
+
+        if (payload.result === 'success') {
+          setRunState('completed');
+        } else if (payload.result === 'cancelled') {
+          setRunState('cancelled');
+        } else {
+          setRunState('error');
+          if (payload.error_message) {
+            setLastError(payload.error_message);
+          }
+        }
+
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-end`,
+          requestId: payload.request_id,
+          kind: 'request_end',
+          text:
+            payload.result === 'success'
+              ? '请求完成'
+              : payload.result === 'cancelled'
+                ? '请求已取消'
+                : `请求失败${payload.error_message ? `: ${payload.error_message}` : ''}`,
+          timestamp: payload.timestamp,
+          result: payload.result,
         });
 
-        setTimeout(() => {
-          setCurrentToolCall(null);
-        }, 2000);
+        resetRunIfTerminal();
       });
     };
 
@@ -151,6 +299,9 @@ function ChatInterface({
       if (unlistenChunk) unlistenChunk();
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
+      if (unlistenRequestStart) unlistenRequestStart();
+      if (unlistenStatus) unlistenStatus();
+      if (unlistenRequestEnd) unlistenRequestEnd();
     };
   }, []);
 
@@ -223,62 +374,55 @@ function ChatInterface({
     };
 
     onMessagesChange((prev) => [...prev, newMessage]);
-    onLoadingChange(true);
+    setLastError(null);
+    setRunState('running_thinking');
 
     try {
       await invoke<string>('send_message', { message: content });
-
-      setTimeout(() => {
-        onMessagesChange((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === 'assistant') {
-            return [...prev.slice(0, -1), { ...last, isStreaming: false }];
-          }
-          return prev;
-        });
-        onLoadingChange(false);
-        setCurrentToolCall(null);
-      }, 500);
     } catch (error) {
       const errorMessage = String(error);
-
       if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
-        onLoadingChange(false);
-        setCurrentToolCall(null);
         return;
       }
 
-      console.error('Failed to send message:', error);
-      onMessagesChange((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `❌ 发送消息失败: ${error}`,
-          timestamp: Date.now(),
-        }
-      ]);
-      onLoadingChange(false);
-      setCurrentToolCall(null);
+      setRunState('error');
+      setLastError(errorMessage);
+      appendTimeline({
+        id: `${Date.now()}-send-error`,
+        requestId: activeRequestIdRef.current || 'unknown',
+        kind: 'error',
+        text: `发送消息失败: ${errorMessage}`,
+        timestamp: Date.now(),
+      });
+      resetRunIfTerminal();
     }
   };
 
   const handleCancelMessage = async () => {
+    if (!canCancel) return;
+
+    setRunState('finalizing');
+    appendTimeline({
+      id: `${Date.now()}-cancel-request`,
+      requestId: activeRequestIdRef.current || 'unknown',
+      kind: 'status',
+      text: '请求中断中…',
+      timestamp: Date.now(),
+      phase: 'finalizing',
+    });
+
     try {
       await invoke('cancel_message');
-      onLoadingChange(false);
-      setCurrentToolCall(null);
-      onMessagesChange((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: '⏹ 已中断 AI 思考',
-          timestamp: Date.now(),
-        }
-      ]);
     } catch (error) {
-      console.error('Failed to cancel message:', error);
+      const errorMessage = String(error);
+      setLastError(errorMessage);
+      appendTimeline({
+        id: `${Date.now()}-cancel-error`,
+        requestId: activeRequestIdRef.current || 'unknown',
+        kind: 'error',
+        text: `中断失败: ${errorMessage}`,
+        timestamp: Date.now(),
+      });
     }
   };
 
@@ -310,6 +454,7 @@ function ChatInterface({
         selectedModelValue={selectedProviderValue}
         modelStatusText={modelStatusText}
         newChatDisabledReason={newChatDisabledReason}
+        runState={runState}
         onModelChange={onProviderChange}
         onSidebarToggle={handleSidebarToggle}
         onInspectorToggle={handleInspectorToggle}
@@ -333,13 +478,15 @@ function ChatInterface({
           <div className="chat-main-surface">
             {hasActiveSession ? (
               <>
-                <MessageList messages={messages} isLoading={isLoading} />
+                <MessageList messages={messages} isBusy={isBusy} processTimeline={processTimeline} />
                 {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                 <InputBox
                   onSendMessage={handleSendMessage}
                   onCancelMessage={handleCancelMessage}
-                  disabled={!workingDirectory || isLoading}
-                  isLoading={isLoading}
+                  isBusy={isBusy}
+                  canCancel={canCancel}
+                  isCancelling={isCancelling}
+                  isInputDisabled={isInputDisabled}
                 />
               </>
             ) : (
@@ -367,6 +514,9 @@ function ChatInterface({
           currentSessionId={currentSessionId}
           messageCount={messages.length}
           currentToolCall={currentToolCall}
+          runState={runState}
+          processTimeline={processTimeline}
+          lastError={lastError}
           providerLabel={currentProviderName}
           modelLabel={currentModelName}
           collapsed={isCompact ? !isInspectorDrawerOpen : isInspectorCollapsed}
