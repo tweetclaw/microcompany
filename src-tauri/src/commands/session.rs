@@ -84,6 +84,13 @@ pub async fn init_session(
         return Err(format!("API key not configured for provider '{}'", selected_provider.name));
     }
 
+    // 设置 Brave Search API Key 环境变量（如果配置了）
+    if let Some(api_key) = &app_config.brave_search_api_key {
+        if !api_key.is_empty() {
+            std::env::set_var("BRAVE_SEARCH_API_KEY", api_key);
+        }
+    }
+
     let session = ClaurstSession::new(
         session_id.clone(),
         std::path::PathBuf::from(&working_dir),

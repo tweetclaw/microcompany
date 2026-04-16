@@ -225,14 +225,8 @@ function App() {
 
   // 确保当前有一个真实的后端 session（懒创建）
   const ensureActiveSession = async (): Promise<string | null> => {
-    console.log('🔐 [App] ensureActiveSession called');
-    console.log('🔐 [App] currentSessionId:', currentSessionId);
-    console.log('🔐 [App] isDraftConversation:', isDraftConversation);
-    console.log('🔐 [App] selectedProviderValue:', selectedProviderValue);
-
     // 如果已经有真实 session，直接返回
     if (currentSessionId && !isDraftConversation) {
-      console.log('🔐 [App] Already have real session, returning:', currentSessionId);
       return currentSessionId;
     }
 
@@ -242,16 +236,13 @@ function App() {
         const [providerId] = selectedProviderValue.split('::');
         const provider = availableProviders.find((item) => `${item.id}::${item.model}` === selectedProviderValue);
 
-        console.log('🔐 [App] Creating new session with providerId:', providerId);
         const sessionId = await invoke<string>('init_session', {
           workingDir: workingDirectory,
           sessionId: null,
           providerId,
         });
-        console.log('🔐 [App] Session created:', sessionId);
 
         // 转换草稿为真实 session
-        console.log('🔐 [App] Converting draft to real session...');
         setCurrentSessionId(sessionId);
         setCurrentSessionTitle('Untitled');
         setCurrentProviderName(provider?.name || null);
@@ -259,16 +250,14 @@ function App() {
         setIsDraftConversation(false);
         setHasActiveSession(true);
         setSessionListRefreshKey((prev) => prev + 1);
-        console.log('🔐 [App] Draft converted to real session');
 
         return sessionId;
       } catch (error) {
-        console.error('❌ [App] Failed to create session:', error);
+        console.error('Failed to create session:', error);
         throw error;
       }
     }
 
-    console.log('🔐 [App] No session created (conditions not met)');
     return null;
   };
 

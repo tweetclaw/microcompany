@@ -95,19 +95,12 @@ function ChatInterface({
   }, [activeRequestId]);
 
   useEffect(() => {
-    console.log('🔄 [ChatInterface] currentSessionId changed:', currentSessionId);
-    console.log('🔄 [ChatInterface] Current runState:', runState);
-    console.log('🔄 [ChatInterface] Current activeRequestId:', activeRequestId);
-    console.log('🔄 [ChatInterface] Current activeRequestIdRef.current:', activeRequestIdRef.current);
-
     // 如果当前正在运行中（有活跃的请求），不要重置状态
     // 这样可以避免在草稿转换为真实 session 时中断流式显示
     // 注意：必须检查 ref 而不是状态，因为状态更新是异步的
     if (runState !== 'idle' && activeRequestIdRef.current) {
-      console.log('⏭️ [ChatInterface] Skipping reset - request is active');
       return;
     }
-    console.log('🔄 [ChatInterface] Resetting conversation run state');
     resetConversationRunState();
   }, [currentSessionId]);
 
@@ -121,24 +114,13 @@ function ChatInterface({
   };
 
   const finalizeStreamingMessage = (requestId?: string | null, finalText?: string) => {
-    console.log('🔍 [DEBUG] finalizeStreamingMessage called with:', {
-      requestId,
-      finalTextLength: finalText?.length ?? 0,
-      finalTextPreview: finalText ? finalText.substring(0, 200) : '(empty)',
-    });
-
     onMessagesChangeRef.current((prev: Message[]) => {
-      console.log('🔍 [DEBUG] Current messages count:', prev.length);
-
       const targetIndex = [...prev]
         .map((message, index) => ({ message, index }))
         .reverse()
         .find(({ message }) => message.role === 'assistant' && (!requestId || message.requestId === requestId))?.index;
 
-      console.log('🔍 [DEBUG] Target message index:', targetIndex ?? 'undefined');
-
       if (targetIndex === undefined) {
-        console.log('🔍 [DEBUG] No target message found, creating new message');
         if (finalText && finalText.trim()) {
           return [
             ...prev,
@@ -160,12 +142,6 @@ function ChatInterface({
       // 关键修改：不替换内容，只标记为非流式状态
       // 前端通过 message-chunk 事件已经累积了完整的文本
       // 后端的 final_text 可能是不完整的（特别是在使用工具调用时）
-      console.log('🔍 [DEBUG] Finalizing message without replacing content:', {
-        currentContentLength: targetMessage.content.length,
-        currentContentPreview: targetMessage.content.substring(0, 200),
-        willKeepCurrentContent: true,
-      });
-
       return [
         ...prev.slice(0, targetIndex),
         { ...targetMessage, isStreaming: false },
@@ -233,7 +209,6 @@ function ChatInterface({
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
         const payload = event.payload;
-        console.log('🎬 [Event] ai-request-start received:', payload.request_id);
         setActiveRequestId(payload.request_id);
         activeRequestIdRef.current = payload.request_id;
         setRunState('running_thinking');
@@ -275,16 +250,11 @@ function ChatInterface({
 
       unlistenChunk = await listen<AiMessageChunkEvent>('message-chunk', (event) => {
         const payload = event.payload;
-        console.log('📝 [Event] message-chunk received, request_id:', payload.request_id);
-        console.log('📝 [Event] Current activeRequestIdRef:', activeRequestIdRef.current);
-        console.log('📝 [Event] Chunk length:', payload.chunk.length);
 
         if (payload.request_id !== activeRequestIdRef.current) {
-          console.warn('⚠️ [Event] message-chunk IGNORED - request_id mismatch');
           return;
         }
 
-        console.log('✅ [Event] message-chunk ACCEPTED - updating message');
         setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
 
         onMessagesChangeRef.current((currentMessages: Message[]) => {
@@ -461,25 +431,16 @@ function ChatInterface({
   }, [workingDirectory]);
 
   const handleSendMessage = async (content: string) => {
-    console.log('📤 [ChatInterface] handleSendMessage called');
-    console.log('📤 [ChatInterface] isDraftConversation:', isDraftConversation);
-    console.log('📤 [ChatInterface] currentSessionId:', currentSessionId);
-
     // 先设置运行状态，防止 session 创建时触发的 useEffect 重置状态
-    console.log('📤 [ChatInterface] Setting runState to running_thinking');
     setRunState('running_thinking');
     setLastError(null);
 
     // 如果是草稿对话，先确保创建真实 session
     try {
-      console.log('📤 [ChatInterface] Calling onEnsureSession...');
       await onEnsureSession();
-      console.log('📤 [ChatInterface] onEnsureSession completed');
-      console.log('📤 [ChatInterface] After ensure - currentSessionId:', currentSessionId);
-      console.log('📤 [ChatInterface] After ensure - isDraftConversation:', isDraftConversation);
     } catch (error) {
       const errorMessage = String(error);
-      console.error('❌ [ChatInterface] Failed to ensure session:', errorMessage);
+      console.error('Failed to ensure session:', errorMessage);
       setRunState('error');
       setLastError(`创建会话失败: ${errorMessage}`);
       appendTimeline({
@@ -499,16 +460,13 @@ function ChatInterface({
       timestamp: Date.now(),
     };
 
-    console.log('📤 [ChatInterface] Adding user message to messages');
     onMessagesChange((prev) => [...prev, newMessage]);
 
     try {
-      console.log('📤 [ChatInterface] Calling send_message...');
       await invoke<string>('send_message', { message: content });
-      console.log('📤 [ChatInterface] send_message completed');
     } catch (error) {
       const errorMessage = String(error);
-      console.error('❌ [ChatInterface] send_message failed:', errorMessage);
+      console.error('send_message failed:', errorMessage);
       if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
         return;
       }
