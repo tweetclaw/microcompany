@@ -14,6 +14,19 @@ use tauri::{Emitter, Window};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
+    blocks
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 pub struct ClaurstSession {
     session_id: String,
     working_dir: PathBuf,
@@ -276,20 +289,42 @@ impl ClaurstSession {
         // 5. 处理结果并发送终态事件
         match outcome {
             QueryOutcome::EndTurn { message, .. } => {
-                let text = match &message.content {
-                    MessageContent::Text(s) => s.clone(),
-                    MessageContent::Blocks(blocks) => blocks
-                        .iter()
-                        .filter_map(|block| {
-                            if let ContentBlock::Text { text } = block {
-                                Some(text.as_str())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n"),
+                let mut text = match &message.content {
+                    MessageContent::Text(s) => s.trim().to_string(),
+                    MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
                 };
+
+                log::info!("🔍 [DEBUG] EndTurn message.content extracted text length: {}", text.len());
+                if !text.is_empty() {
+                    log::info!("🔍 [DEBUG] EndTurn text preview (first 200 chars): {}",
+                        text.chars().take(200).collect::<String>());
+                }
+
+                if text.is_empty() {
+                    log::info!("🔍 [DEBUG] text is empty, searching in self.messages (total: {})", self.messages.len());
+                    text = self
+                        .messages
+                        .iter()
+                        .rev()
+                        .find(|message| matches!(message.role, claurst_core::Role::Assistant))
+                        .map(|message| {
+                            let fallback_text = message.get_all_text().trim().to_string();
+                            log::info!("🔍 [DEBUG] Found fallback text length: {}", fallback_text.len());
+                            if !fallback_text.is_empty() {
+                                log::info!("🔍 [DEBUG] Fallback text preview (first 200 chars): {}",
+                                    fallback_text.chars().take(200).collect::<String>());
+                            }
+                            fallback_text
+                        })
+                        .filter(|candidate| !candidate.is_empty())
+                        .unwrap_or_default();
+                }
+
+                log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());
+                if !text.is_empty() {
+                    log::info!("🔍 [DEBUG] Final text preview (first 200 chars): {}",
+                        text.chars().take(200).collect::<String>());
+                }
 
                 log::info!("AI response received, length: {} chars", text.len());
 
@@ -308,6 +343,7 @@ impl ClaurstSession {
                 let _ = window.emit("ai-request-end", serde_json::json!({
                     "request_id": request_id_owned.clone(),
                     "result": "success",
+                    "final_text": text,
                     "timestamp": now,
                 }));
 

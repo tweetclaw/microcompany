@@ -38,6 +38,7 @@ export interface AiRequestEndEvent {
   request_id: string;
   result: AiRequestResult;
   error_message?: string;
+  final_text?: string;
   timestamp: number;
 }
 

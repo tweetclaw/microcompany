@@ -105,13 +105,57 @@ function ChatInterface({
     setProcessTimeline((prev) => [...prev, item]);
   };
 
-  const finalizeStreamingMessage = () => {
+  const finalizeStreamingMessage = (requestId?: string | null, finalText?: string) => {
+    console.log('🔍 [DEBUG] finalizeStreamingMessage called with:', {
+      requestId,
+      finalTextLength: finalText?.length ?? 0,
+      finalTextPreview: finalText ? finalText.substring(0, 200) : '(empty)',
+    });
+
     onMessagesChangeRef.current((prev: Message[]) => {
-      const last = prev[prev.length - 1];
-      if (last && last.role === 'assistant' && last.isStreaming) {
-        return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+      console.log('🔍 [DEBUG] Current messages count:', prev.length);
+
+      const targetIndex = [...prev]
+        .map((message, index) => ({ message, index }))
+        .reverse()
+        .find(({ message }) => message.role === 'assistant' && (!requestId || message.requestId === requestId))?.index;
+
+      console.log('🔍 [DEBUG] Target message index:', targetIndex ?? 'undefined');
+
+      if (targetIndex === undefined) {
+        console.log('🔍 [DEBUG] No target message found, creating new message');
+        if (finalText && finalText.trim()) {
+          return [
+            ...prev,
+            {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              role: 'assistant',
+              content: finalText.trim(),
+              timestamp: Date.now(),
+              isStreaming: false,
+              requestId: requestId || undefined,
+            },
+          ];
+        }
+        return prev;
       }
-      return prev;
+
+      const targetMessage = prev[targetIndex];
+      const nextContent = finalText && finalText.trim() ? finalText.trim() : targetMessage.content;
+
+      console.log('🔍 [DEBUG] Replacing message content:', {
+        oldContentLength: targetMessage.content.length,
+        oldContentPreview: targetMessage.content.substring(0, 200),
+        newContentLength: nextContent.length,
+        newContentPreview: nextContent.substring(0, 200),
+        willReplace: finalText && finalText.trim() ? 'yes' : 'no (keeping old)',
+      });
+
+      return [
+        ...prev.slice(0, targetIndex),
+        { ...targetMessage, content: nextContent, isStreaming: false },
+        ...prev.slice(targetIndex + 1),
+      ];
     });
   };
 
@@ -289,7 +333,7 @@ function ChatInterface({
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        finalizeStreamingMessage();
+        finalizeStreamingMessage(payload.request_id, payload.final_text);
 
         if (payload.result === 'success') {
           setRunState('completed');

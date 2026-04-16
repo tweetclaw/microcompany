@@ -31,3 +31,6 @@ package-lock.json
 src-tauri/.DS_Store
 .DS_Store
 .gstack/
+
+# Build output
+dist/
