@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
+import { Settings } from './components/Settings';
 import { Message } from './types';
 import './App.css';
 
@@ -12,6 +13,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleDirectorySelected = async (directory: string) => {
     // 只设置工作目录，不创建会话
@@ -107,7 +109,9 @@ function App() {
         onSessionSelected={handleSessionSelected}
         onNewChat={handleNewChat}
         hasActiveSession={hasActiveSession}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
+      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

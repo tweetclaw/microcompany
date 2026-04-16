@@ -18,6 +18,7 @@ interface ChatInterfaceProps {
   onSessionSelected: (directory: string) => void;
   onNewChat: () => void;
   hasActiveSession: boolean;
+  onSettingsClick: () => void;
 }
 
 function ChatInterface({
@@ -29,6 +30,7 @@ function ChatInterface({
   onSessionSelected,
   onNewChat,
   hasActiveSession,
+  onSettingsClick,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -223,6 +225,7 @@ function ChatInterface({
         workingDirectory={workingDirectory}
         onMenuClick={() => setSidebarOpen(true)}
         onNewChat={onNewChat}
+        onSettingsClick={onSettingsClick}
       />
       {hasActiveSession ? (
         <>

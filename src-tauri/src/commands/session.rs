@@ -36,11 +36,17 @@ pub async fn init_session(
     }
 
     // Load API configuration
-    let config = crate::commands::config::ApiConfig::load()
+    let app_config = crate::config::AppConfig::load()
         .map_err(|e| format!("Failed to load config: {}", e))?;
 
-    let api_key = config.anthropic_api_key
-        .ok_or("API key not configured")?;
+    // Get active provider configuration
+    let active_provider = app_config.providers.iter()
+        .find(|p| p.id == app_config.active_provider)
+        .ok_or_else(|| format!("Active provider '{}' not found in configuration", app_config.active_provider))?;
+
+    if active_provider.api_key.is_empty() {
+        return Err(format!("API key not configured for provider '{}'", active_provider.name));
+    }
 
     // Use provided session_id or create a new one
     let session_id = if let Some(id) = session_id {
@@ -57,9 +63,9 @@ pub async fn init_session(
     let session = ClaurstSession::new(
         session_id.clone(),
         std::path::PathBuf::from(&working_dir),
-        api_key,
-        config.model,
-        config.base_url,
+        active_provider.api_key.clone(),
+        active_provider.model.clone(),
+        active_provider.base_url.clone(),
     ).map_err(|e| format!("Failed to create session: {}", e))?;
 
     // Save session

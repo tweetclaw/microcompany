@@ -5,12 +5,14 @@ interface ToolbarProps {
   workingDirectory: string | null;
   onMenuClick: () => void;
   onNewChat: () => void;
+  onSettingsClick: () => void;
 }
 
 function Toolbar({
   workingDirectory,
   onMenuClick,
   onNewChat,
+  onSettingsClick,
 }: ToolbarProps) {
   const getDirectoryName = (path: string) => {
     const parts = path.split('/');
@@ -35,6 +37,13 @@ function Toolbar({
         )}
       </div>
       <div className="toolbar-right">
+        <button
+          className="toolbar-settings-button"
+          onClick={onSettingsClick}
+          title="设置"
+        >
+          ⚙️
+        </button>
         <button
           className="toolbar-new-chat-button"
           onClick={onNewChat}

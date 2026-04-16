@@ -4,3 +4,4 @@ pub mod config;
 
 pub use session::*;
 pub use message::*;
+pub use config::*;

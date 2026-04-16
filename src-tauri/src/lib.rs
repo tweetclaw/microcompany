@@ -1,6 +1,7 @@
 mod commands;
 mod claurst;
 mod storage;
+mod config;
 
 use commands::session::AppState;
 use std::sync::Arc;
@@ -24,6 +25,10 @@ pub fn run() {
       commands::delete_session,
       commands::clear_session,
       commands::load_messages,
+      commands::get_config,
+      commands::save_config,
+      commands::get_available_providers,
+      commands::validate_provider_config,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
