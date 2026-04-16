@@ -1,10 +1,11 @@
 .toolbar {
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
-  height: 50px;
-  padding: 0 var(--space-6);
+  height: var(--toolbar-height);
+  padding: 0 var(--space-5);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-4);
   flex-shrink: 0;
 }
@@ -12,8 +13,16 @@
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  min-width: 0;
   flex: 1;
+}
+
+.toolbar-working-dir {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .working-dir-label {
@@ -29,62 +38,64 @@
   background: var(--bg-primary);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  max-width: 400px;
+  max-width: 460px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.toolbar-working-dir-empty {
+  color: var(--text-tertiary);
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  flex-shrink: 0;
 }
 
-.toolbar-button {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  border: 1px solid var(--border-default);
-  cursor: pointer;
-  transition: var(--transition-all);
-}
-
-.toolbar-button:hover {
-  background: var(--bg-secondary);
-  border-color: var(--border-strong);
-}
-
-.toolbar-button:active {
-  transform: translateY(1px);
-}
-
-.toolbar-menu-button {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: var(--text-primary);
-  cursor: pointer;
-  padding: var(--space-2);
+.toolbar-model-picker {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: rgba(10, 22, 40, 0.4);
+}
+
+.toolbar-picker-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.toolbar-model-select {
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  outline: none;
 }
 
-.toolbar-menu-button:hover {
-  background: var(--bg-hover);
+.toolbar-model-select:focus {
+  border-color: var(--primary-blue-start);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
 }
 
-.toolbar-menu-button:active {
-  transform: scale(0.95);
+.toolbar-model-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.toolbar-new-chat-button {
+.toolbar-button,
+.toolbar-new-chat-button,
+.toolbar-panel-button {
   background: var(--bg-elevated);
   color: var(--text-primary);
   padding: var(--space-2) var(--space-4);
@@ -97,12 +108,16 @@
   white-space: nowrap;
 }
 
-.toolbar-new-chat-button:hover:not(:disabled) {
+.toolbar-button:hover,
+.toolbar-new-chat-button:hover:not(:disabled),
+.toolbar-panel-button:hover {
   background: var(--bg-secondary);
   border-color: var(--border-strong);
 }
 
-.toolbar-new-chat-button:active:not(:disabled) {
+.toolbar-button:active,
+.toolbar-new-chat-button:active:not(:disabled),
+.toolbar-panel-button:active {
   transform: translateY(1px);
 }
 
@@ -111,6 +126,7 @@
   cursor: not-allowed;
 }
 
+.toolbar-menu-button,
 .toolbar-settings-button {
   background: none;
   border: none;
@@ -125,10 +141,31 @@
   border-radius: var(--radius-sm);
 }
 
+.toolbar-menu-button:hover,
 .toolbar-settings-button:hover {
   background: var(--bg-hover);
 }
 
+.toolbar-menu-button:active,
 .toolbar-settings-button:active {
   transform: scale(0.95);
+}
+
+@media (max-width: 1279px) {
+  .toolbar {
+    padding: 0 var(--space-4);
+  }
+
+  .toolbar-picker-label {
+    display: none;
+  }
+
+  .toolbar-model-select {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
+  .working-dir-path {
+    max-width: 240px;
+  }
 }

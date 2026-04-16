@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, ProviderConfig};
+use crate::config::AppConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

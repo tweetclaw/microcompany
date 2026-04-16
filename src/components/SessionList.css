@@ -2,20 +2,20 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
 }
 
 .session-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-all);
 }
 
 .session-item:hover {
@@ -24,9 +24,15 @@
   transform: translateX(4px);
 }
 
+.session-item-active {
+  border-color: var(--primary-blue-start);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
 .session-icon {
   font-size: 20px;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .session-info {
@@ -47,6 +53,17 @@
 .session-meta {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
+}
+
+.session-provider-badge {
+  display: inline-flex;
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(30, 64, 175, 0.14);
+  color: #bfdbfe;
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
 .session-delete {

@@ -28,47 +28,69 @@ pub struct AppState {
 pub async fn init_session(
     working_dir: String,
     session_id: Option<String>,
+    provider_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    // Validate directory exists
     if !std::path::Path::new(&working_dir).exists() {
         return Err(format!("Directory does not exist: {}", working_dir));
     }
 
-    // Load API configuration
     let app_config = crate::config::AppConfig::load()
         .map_err(|e| format!("Failed to load config: {}", e))?;
 
-    // Get active provider configuration
-    let active_provider = app_config.providers.iter()
-        .find(|p| p.id == app_config.active_provider)
-        .ok_or_else(|| format!("Active provider '{}' not found in configuration", app_config.active_provider))?;
+    let storage = crate::storage::ConversationStorage::new()
+        .map_err(|e| format!("Failed to create storage: {}", e))?;
 
-    if active_provider.api_key.is_empty() {
-        return Err(format!("API key not configured for provider '{}'", active_provider.name));
-    }
+    let (session_id, selected_provider) = if let Some(existing_session_id) = session_id {
+        let session_data = storage.load_session(&existing_session_id)
+            .map_err(|e| format!("Failed to load session: {}", e))?;
 
-    // Use provided session_id or create a new one
-    let session_id = if let Some(id) = session_id {
-        id
+        if session_data.working_directory != working_dir {
+            return Err("Session does not belong to the current working directory".to_string());
+        }
+
+        let resolved_provider_id = session_data
+            .provider_id
+            .clone()
+            .unwrap_or_else(|| app_config.active_provider.clone());
+
+        let provider = app_config.providers.iter()
+            .find(|p| p.id == resolved_provider_id)
+            .ok_or_else(|| format!("Provider '{}' not found in configuration", resolved_provider_id))?
+            .clone();
+
+        (existing_session_id, provider)
     } else {
-        // Create a new session in storage
-        let storage = crate::storage::ConversationStorage::new()
-            .map_err(|e| format!("Failed to create storage: {}", e))?;
-        storage.create_session(&std::path::PathBuf::from(&working_dir))
-            .map_err(|e| format!("Failed to create session: {}", e))?
+        let resolved_provider_id = provider_id.unwrap_or_else(|| app_config.active_provider.clone());
+
+        let provider = app_config.providers.iter()
+            .find(|p| p.id == resolved_provider_id)
+            .ok_or_else(|| format!("Provider '{}' not found in configuration", resolved_provider_id))?
+            .clone();
+
+        let created_session_id = storage.create_session(
+            &std::path::PathBuf::from(&working_dir),
+            Some(provider.id.clone()),
+            Some(provider.name.clone()),
+            Some(provider.model.clone()),
+            provider.base_url.clone(),
+        ).map_err(|e| format!("Failed to create session: {}", e))?;
+
+        (created_session_id, provider)
     };
 
-    // Create Claurst session
+    if selected_provider.id != "ollama" && selected_provider.api_key.is_empty() {
+        return Err(format!("API key not configured for provider '{}'", selected_provider.name));
+    }
+
     let session = ClaurstSession::new(
         session_id.clone(),
         std::path::PathBuf::from(&working_dir),
-        active_provider.api_key.clone(),
-        active_provider.model.clone(),
-        active_provider.base_url.clone(),
+        selected_provider.api_key.clone(),
+        selected_provider.model.clone(),
+        selected_provider.base_url.clone(),
     ).map_err(|e| format!("Failed to create session: {}", e))?;
 
-    // Save session
     *state.session.lock().await = Some(session);
 
     Ok(session_id)
@@ -99,11 +121,11 @@ pub async fn close_session(
 }
 
 #[tauri::command]
-pub async fn list_sessions() -> Result<Vec<crate::storage::SessionInfo>, String> {
+pub async fn list_sessions(working_dir: Option<String>) -> Result<Vec<crate::storage::SessionInfo>, String> {
     let storage = crate::storage::ConversationStorage::new()
         .map_err(|e| format!("Failed to create storage: {}", e))?;
-    
-    storage.list_all_sessions()
+
+    storage.list_all_sessions(working_dir.as_deref())
         .map_err(|e| format!("Failed to list sessions: {}", e))
 }
 

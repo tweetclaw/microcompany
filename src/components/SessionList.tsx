@@ -2,30 +2,42 @@ import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './SessionList.css';
 
-interface SessionInfo {
+export interface SessionInfo {
   session_id: string;
   working_directory: string;
   title: string;
   message_count: number;
   last_activity: number;
   created_at: number;
+  provider_id?: string | null;
+  provider_name?: string | null;
+  model?: string | null;
 }
 
 interface SessionListProps {
+  workingDirectory: string;
+  currentSessionId?: string | null;
   onSessionSelected: (sessionId: string) => void;
 }
 
-function SessionList({ onSessionSelected }: SessionListProps) {
+function SessionList({ workingDirectory, currentSessionId, onSessionSelected }: SessionListProps) {
   const [sessions, setSessions] = React.useState<SessionInfo[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     loadSessions();
-  }, []);
+  }, [workingDirectory]);
 
   const loadSessions = async () => {
+    if (!workingDirectory) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await invoke<SessionInfo[]>('list_sessions');
+      setLoading(true);
+      const result = await invoke<SessionInfo[]>('list_sessions', { workingDir: workingDirectory });
       setSessions(result);
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -65,12 +77,6 @@ function SessionList({ onSessionSelected }: SessionListProps) {
     return date.toLocaleDateString('zh-CN');
   };
 
-  const getDirectoryName = (path: string) => {
-    // Extract directory name from full path
-    const parts = path.split('/');
-    return parts[parts.length - 1] || path;
-  };
-
   if (loading) {
     return (
       <div className="session-list-loading">
@@ -84,7 +90,7 @@ function SessionList({ onSessionSelected }: SessionListProps) {
     return (
       <div className="session-list-empty">
         <p>暂无历史会话</p>
-        <p className="session-list-empty-hint">选择一个工作目录开始对话</p>
+        <p className="session-list-empty-hint">点击右上角“新建”开始第一段对话</p>
       </div>
     );
   }
@@ -94,7 +100,10 @@ function SessionList({ onSessionSelected }: SessionListProps) {
       {sessions.map((session) => (
         <div
           key={session.session_id}
-          className="session-item"
+          className={[
+            'session-item',
+            currentSessionId === session.session_id ? 'session-item-active' : '',
+          ].filter(Boolean).join(' ')}
           onClick={() => onSessionSelected(session.session_id)}
         >
           <div className="session-icon">💬</div>
@@ -103,6 +112,11 @@ function SessionList({ onSessionSelected }: SessionListProps) {
             <div className="session-meta">
               {session.message_count} 条消息 · {formatTime(session.last_activity)}
             </div>
+            {(session.provider_name || session.model) && (
+              <div className="session-provider-badge">
+                {session.provider_name || session.provider_id || 'Provider'} · {session.model || 'Default'}
+              </div>
+            )}
           </div>
           <button
             className="session-delete"

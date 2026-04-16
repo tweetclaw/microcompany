@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::fs;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredMessage {
@@ -18,6 +16,10 @@ pub struct SessionData {
     pub title: String,
     pub created_at: i64,
     pub messages: Vec<StoredMessage>,
+    pub provider_id: Option<String>,
+    pub provider_name: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +30,9 @@ pub struct SessionInfo {
     pub message_count: usize,
     pub last_activity: i64,
     pub created_at: i64,
+    pub provider_id: Option<String>,
+    pub provider_name: Option<String>,
+    pub model: Option<String>,
 }
 
 pub struct ConversationStorage {
@@ -73,7 +78,14 @@ impl ConversationStorage {
     }
 
     /// Create a new session
-    pub fn create_session(&self, working_dir: &Path) -> anyhow::Result<String> {
+    pub fn create_session(
+        &self,
+        working_dir: &Path,
+        provider_id: Option<String>,
+        provider_name: Option<String>,
+        model: Option<String>,
+        base_url: Option<String>,
+    ) -> anyhow::Result<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
 
@@ -83,6 +95,10 @@ impl ConversationStorage {
             title: "Untitled".to_string(), // Will be updated when first message is sent
             created_at: now,
             messages: Vec::new(),
+            provider_id,
+            provider_name,
+            model,
+            base_url,
         };
 
         let file_path = self.get_session_file(&session_id);
@@ -164,7 +180,7 @@ impl ConversationStorage {
     }
 
     /// List all sessions with their metadata
-    pub fn list_all_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
+    pub fn list_all_sessions(&self, working_dir: Option<&str>) -> anyhow::Result<Vec<SessionInfo>> {
         let mut sessions = Vec::new();
 
         if !self.storage_dir.exists() {
@@ -179,6 +195,12 @@ impl ConversationStorage {
                 let content = fs::read_to_string(&path)?;
 
                 if let Ok(session_data) = serde_json::from_str::<SessionData>(&content) {
+                    if let Some(expected_working_dir) = working_dir {
+                        if session_data.working_directory != expected_working_dir {
+                            continue;
+                        }
+                    }
+
                     let last_activity = session_data.messages.last()
                         .map(|m| m.timestamp)
                         .unwrap_or(session_data.created_at);
@@ -191,12 +213,14 @@ impl ConversationStorage {
                         message_count,
                         last_activity,
                         created_at: session_data.created_at,
+                        provider_id: session_data.provider_id,
+                        provider_name: session_data.provider_name,
+                        model: session_data.model,
                     });
                 }
             }
         }
 
-        // Sort by last activity (most recent first)
         sessions.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
 
         Ok(sessions)

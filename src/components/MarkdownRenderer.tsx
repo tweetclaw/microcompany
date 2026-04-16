@@ -14,7 +14,6 @@ function isIncompleteCodeBlock(content: string): boolean {
 }
 
 export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRendererProps) {
-  // 如果正在流式传输且代码块未闭合,暂时添加闭合标记
   let processedContent = content;
   if (isStreaming && isIncompleteCodeBlock(content)) {
     processedContent = content + '\n```';
@@ -25,11 +24,11 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
             const code = String(children).replace(/\n$/, '');
 
-            return !inline && match ? (
+            return match ? (
               <CodeBlock language={match[1]} code={code} />
             ) : (
               <code className="inline-code" {...props}>

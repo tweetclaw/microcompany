@@ -1,21 +1,31 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import Toolbar from './Toolbar';
 import MessageList from './MessageList';
 import InputBox from './InputBox';
 import Sidebar from './Sidebar';
+import InspectorPanel from './InspectorPanel';
 import { ToolIndicator } from './ToolIndicator';
 import { Message, ToolCall } from '../types';
+import { ProviderConfig } from '../types/settings';
+import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import './ChatInterface.css';
 
 interface ChatInterfaceProps {
   workingDirectory: string | null;
+  currentSessionId: string | null;
+  currentSessionTitle: string | null;
+  currentProviderName: string | null;
+  currentModelName: string | null;
+  availableProviders: ProviderConfig[];
+  selectedProviderValue: string;
   messages: Message[];
   isLoading: boolean;
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   onLoadingChange: (loading: boolean) => void;
-  onSessionSelected: (directory: string) => void;
+  onSessionSelected: (sessionId: string) => void;
+  onProviderChange: (value: string) => void;
   onNewChat: () => void;
   hasActiveSession: boolean;
   onSettingsClick: () => void;
@@ -23,48 +33,73 @@ interface ChatInterfaceProps {
 
 function ChatInterface({
   workingDirectory,
+  currentSessionId,
+  currentSessionTitle,
+  currentProviderName,
+  currentModelName,
+  availableProviders,
+  selectedProviderValue,
   messages,
   isLoading,
   onMessagesChange,
   onLoadingChange,
   onSessionSelected,
+  onProviderChange,
   onNewChat,
   hasActiveSession,
   onSettingsClick,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const initialLayout = useMemo(() => loadLayoutState(), []);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialLayout.isSidebarCollapsed);
+  const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(initialLayout.isInspectorCollapsed);
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
+  const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 1280 : false);
 
-  // Use refs to always access the latest callbacks
   const onMessagesChangeRef = useRef(onMessagesChange);
   const onLoadingChangeRef = useRef(onLoadingChange);
 
-  // Update refs when callbacks change
   useEffect(() => {
     onMessagesChangeRef.current = onMessagesChange;
     onLoadingChangeRef.current = onLoadingChange;
   }, [onMessagesChange, onLoadingChange]);
 
-  // 设置事件监听器
+  useEffect(() => {
+    saveLayoutState({
+      isSidebarCollapsed,
+      isInspectorCollapsed,
+    });
+  }, [isSidebarCollapsed, isInspectorCollapsed]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const compact = window.innerWidth < 1280;
+      setIsCompact(compact);
+      if (!compact) {
+        setIsSidebarDrawerOpen(false);
+        setIsInspectorDrawerOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     let unlistenChunk: (() => void) | null = null;
-    let unlistenComplete: (() => void) | null = null;
     let unlistenToolStart: (() => void) | null = null;
     let unlistenToolEnd: (() => void) | null = null;
 
     const setupListeners = async () => {
-      // 监听消息片段
       unlistenChunk = await listen<string>('message-chunk', (event) => {
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
 
-          // If the last message is an assistant message (streaming or not), append to it
           if (last && last.role === 'assistant') {
-            // Replace "💭 思考中..." with actual content on first chunk
             const isThinking = last.content.includes('思考中');
-            const newContent = isThinking
-              ? event.payload
-              : last.content + event.payload;
+            const newContent = isThinking ? event.payload : last.content + event.payload;
 
             return [
               ...currentMessages.slice(0, -1),
@@ -72,7 +107,6 @@ function ChatInterface({
             ];
           }
 
-          // If no assistant message exists, create one with the first chunk
           return [
             ...currentMessages,
             {
@@ -86,35 +120,26 @@ function ChatInterface({
         });
       });
 
-      // 监听工具调用开始
-      unlistenToolStart = await listen<{ tool: string; action: string }>(
-        'tool-call-start',
-        (event) => {
-          setCurrentToolCall({
-            tool: event.payload.tool,
-            action: event.payload.action,
-            status: 'running',
-          });
-        }
-      );
+      unlistenToolStart = await listen<{ tool: string; action: string }>('tool-call-start', (event) => {
+        setCurrentToolCall({
+          tool: event.payload.tool,
+          action: event.payload.action,
+          status: 'running',
+        });
+      });
 
-      // 监听工具调用结束
-      unlistenToolEnd = await listen<{ tool: string; success: boolean; result: string }>(
-        'tool-call-end',
-        (event) => {
-          setCurrentToolCall({
-            tool: event.payload.tool,
-            action: '',
-            status: event.payload.success ? 'success' : 'error',
-            result: event.payload.result,
-          });
+      unlistenToolEnd = await listen<{ tool: string; success: boolean; result: string }>('tool-call-end', (event) => {
+        setCurrentToolCall({
+          tool: event.payload.tool,
+          action: '',
+          status: event.payload.success ? 'success' : 'error',
+          result: event.payload.result,
+        });
 
-          // 2秒后清除工具调用状态
-          setTimeout(() => {
-            setCurrentToolCall(null);
-          }, 2000);
-        }
-      );
+        setTimeout(() => {
+          setCurrentToolCall(null);
+        }, 2000);
+      });
     };
 
     setupListeners();
@@ -124,7 +149,18 @@ function ChatInterface({
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
     };
-  }, []); // Empty deps - listeners should only be set up once
+  }, []);
+
+  const modelOptions = useMemo(() => {
+    return availableProviders
+      .filter((provider) => provider.enabled && (provider.apiKey || provider.id === 'ollama'))
+      .map((provider) => ({
+        value: `${provider.id}::${provider.model}`,
+        providerId: provider.id,
+        providerName: provider.name,
+        model: provider.model,
+      }));
+  }, [availableProviders]);
 
   const handleSendMessage = async (content: string) => {
     const newMessage: Message = {
@@ -134,16 +170,12 @@ function ChatInterface({
       timestamp: Date.now(),
     };
 
-    // Add user message only
     onMessagesChange((prev) => [...prev, newMessage]);
     onLoadingChange(true);
 
     try {
-      // 调用 Tauri 命令，流式响应通过事件接收
       await invoke<string>('send_message', { message: content });
 
-      // 消息发送完成后，标记最后一条消息为非流式状态并隐藏加载指示器
-      // 增加延迟确保所有流式事件都已处理完成
       setTimeout(() => {
         onMessagesChange((prev) => {
           const last = prev[prev.length - 1];
@@ -158,7 +190,6 @@ function ChatInterface({
     } catch (error) {
       const errorMessage = String(error);
 
-      // 如果是取消操作，不显示错误消息
       if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
         onLoadingChange(false);
         setCurrentToolCall(null);
@@ -166,8 +197,6 @@ function ChatInterface({
       }
 
       console.error('Failed to send message:', error);
-
-      // Add error message
       onMessagesChange((prev) => [
         ...prev,
         {
@@ -187,8 +216,6 @@ function ChatInterface({
       await invoke('cancel_message');
       onLoadingChange(false);
       setCurrentToolCall(null);
-
-      // Add cancellation message
       onMessagesChange((prev) => [
         ...prev,
         {
@@ -203,49 +230,90 @@ function ChatInterface({
     }
   };
 
-  const handleClearChat = async () => {
-    try {
-      await invoke('clear_session');
-      onMessagesChange([]);
-    } catch (error) {
-      console.error('Failed to clear session:', error);
-      alert(`清空会话失败: ${error}`);
+  const handleSidebarToggle = () => {
+    if (isCompact) {
+      setIsSidebarDrawerOpen((prev) => !prev);
+      return;
     }
+    setIsSidebarCollapsed((prev) => !prev);
+  };
+
+  const handleInspectorToggle = () => {
+    if (isCompact) {
+      setIsInspectorDrawerOpen((prev) => !prev);
+      return;
+    }
+    setIsInspectorCollapsed((prev) => !prev);
   };
 
   return (
     <div className="chat-interface">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        currentWorkingDirectory={workingDirectory || ''}
-        onSessionSelected={onSessionSelected}
-      />
       <Toolbar
         workingDirectory={workingDirectory}
-        onMenuClick={() => setSidebarOpen(true)}
+        modelOptions={modelOptions}
+        selectedModelValue={selectedProviderValue}
+        onModelChange={onProviderChange}
+        onSidebarToggle={handleSidebarToggle}
+        onInspectorToggle={handleInspectorToggle}
         onNewChat={onNewChat}
         onSettingsClick={onSettingsClick}
       />
-      {hasActiveSession ? (
-        <>
-          <MessageList messages={messages} isLoading={isLoading} />
-          {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
-          <InputBox
-            onSendMessage={handleSendMessage}
-            onCancelMessage={handleCancelMessage}
-            disabled={!workingDirectory || isLoading}
-            isLoading={isLoading}
-          />
-        </>
-      ) : (
-        <div className="no-session-placeholder">
-          <div className="placeholder-content">
-            <h2>欢迎使用 AI 助手</h2>
-            <p>请点击左上角的菜单选择一个会话,或点击"新建"按钮开始新的对话</p>
+
+      <div className="ide-workspace">
+        <Sidebar
+          isOpen={isSidebarDrawerOpen}
+          collapsed={isSidebarCollapsed}
+          isCompact={isCompact}
+          onClose={() => setIsSidebarDrawerOpen(false)}
+          currentWorkingDirectory={workingDirectory || ''}
+          currentSessionId={currentSessionId}
+          onSessionSelected={onSessionSelected}
+        />
+
+        <main className="chat-main-column">
+          <div className="chat-main-surface">
+            {hasActiveSession ? (
+              <>
+                <MessageList messages={messages} isLoading={isLoading} />
+                {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
+                <InputBox
+                  onSendMessage={handleSendMessage}
+                  onCancelMessage={handleCancelMessage}
+                  disabled={!workingDirectory || isLoading}
+                  isLoading={isLoading}
+                />
+              </>
+            ) : (
+              <div className="no-session-placeholder">
+                <div className="placeholder-content">
+                  <div className="placeholder-badge">IDE Workspace Ready</div>
+                  <h2>欢迎使用 AI IDE 助手</h2>
+                  <p>左侧管理会话，中间进行对话，右侧查看模型与工作区信息。先选择模型，再点击“新建”开始新的上下文。</p>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </main>
+
+        {isCompact && isInspectorDrawerOpen && (
+          <div
+            className="inspector-overlay"
+            onClick={() => setIsInspectorDrawerOpen(false)}
+          ></div>
+        )}
+
+        <InspectorPanel
+          workingDirectory={workingDirectory}
+          currentSessionTitle={currentSessionTitle}
+          currentSessionId={currentSessionId}
+          messageCount={messages.length}
+          currentToolCall={currentToolCall}
+          providerLabel={currentProviderName}
+          modelLabel={currentModelName}
+          collapsed={isCompact ? !isInspectorDrawerOpen : isInspectorCollapsed}
+          isCompact={isCompact}
+        />
+      </div>
     </div>
   );
 }
