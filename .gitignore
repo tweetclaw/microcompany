@@ -34,3 +34,5 @@ src-tauri/.DS_Store
 
 # Build output
 dist/
+src-tauri/dev.pid
+dev.pid

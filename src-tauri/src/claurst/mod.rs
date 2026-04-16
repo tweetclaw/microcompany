@@ -289,6 +289,7 @@ impl ClaurstSession {
         // 5. 处理结果并发送终态事件
         match outcome {
             QueryOutcome::EndTurn { message, .. } => {
+                // 优先从 message.content 提取文本
                 let mut text = match &message.content {
                     MessageContent::Text(s) => s.trim().to_string(),
                     MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
@@ -300,24 +301,20 @@ impl ClaurstSession {
                         text.chars().take(200).collect::<String>());
                 }
 
+                // 如果 message.content 为空，从 self.messages 中获取最后一条 assistant 消息
+                // 注意：这里获取的是完整的累积文本，而不是中间的流式片段
                 if text.is_empty() {
                     log::info!("🔍 [DEBUG] text is empty, searching in self.messages (total: {})", self.messages.len());
-                    text = self
-                        .messages
-                        .iter()
-                        .rev()
-                        .find(|message| matches!(message.role, claurst_core::Role::Assistant))
-                        .map(|message| {
-                            let fallback_text = message.get_all_text().trim().to_string();
-                            log::info!("🔍 [DEBUG] Found fallback text length: {}", fallback_text.len());
-                            if !fallback_text.is_empty() {
-                                log::info!("🔍 [DEBUG] Fallback text preview (first 200 chars): {}",
-                                    fallback_text.chars().take(200).collect::<String>());
-                            }
-                            fallback_text
-                        })
-                        .filter(|candidate| !candidate.is_empty())
-                        .unwrap_or_default();
+
+                    // 获取最后一条 assistant 消息的完整文本
+                    if let Some(last_assistant_msg) = self.messages.iter().rev().find(|msg| matches!(msg.role, claurst_core::Role::Assistant)) {
+                        text = last_assistant_msg.get_all_text().trim().to_string();
+                        log::info!("🔍 [DEBUG] Found assistant message text length: {}", text.len());
+                        if !text.is_empty() {
+                            log::info!("🔍 [DEBUG] Assistant message text preview (first 200 chars): {}",
+                                text.chars().take(200).collect::<String>());
+                        }
+                    }
                 }
 
                 log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());

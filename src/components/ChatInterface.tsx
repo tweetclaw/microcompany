@@ -141,19 +141,19 @@ function ChatInterface({
       }
 
       const targetMessage = prev[targetIndex];
-      const nextContent = finalText && finalText.trim() ? finalText.trim() : targetMessage.content;
 
-      console.log('🔍 [DEBUG] Replacing message content:', {
-        oldContentLength: targetMessage.content.length,
-        oldContentPreview: targetMessage.content.substring(0, 200),
-        newContentLength: nextContent.length,
-        newContentPreview: nextContent.substring(0, 200),
-        willReplace: finalText && finalText.trim() ? 'yes' : 'no (keeping old)',
+      // 关键修改：不替换内容，只标记为非流式状态
+      // 前端通过 message-chunk 事件已经累积了完整的文本
+      // 后端的 final_text 可能是不完整的（特别是在使用工具调用时）
+      console.log('🔍 [DEBUG] Finalizing message without replacing content:', {
+        currentContentLength: targetMessage.content.length,
+        currentContentPreview: targetMessage.content.substring(0, 200),
+        willKeepCurrentContent: true,
       });
 
       return [
         ...prev.slice(0, targetIndex),
-        { ...targetMessage, content: nextContent, isStreaming: false },
+        { ...targetMessage, isStreaming: false },
         ...prev.slice(targetIndex + 1),
       ];
     });
