@@ -13,12 +13,8 @@ interface ModelOption {
 interface ToolbarProps {
   workingDirectory: string | null;
   modelOptions: ModelOption[];
-  selectedModelValue: string;
-  modelStatusText: string | null;
   newChatDisabledReason: string | null;
   runState: AiRunState;
-  onModelChange: (value: string) => void;
-  onNewChat: () => void;
   onNewChatWithModel: (modelValue: string) => void;
   onSettingsClick: () => void;
 }
@@ -26,12 +22,8 @@ interface ToolbarProps {
 function Toolbar({
   workingDirectory,
   modelOptions,
-  selectedModelValue,
-  modelStatusText,
   newChatDisabledReason,
   runState,
-  onModelChange,
-  onNewChat,
   onNewChatWithModel,
   onSettingsClick,
 }: ToolbarProps) {
@@ -128,33 +120,6 @@ function Toolbar({
             triggerRect={newChatButtonRef.current.getBoundingClientRect()}
           />
         )}
-        <div className="toolbar-model-picker">
-          <span className="toolbar-picker-label">当前模型</span>
-          <div className="toolbar-model-picker-body">
-            <select
-              className="toolbar-model-select"
-              value={selectedModelValue}
-              onChange={(e) => onModelChange(e.target.value)}
-              disabled={modelOptions.length === 0}
-              title={modelStatusText || '当前对话使用的模型'}
-            >
-              {modelOptions.length === 0 ? (
-                <option value="">暂无可用模型</option>
-              ) : (
-                modelOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.providerName} · {option.model}
-                  </option>
-                ))
-              )}
-            </select>
-            {modelStatusText && (
-              <div className="toolbar-model-status" title={modelStatusText}>
-                {modelStatusText}
-              </div>
-            )}
-          </div>
-        </div>
         <div className="toolbar-divider"></div>
         <button
           className="toolbar-settings-button"

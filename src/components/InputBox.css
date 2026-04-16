@@ -12,6 +12,21 @@
   display: flex;
   gap: var(--space-3);
   align-items: flex-end;
+  position: relative;
+}
+
+.input-model-info {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
 }
 
 .input-textarea {

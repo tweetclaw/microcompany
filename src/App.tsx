@@ -159,36 +159,6 @@ function App() {
     setIsDraftConversation(false);
   };
 
-  // 获取默认模型：优先最近使用的有效模型，否则唯一可用模型，否则留空
-  const getDefaultModelValue = (): string => {
-    const enabledProviders = availableProviders.filter((provider) =>
-      isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id))
-    );
-
-    if (enabledProviders.length === 0) {
-      return '';
-    }
-
-    // 如果当前选中的模型仍然有效，继续使用
-    if (selectedProviderValue) {
-      const stillValid = enabledProviders.some(
-        (provider) => `${provider.id}::${provider.model}` === selectedProviderValue
-      );
-      if (stillValid) {
-        return selectedProviderValue;
-      }
-    }
-
-    // 如果只有一个可用模型，自动选中
-    if (enabledProviders.length === 1) {
-      const provider = enabledProviders[0];
-      return `${provider.id}::${provider.model}`;
-    }
-
-    // 否则留空，让用户选择
-    return '';
-  };
-
   const handleSessionSelected = async (sessionId: string) => {
     if (!workingDirectory) return;
 
@@ -236,32 +206,6 @@ function App() {
     }
   };
 
-  const handleNewChat = async () => {
-    if (!workingDirectory) return;
-
-    // 创建本地草稿对话，不立即调用后端 init_session
-    const defaultModel = getDefaultModelValue();
-
-    // 如果有默认模型，设置它
-    if (defaultModel) {
-      setSelectedProviderValue(defaultModel);
-      const provider = availableProviders.find((item) => `${item.id}::${item.model}` === defaultModel);
-      setCurrentProviderName(provider?.name || null);
-      setCurrentModelName(provider?.model || null);
-    } else {
-      // 没有默认模型，清空当前模型信息
-      setCurrentProviderName(null);
-      setCurrentModelName(null);
-    }
-
-    // 设置为草稿状态
-    setCurrentSessionId(null);
-    setCurrentSessionTitle(null);
-    setMessages([]);
-    setIsDraftConversation(true);
-    setHasActiveSession(true); // 标记为有活跃对话（虽然是草稿）
-  };
-
   const handleNewChatWithModel = async (modelValue: string) => {
     if (!workingDirectory) return;
 
@@ -281,8 +225,14 @@ function App() {
 
   // 确保当前有一个真实的后端 session（懒创建）
   const ensureActiveSession = async (): Promise<string | null> => {
+    console.log('🔐 [App] ensureActiveSession called');
+    console.log('🔐 [App] currentSessionId:', currentSessionId);
+    console.log('🔐 [App] isDraftConversation:', isDraftConversation);
+    console.log('🔐 [App] selectedProviderValue:', selectedProviderValue);
+
     // 如果已经有真实 session，直接返回
     if (currentSessionId && !isDraftConversation) {
+      console.log('🔐 [App] Already have real session, returning:', currentSessionId);
       return currentSessionId;
     }
 
@@ -292,13 +242,16 @@ function App() {
         const [providerId] = selectedProviderValue.split('::');
         const provider = availableProviders.find((item) => `${item.id}::${item.model}` === selectedProviderValue);
 
+        console.log('🔐 [App] Creating new session with providerId:', providerId);
         const sessionId = await invoke<string>('init_session', {
           workingDir: workingDirectory,
           sessionId: null,
           providerId,
         });
+        console.log('🔐 [App] Session created:', sessionId);
 
         // 转换草稿为真实 session
+        console.log('🔐 [App] Converting draft to real session...');
         setCurrentSessionId(sessionId);
         setCurrentSessionTitle('Untitled');
         setCurrentProviderName(provider?.name || null);
@@ -306,14 +259,16 @@ function App() {
         setIsDraftConversation(false);
         setHasActiveSession(true);
         setSessionListRefreshKey((prev) => prev + 1);
+        console.log('🔐 [App] Draft converted to real session');
 
         return sessionId;
       } catch (error) {
-        console.error('Failed to create session:', error);
+        console.error('❌ [App] Failed to create session:', error);
         throw error;
       }
     }
 
+    console.log('🔐 [App] No session created (conditions not met)');
     return null;
   };
 
@@ -346,8 +301,6 @@ function App() {
         onMessagesChange={setMessages}
         sessionListRefreshKey={sessionListRefreshKey}
         onSessionSelected={handleSessionSelected}
-        onProviderChange={setSelectedProviderValue}
-        onNewChat={handleNewChat}
         onNewChatWithModel={handleNewChatWithModel}
         hasActiveSession={hasActiveSession}
         isDraftConversation={isDraftConversation}

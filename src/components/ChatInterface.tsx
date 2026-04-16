@@ -37,8 +37,6 @@ interface ChatInterfaceProps {
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
-  onProviderChange: (value: string) => void;
-  onNewChat: () => void;
   onNewChatWithModel: (modelValue: string) => void;
   hasActiveSession: boolean;
   isDraftConversation: boolean;
@@ -65,8 +63,6 @@ function ChatInterface({
   onMessagesChange,
   sessionListRefreshKey,
   onSessionSelected,
-  onProviderChange,
-  onNewChat,
   onNewChatWithModel,
   hasActiveSession,
   isDraftConversation,
@@ -99,6 +95,17 @@ function ChatInterface({
   }, [activeRequestId]);
 
   useEffect(() => {
+    console.log('🔄 [ChatInterface] currentSessionId changed:', currentSessionId);
+    console.log('🔄 [ChatInterface] Current runState:', runState);
+    console.log('🔄 [ChatInterface] Current activeRequestId:', activeRequestId);
+
+    // 如果当前正在运行中（有活跃的请求），不要重置状态
+    // 这样可以避免在草稿转换为真实 session 时中断流式显示
+    if (runState !== 'idle' && activeRequestId) {
+      console.log('⏭️ [ChatInterface] Skipping reset - request is active');
+      return;
+    }
+    console.log('🔄 [ChatInterface] Resetting conversation run state');
     resetConversationRunState();
   }, [currentSessionId]);
 
@@ -224,6 +231,7 @@ function ChatInterface({
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
         const payload = event.payload;
+        console.log('🎬 [Event] ai-request-start received:', payload.request_id);
         setActiveRequestId(payload.request_id);
         activeRequestIdRef.current = payload.request_id;
         setRunState('running_thinking');
@@ -265,8 +273,16 @@ function ChatInterface({
 
       unlistenChunk = await listen<AiMessageChunkEvent>('message-chunk', (event) => {
         const payload = event.payload;
-        if (payload.request_id !== activeRequestIdRef.current) return;
+        console.log('📝 [Event] message-chunk received, request_id:', payload.request_id);
+        console.log('📝 [Event] Current activeRequestIdRef:', activeRequestIdRef.current);
+        console.log('📝 [Event] Chunk length:', payload.chunk.length);
 
+        if (payload.request_id !== activeRequestIdRef.current) {
+          console.warn('⚠️ [Event] message-chunk IGNORED - request_id mismatch');
+          return;
+        }
+
+        console.log('✅ [Event] message-chunk ACCEPTED - updating message');
         setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
 
         onMessagesChangeRef.current((currentMessages: Message[]) => {
@@ -443,11 +459,25 @@ function ChatInterface({
   }, [workingDirectory]);
 
   const handleSendMessage = async (content: string) => {
+    console.log('📤 [ChatInterface] handleSendMessage called');
+    console.log('📤 [ChatInterface] isDraftConversation:', isDraftConversation);
+    console.log('📤 [ChatInterface] currentSessionId:', currentSessionId);
+
+    // 先设置运行状态，防止 session 创建时触发的 useEffect 重置状态
+    console.log('📤 [ChatInterface] Setting runState to running_thinking');
+    setRunState('running_thinking');
+    setLastError(null);
+
     // 如果是草稿对话，先确保创建真实 session
     try {
+      console.log('📤 [ChatInterface] Calling onEnsureSession...');
       await onEnsureSession();
+      console.log('📤 [ChatInterface] onEnsureSession completed');
+      console.log('📤 [ChatInterface] After ensure - currentSessionId:', currentSessionId);
+      console.log('📤 [ChatInterface] After ensure - isDraftConversation:', isDraftConversation);
     } catch (error) {
       const errorMessage = String(error);
+      console.error('❌ [ChatInterface] Failed to ensure session:', errorMessage);
       setRunState('error');
       setLastError(`创建会话失败: ${errorMessage}`);
       appendTimeline({
@@ -467,14 +497,16 @@ function ChatInterface({
       timestamp: Date.now(),
     };
 
+    console.log('📤 [ChatInterface] Adding user message to messages');
     onMessagesChange((prev) => [...prev, newMessage]);
-    setLastError(null);
-    setRunState('running_thinking');
 
     try {
+      console.log('📤 [ChatInterface] Calling send_message...');
       await invoke<string>('send_message', { message: content });
+      console.log('📤 [ChatInterface] send_message completed');
     } catch (error) {
       const errorMessage = String(error);
+      console.error('❌ [ChatInterface] send_message failed:', errorMessage);
       if (errorMessage.includes('cancelled') || errorMessage.includes('Cancelled')) {
         return;
       }
@@ -553,12 +585,8 @@ function ChatInterface({
       <Toolbar
         workingDirectory={workingDirectory}
         modelOptions={modelOptions}
-        selectedModelValue={selectedProviderValue}
-        modelStatusText={modelStatusText}
         newChatDisabledReason={newChatDisabledReason}
         runState={runState}
-        onModelChange={onProviderChange}
-        onNewChat={onNewChat}
         onNewChatWithModel={onNewChatWithModel}
         onSettingsClick={onSettingsClick}
       />
@@ -588,6 +616,8 @@ function ChatInterface({
                   canCancel={canCancel}
                   isCancelling={isCancelling}
                   isInputDisabled={isInputDisabled}
+                  currentProviderName={currentProviderName}
+                  currentModelName={currentModelName}
                 />
               </>
             ) : isDraftConversation ? (
@@ -603,26 +633,10 @@ function ChatInterface({
                           打开设置
                         </button>
                       </>
-                    ) : !selectedProviderValue || !selectedModelValid ? (
-                      <>
-                        <p>为这次对话选择一个模型后即可开始</p>
-                        <div className="draft-model-selector">
-                          <label>选择模型：</label>
-                          <select
-                            value={selectedProviderValue}
-                            onChange={(e) => onProviderChange(e.target.value)}
-                          >
-                            <option value="">-- 请选择 --</option>
-                            {modelOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.providerName} · {option.model}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </>
+                    ) : currentProviderName && currentModelName ? (
+                      <p>使用 {currentProviderName} · {currentModelName} 开始对话</p>
                     ) : (
-                      <p>已选择模型：{currentProviderName} · {currentModelName}，可以开始对话了</p>
+                      <p>请点击"新建"按钮选择一个模型</p>
                     )}
                   </div>
                 </div>
@@ -633,6 +647,8 @@ function ChatInterface({
                   canCancel={canCancel}
                   isCancelling={isCancelling}
                   isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid}
+                  currentProviderName={currentProviderName}
+                  currentModelName={currentModelName}
                 />
               </>
             ) : (

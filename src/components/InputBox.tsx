@@ -9,6 +9,8 @@ interface InputBoxProps {
   canCancel?: boolean;
   isCancelling?: boolean;
   placeholderText?: string;
+  currentProviderName?: string | null;
+  currentModelName?: string | null;
 }
 
 function InputBox({
@@ -19,6 +21,8 @@ function InputBox({
   canCancel = false,
   isCancelling = false,
   placeholderText,
+  currentProviderName,
+  currentModelName,
 }: InputBoxProps) {
   const [input, setInput] = useState('');
 
@@ -61,6 +65,11 @@ function InputBox({
           disabled={isInputDisabled || isBusy}
           rows={1}
         />
+        {currentProviderName && currentModelName && (
+          <div className="input-model-info">
+            {currentProviderName} · {currentModelName}
+          </div>
+        )}
         {isBusy ? (
           <button
             className="cancel-button"
