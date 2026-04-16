@@ -17,16 +17,17 @@ export interface SessionInfo {
 interface SessionListProps {
   workingDirectory: string;
   currentSessionId?: string | null;
+  refreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
 }
 
-function SessionList({ workingDirectory, currentSessionId, onSessionSelected }: SessionListProps) {
+function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected }: SessionListProps) {
   const [sessions, setSessions] = React.useState<SessionInfo[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     loadSessions();
-  }, [workingDirectory]);
+  }, [workingDirectory, refreshKey]);
 
   const loadSessions = async () => {
     if (!workingDirectory) {

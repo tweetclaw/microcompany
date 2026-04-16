@@ -35,6 +35,7 @@ interface ChatInterfaceProps {
   selectedProviderValue: string;
   messages: Message[];
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
+  sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
   onProviderChange: (value: string) => void;
   onNewChat: () => void;
@@ -59,6 +60,7 @@ function ChatInterface({
   selectedProviderValue,
   messages,
   onMessagesChange,
+  sessionListRefreshKey,
   onSessionSelected,
   onProviderChange,
   onNewChat,
@@ -90,6 +92,10 @@ function ChatInterface({
     activeRequestIdRef.current = activeRequestId;
   }, [activeRequestId]);
 
+  useEffect(() => {
+    resetConversationRunState();
+  }, [currentSessionId]);
+
   const isBusy = RUNNING_STATES.includes(runState);
   const canCancel = isBusy && Boolean(activeRequestId);
   const isCancelling = runState === 'finalizing';
@@ -111,6 +117,15 @@ function ChatInterface({
 
   const resetRunIfTerminal = () => {
     setCurrentToolCall(null);
+    activeRequestIdRef.current = null;
+    setActiveRequestId(null);
+  };
+
+  const resetConversationRunState = () => {
+    setRunState('idle');
+    setLastError(null);
+    setCurrentToolCall(null);
+    setProcessTimeline([]);
     activeRequestIdRef.current = null;
     setActiveRequestId(null);
   };
@@ -150,6 +165,7 @@ function ChatInterface({
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
         const payload = event.payload;
         setActiveRequestId(payload.request_id);
+        activeRequestIdRef.current = payload.request_id;
         setRunState('running_thinking');
         setLastError(null);
         setCurrentToolCall(null);
@@ -477,6 +493,7 @@ function ChatInterface({
           onClose={() => setIsSidebarDrawerOpen(false)}
           currentWorkingDirectory={workingDirectory || ''}
           currentSessionId={currentSessionId}
+          sessionListRefreshKey={sessionListRefreshKey}
           onSessionSelected={onSessionSelected}
         />
 

@@ -26,6 +26,7 @@ function App() {
   const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
   const [selectedProviderValue, setSelectedProviderValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionListRefreshKey, setSessionListRefreshKey] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -127,6 +128,7 @@ function App() {
       }
       setMessages(loadedMessages);
       setHasActiveSession(true);
+      setSessionListRefreshKey((prev) => prev + 1);
     } catch (error) {
       console.error('Failed to load session:', error);
       alert(`Failed to load session: ${error}`);
@@ -154,6 +156,7 @@ function App() {
       setCurrentModelName(provider?.model || null);
       setMessages([]);
       setHasActiveSession(true);
+      setSessionListRefreshKey((prev) => prev + 1);
     } catch (error) {
       console.error('Failed to create new session:', error);
       alert(`创建新会话失败: ${error}`);
@@ -189,6 +192,7 @@ function App() {
         selectedProviderValue={selectedProviderValue}
         messages={messages}
         onMessagesChange={setMessages}
+        sessionListRefreshKey={sessionListRefreshKey}
         onSessionSelected={handleSessionSelected}
         onProviderChange={setSelectedProviderValue}
         onNewChat={handleNewChat}

@@ -9,6 +9,7 @@ interface SidebarProps {
   onClose: () => void;
   currentWorkingDirectory: string;
   currentSessionId?: string | null;
+  sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
 }
 
@@ -19,6 +20,7 @@ function Sidebar({
   onClose,
   currentWorkingDirectory,
   currentSessionId,
+  sessionListRefreshKey,
   onSessionSelected,
 }: SidebarProps) {
   const handleSessionSelected = (sessionId: string) => {
@@ -52,6 +54,7 @@ function Sidebar({
         <SessionList
           workingDirectory={currentWorkingDirectory}
           currentSessionId={currentSessionId}
+          refreshKey={sessionListRefreshKey}
           onSessionSelected={handleSessionSelected}
         />
       </div>
