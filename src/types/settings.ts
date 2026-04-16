@@ -16,6 +16,8 @@ export interface ProviderDraft extends ProviderConfig {
 export interface SettingsData {
   activeProvider: string;
   providers: ProviderConfig[];
+  braveSearchApiKey?: string;
+  theme?: 'light' | 'dark' | 'system';
 }
 
 export interface ProviderInfo {
@@ -42,6 +44,9 @@ interface BackendSettingsData {
   active_provider?: string;
   activeProvider?: string;
   providers?: BackendProviderConfig[];
+  brave_search_api_key?: string;
+  braveSearchApiKey?: string;
+  theme?: string;
 }
 
 interface BackendProviderInfo {
@@ -181,9 +186,14 @@ export function normalizeSettingsData(raw: unknown): SettingsData {
     ?? providers[0]?.id
     ?? '';
 
+  const braveSearchApiKey = source.braveSearchApiKey ?? source.brave_search_api_key;
+  const theme = source.theme as 'light' | 'dark' | 'system' | undefined;
+
   return {
     activeProvider,
     providers,
+    braveSearchApiKey,
+    theme,
   };
 }
 
@@ -198,6 +208,8 @@ export function toBackendSettingsData(config: SettingsData) {
       model: provider.model,
       enabled: provider.enabled,
     })),
+    brave_search_api_key: config.braveSearchApiKey,
+    theme: config.theme,
   };
 }
 

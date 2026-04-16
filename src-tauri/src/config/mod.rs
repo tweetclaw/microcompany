@@ -18,6 +18,10 @@ pub struct ProviderConfig {
 pub struct AppConfig {
     pub active_provider: String,
     pub providers: Vec<ProviderConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brave_search_api_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -34,6 +38,8 @@ impl Default for AppConfig {
                     enabled: true,
                 },
             ],
+            brave_search_api_key: None,
+            theme: None,
         }
     }
 }
@@ -87,6 +93,8 @@ impl AppConfig {
                                 enabled: true,
                             },
                         ],
+                        brave_search_api_key: None,
+                        theme: None,
                     };
 
                     // 保存迁移后的配置

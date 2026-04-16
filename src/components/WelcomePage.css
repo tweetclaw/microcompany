@@ -5,6 +5,42 @@
   align-items: center;
   justify-content: center;
   background: var(--bg-primary);
+  position: relative;
+}
+
+.welcome-window-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.welcome-window-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
+}
+
+.welcome-window-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.welcome-window-btn.close-btn:hover {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: white;
 }
 
 .welcome-content {

@@ -22,6 +22,8 @@ interface SettingsProps {
   config: SettingsData | null;
   availableProviders: ProviderInfo[];
   onSaveConfig: (config: SettingsData) => Promise<void>;
+  themePreference: 'light' | 'dark' | 'system';
+  onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
 }
 
 type SettingsSection = 'providers' | 'search' | 'theme';
@@ -58,14 +60,19 @@ function getProviderValidationMessage(provider: ProviderDraft | null) {
   return null;
 }
 
-export function Settings({ isOpen, onClose, config, availableProviders, onSaveConfig }: SettingsProps) {
+export function Settings({ isOpen, onClose, config, availableProviders, onSaveConfig, themePreference, onThemeChange }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('providers');
   const [editingProvider, setEditingProvider] = useState<ProviderDraft | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [searchApiKey, setSearchApiKey] = useState('');
-  const [themeSelection, setThemeSelection] = useState<'light' | 'dark' | 'system'>('system');
   const autosaveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen && config) {
+      setSearchApiKey(config.braveSearchApiKey || '');
+    }
+  }, [isOpen, config]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -480,13 +487,22 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
                     <input
                       type="password"
                       value={searchApiKey}
-                      onChange={(e) => setSearchApiKey(e.target.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setSearchApiKey(newValue);
+                        if (config) {
+                          void persistConfig({
+                            ...config,
+                            braveSearchApiKey: newValue || undefined,
+                          });
+                        }
+                      }}
                       placeholder="Brave Search API key"
                     />
-                    <div className="field-hint">This field is preview-only today and is not written into the current config schema.</div>
+                    <div className="field-hint">Changes are saved automatically. Search integration is not yet active.</div>
                   </div>
                   <div className="placeholder-note">
-                    This section previews the future Brave Search integration and intentionally does not affect runtime behavior yet.
+                    API key is saved but search integration is not yet connected to runtime behavior.
                   </div>
                 </div>
               </div>
@@ -507,16 +523,24 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
                     <button
                       key={theme}
                       type="button"
-                      className={`theme-option ${themeSelection === theme ? 'active' : ''}`}
-                      onClick={() => setThemeSelection(theme)}
+                      className={`theme-option ${themePreference === theme ? 'active' : ''}`}
+                      onClick={() => {
+                        onThemeChange(theme);
+                        if (config) {
+                          void persistConfig({
+                            ...config,
+                            theme,
+                          });
+                        }
+                      }}
                     >
                       <span className="theme-option-title">{theme[0].toUpperCase() + theme.slice(1)}</span>
-                      <span className="theme-option-subtitle">Not yet applied globally</span>
+                      <span className="theme-option-subtitle">Applied immediately</span>
                     </button>
                   ))}
                 </div>
                 <div className="placeholder-note theme-placeholder-note">
-                  Theme selection is preview-only for this release and will not override the current app appearance yet.
+                  Theme changes take effect immediately and persist across sessions.
                 </div>
               </div>
             )}
@@ -524,7 +548,6 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
         </div>
 
         <div className="settings-footer settings-footer-minimal">
-          <button className="btn-secondary" onClick={onClose}>Close</button>
           {renderSaveStatus()}
         </div>
       </div>

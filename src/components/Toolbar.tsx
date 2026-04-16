@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { AiRunState } from '../types';
+import ModelDropdown from './ModelDropdown';
 import './Toolbar.css';
 
 interface ModelOption {
@@ -18,6 +19,7 @@ interface ToolbarProps {
   runState: AiRunState;
   onModelChange: (value: string) => void;
   onNewChat: () => void;
+  onNewChatWithModel: (modelValue: string) => void;
   onSettingsClick: () => void;
 }
 
@@ -30,11 +32,44 @@ function Toolbar({
   runState,
   onModelChange,
   onNewChat,
+  onNewChatWithModel,
   onSettingsClick,
 }: ToolbarProps) {
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const newChatButtonRef = useRef<HTMLButtonElement>(null);
+
   const getDirectoryName = (path: string) => {
     const parts = path.split('/');
     return parts[parts.length - 1] || path;
+  };
+
+  const handleNewChatClick = () => {
+    // 如果没有工作目录，不做任何操作
+    if (!workingDirectory) return;
+
+    // 如果没有可用模型，显示提示
+    if (modelOptions.length === 0) {
+      alert('请先在设置中配置至少一个可用的模型');
+      return;
+    }
+
+    // 如果只有一个模型，直接创建草稿
+    if (modelOptions.length === 1) {
+      onNewChatWithModel(modelOptions[0].value);
+      return;
+    }
+
+    // 如果有多个模型，显示下拉菜单
+    setShowModelDropdown(true);
+  };
+
+  const handleModelSelect = (modelValue: string) => {
+    setShowModelDropdown(false);
+    onNewChatWithModel(modelValue);
+  };
+
+  const handleDropdownCancel = () => {
+    setShowModelDropdown(false);
   };
 
   const runStateLabel =
@@ -76,15 +111,32 @@ function Toolbar({
         </div>
       </div>
       <div className="toolbar-right">
+        <button
+          ref={newChatButtonRef}
+          className="toolbar-new-chat-button"
+          onClick={handleNewChatClick}
+          disabled={Boolean(newChatDisabledReason)}
+          title={newChatDisabledReason || '新建对话'}
+        >
+          ➕ 新建
+        </button>
+        {showModelDropdown && newChatButtonRef.current && (
+          <ModelDropdown
+            modelOptions={modelOptions}
+            onSelectModel={handleModelSelect}
+            onCancel={handleDropdownCancel}
+            triggerRect={newChatButtonRef.current.getBoundingClientRect()}
+          />
+        )}
         <div className="toolbar-model-picker">
-          <span className="toolbar-picker-label">对话模型</span>
+          <span className="toolbar-picker-label">当前模型</span>
           <div className="toolbar-model-picker-body">
             <select
               className="toolbar-model-select"
               value={selectedModelValue}
               onChange={(e) => onModelChange(e.target.value)}
               disabled={modelOptions.length === 0}
-              title={modelStatusText || '选择会话模型'}
+              title={modelStatusText || '当前对话使用的模型'}
             >
               {modelOptions.length === 0 ? (
                 <option value="">暂无可用模型</option>
@@ -103,14 +155,6 @@ function Toolbar({
             )}
           </div>
         </div>
-        <button
-          className="toolbar-new-chat-button"
-          onClick={onNewChat}
-          disabled={Boolean(newChatDisabledReason)}
-          title={newChatDisabledReason || '新建对话'}
-        >
-          ➕ 新建
-        </button>
         <div className="toolbar-divider"></div>
         <button
           className="toolbar-settings-button"

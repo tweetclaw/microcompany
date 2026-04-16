@@ -8,6 +8,7 @@ interface InputBoxProps {
   isBusy?: boolean;
   canCancel?: boolean;
   isCancelling?: boolean;
+  placeholderText?: string;
 }
 
 function InputBox({
@@ -17,6 +18,7 @@ function InputBox({
   isBusy = false,
   canCancel = false,
   isCancelling = false,
+  placeholderText,
 }: InputBoxProps) {
   const [input, setInput] = useState('');
 
@@ -40,6 +42,13 @@ function InputBox({
     }
   };
 
+  // 默认 placeholder 逻辑
+  const defaultPlaceholder = isInputDisabled
+    ? '请先选择工作目录...'
+    : isBusy
+      ? 'AI 正在处理中...'
+      : '输入消息... (Enter发送, Shift+Enter换行)';
+
   return (
     <div className="input-box">
       <div className="input-container">
@@ -48,7 +57,7 @@ function InputBox({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isInputDisabled ? '请先选择工作目录...' : isBusy ? 'AI 正在处理中...' : '输入消息... (Enter发送, Shift+Enter换行)'}
+          placeholder={placeholderText || defaultPlaceholder}
           disabled={isInputDisabled || isBusy}
           rows={1}
         />

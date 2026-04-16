@@ -39,7 +39,10 @@ interface ChatInterfaceProps {
   onSessionSelected: (sessionId: string) => void;
   onProviderChange: (value: string) => void;
   onNewChat: () => void;
+  onNewChatWithModel: (modelValue: string) => void;
   hasActiveSession: boolean;
+  isDraftConversation: boolean;
+  onEnsureSession: () => Promise<string | null>;
   onSettingsClick: () => void;
 }
 
@@ -64,7 +67,10 @@ function ChatInterface({
   onSessionSelected,
   onProviderChange,
   onNewChat,
+  onNewChatWithModel,
   hasActiveSession,
+  isDraftConversation,
+  onEnsureSession,
   onSettingsClick,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
@@ -432,12 +438,28 @@ function ChatInterface({
 
   const newChatDisabledReason = useMemo(() => {
     if (!workingDirectory) return '请先选择工作目录';
-    if (modelOptions.length === 0) return modelStatusText || '暂无可用模型';
-    if (!selectedProviderValue || !selectedModelValid) return '请先选择一个可用模型';
+    // 不再要求必须选择模型才能新建对话
     return null;
-  }, [modelOptions.length, modelStatusText, selectedModelValid, selectedProviderValue, workingDirectory]);
+  }, [workingDirectory]);
 
   const handleSendMessage = async (content: string) => {
+    // 如果是草稿对话，先确保创建真实 session
+    try {
+      await onEnsureSession();
+    } catch (error) {
+      const errorMessage = String(error);
+      setRunState('error');
+      setLastError(`创建会话失败: ${errorMessage}`);
+      appendTimeline({
+        id: `${Date.now()}-session-create-error`,
+        requestId: activeRequestIdRef.current || 'unknown',
+        kind: 'error',
+        text: `创建会话失败: ${errorMessage}`,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
     const newMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -537,6 +559,7 @@ function ChatInterface({
         runState={runState}
         onModelChange={onProviderChange}
         onNewChat={onNewChat}
+        onNewChatWithModel={onNewChatWithModel}
         onSettingsClick={onSettingsClick}
       />
 
@@ -554,7 +577,7 @@ function ChatInterface({
 
         <main className="chat-main-column">
           <div className="chat-main-surface">
-            {hasActiveSession ? (
+            {hasActiveSession && !isDraftConversation ? (
               <>
                 <MessageList messages={messages} isBusy={isBusy} />
                 {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
@@ -567,12 +590,57 @@ function ChatInterface({
                   isInputDisabled={isInputDisabled}
                 />
               </>
+            ) : isDraftConversation ? (
+              <>
+                <div className="draft-conversation-placeholder">
+                  <div className="placeholder-content">
+                    <div className="placeholder-badge">新对话</div>
+                    <h2>开始一个新对话</h2>
+                    {modelOptions.length === 0 ? (
+                      <>
+                        <p>还没有配置可用的模型。请先在设置中添加并启用至少一个 Provider。</p>
+                        <button className="settings-link-button" onClick={onSettingsClick}>
+                          打开设置
+                        </button>
+                      </>
+                    ) : !selectedProviderValue || !selectedModelValid ? (
+                      <>
+                        <p>为这次对话选择一个模型后即可开始</p>
+                        <div className="draft-model-selector">
+                          <label>选择模型：</label>
+                          <select
+                            value={selectedProviderValue}
+                            onChange={(e) => onProviderChange(e.target.value)}
+                          >
+                            <option value="">-- 请选择 --</option>
+                            {modelOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.providerName} · {option.model}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <p>已选择模型：{currentProviderName} · {currentModelName}，可以开始对话了</p>
+                    )}
+                  </div>
+                </div>
+                <InputBox
+                  onSendMessage={handleSendMessage}
+                  onCancelMessage={handleCancelMessage}
+                  isBusy={isBusy}
+                  canCancel={canCancel}
+                  isCancelling={isCancelling}
+                  isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid}
+                />
+              </>
             ) : (
               <div className="no-session-placeholder">
                 <div className="placeholder-content">
                   <div className="placeholder-badge">IDE Workspace Ready</div>
                   <h2>欢迎使用 AI IDE 助手</h2>
-                  <p>左侧管理会话，中间进行对话，右侧查看模型与工作区信息。先选择模型，再点击“新建”开始新的上下文。</p>
+                  <p>左侧管理会话，中间进行对话，右侧查看模型与工作区信息。点击右上角"新建"开始新的对话。</p>
                 </div>
               </div>
             )}

@@ -6,6 +6,7 @@ import { Settings } from './components/Settings';
 import { Message } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
+import { ThemePreference, applyTheme, loadThemePreference, resolveTheme, saveThemePreference, watchSystemTheme } from './utils/themeState';
 import './App.css';
 
 interface SessionSummary {
@@ -32,10 +33,19 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+
+  // 草稿对话状态：用于"新建"时不立即创建后端 session
+  const [isDraftConversation, setIsDraftConversation] = useState(false);
 
   useEffect(() => {
     loadConfig();
     loadProviderCatalog();
+
+    // Initialize theme
+    const savedTheme = loadThemePreference();
+    setThemePreference(savedTheme);
+    applyTheme(resolveTheme(savedTheme));
   }, []);
 
   useEffect(() => {
@@ -52,6 +62,17 @@ function App() {
       cleanup?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (themePreference === 'system') {
+      const unwatch = watchSystemTheme((systemTheme) => {
+        applyTheme(systemTheme);
+      });
+      return unwatch;
+    } else {
+      applyTheme(themePreference);
+    }
+  }, [themePreference]);
 
   useEffect(() => {
     if (!isSettingsOpen) {
@@ -100,6 +121,13 @@ function App() {
     setSettingsConfig(validConfig);
     setAvailableProviders(validConfig.providers);
 
+    // Update theme if changed
+    if (validConfig.theme && validConfig.theme !== themePreference) {
+      setThemePreference(validConfig.theme);
+      saveThemePreference(validConfig.theme);
+      applyTheme(resolveTheme(validConfig.theme));
+    }
+
     const enabledProviders = validConfig.providers.filter((provider) => isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id)));
     if (enabledProviders.length === 0) {
       setSelectedProviderValue('');
@@ -128,6 +156,37 @@ function App() {
     setCurrentModelName(null);
     setMessages([]);
     setHasActiveSession(false);
+    setIsDraftConversation(false);
+  };
+
+  // 获取默认模型：优先最近使用的有效模型，否则唯一可用模型，否则留空
+  const getDefaultModelValue = (): string => {
+    const enabledProviders = availableProviders.filter((provider) =>
+      isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id))
+    );
+
+    if (enabledProviders.length === 0) {
+      return '';
+    }
+
+    // 如果当前选中的模型仍然有效，继续使用
+    if (selectedProviderValue) {
+      const stillValid = enabledProviders.some(
+        (provider) => `${provider.id}::${provider.model}` === selectedProviderValue
+      );
+      if (stillValid) {
+        return selectedProviderValue;
+      }
+    }
+
+    // 如果只有一个可用模型，自动选中
+    if (enabledProviders.length === 1) {
+      const provider = enabledProviders[0];
+      return `${provider.id}::${provider.model}`;
+    }
+
+    // 否则留空，让用户选择
+    return '';
   };
 
   const handleSessionSelected = async (sessionId: string) => {
@@ -167,6 +226,7 @@ function App() {
       }
       setMessages(loadedMessages);
       setHasActiveSession(true);
+      setIsDraftConversation(false);
       setSessionListRefreshKey((prev) => prev + 1);
     } catch (error) {
       console.error('Failed to load session:', error);
@@ -177,31 +237,84 @@ function App() {
   };
 
   const handleNewChat = async () => {
-    if (!workingDirectory || !selectedProviderValue) return;
+    if (!workingDirectory) return;
 
-    setIsInitializing(true);
-    try {
-      const [providerId] = selectedProviderValue.split('::');
-      const provider = availableProviders.find((item) => `${item.id}::${item.model}` === selectedProviderValue);
+    // 创建本地草稿对话，不立即调用后端 init_session
+    const defaultModel = getDefaultModelValue();
 
-      const sessionId = await invoke<string>('init_session', {
-        workingDir: workingDirectory,
-        sessionId: null,
-        providerId,
-      });
-      setCurrentSessionId(sessionId);
-      setCurrentSessionTitle('Untitled');
+    // 如果有默认模型，设置它
+    if (defaultModel) {
+      setSelectedProviderValue(defaultModel);
+      const provider = availableProviders.find((item) => `${item.id}::${item.model}` === defaultModel);
       setCurrentProviderName(provider?.name || null);
       setCurrentModelName(provider?.model || null);
-      setMessages([]);
-      setHasActiveSession(true);
-      setSessionListRefreshKey((prev) => prev + 1);
-    } catch (error) {
-      console.error('Failed to create new session:', error);
-      alert(`创建新会话失败: ${error}`);
-    } finally {
-      setIsInitializing(false);
+    } else {
+      // 没有默认模型，清空当前模型信息
+      setCurrentProviderName(null);
+      setCurrentModelName(null);
     }
+
+    // 设置为草稿状态
+    setCurrentSessionId(null);
+    setCurrentSessionTitle(null);
+    setMessages([]);
+    setIsDraftConversation(true);
+    setHasActiveSession(true); // 标记为有活跃对话（虽然是草稿）
+  };
+
+  const handleNewChatWithModel = async (modelValue: string) => {
+    if (!workingDirectory) return;
+
+    // 根据选中的模型创建草稿对话
+    setSelectedProviderValue(modelValue);
+    const provider = availableProviders.find((item) => `${item.id}::${item.model}` === modelValue);
+    setCurrentProviderName(provider?.name || null);
+    setCurrentModelName(provider?.model || null);
+
+    // 设置为草稿状态
+    setCurrentSessionId(null);
+    setCurrentSessionTitle(null);
+    setMessages([]);
+    setIsDraftConversation(true);
+    setHasActiveSession(true);
+  };
+
+  // 确保当前有一个真实的后端 session（懒创建）
+  const ensureActiveSession = async (): Promise<string | null> => {
+    // 如果已经有真实 session，直接返回
+    if (currentSessionId && !isDraftConversation) {
+      return currentSessionId;
+    }
+
+    // 如果是草稿且已选模型，创建真实 session
+    if (isDraftConversation && selectedProviderValue && workingDirectory) {
+      try {
+        const [providerId] = selectedProviderValue.split('::');
+        const provider = availableProviders.find((item) => `${item.id}::${item.model}` === selectedProviderValue);
+
+        const sessionId = await invoke<string>('init_session', {
+          workingDir: workingDirectory,
+          sessionId: null,
+          providerId,
+        });
+
+        // 转换草稿为真实 session
+        setCurrentSessionId(sessionId);
+        setCurrentSessionTitle('Untitled');
+        setCurrentProviderName(provider?.name || null);
+        setCurrentModelName(provider?.model || null);
+        setIsDraftConversation(false);
+        setHasActiveSession(true);
+        setSessionListRefreshKey((prev) => prev + 1);
+
+        return sessionId;
+      } catch (error) {
+        console.error('Failed to create session:', error);
+        throw error;
+      }
+    }
+
+    return null;
   };
 
   if (!workingDirectory) {
@@ -235,7 +348,10 @@ function App() {
         onSessionSelected={handleSessionSelected}
         onProviderChange={setSelectedProviderValue}
         onNewChat={handleNewChat}
+        onNewChatWithModel={handleNewChatWithModel}
         hasActiveSession={hasActiveSession}
+        isDraftConversation={isDraftConversation}
+        onEnsureSession={ensureActiveSession}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
       <Settings
@@ -244,6 +360,12 @@ function App() {
         config={settingsConfig}
         availableProviders={providerCatalog}
         onSaveConfig={saveSettingsConfig}
+        themePreference={themePreference}
+        onThemeChange={(theme) => {
+          setThemePreference(theme);
+          saveThemePreference(theme);
+          applyTheme(resolveTheme(theme));
+        }}
       />
     </div>
   );
