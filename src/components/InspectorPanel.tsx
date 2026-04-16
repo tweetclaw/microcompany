@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { AiRunState, ProcessTimelineItem, ToolCall } from '../types';
 import './InspectorPanel.css';
 
@@ -146,9 +146,9 @@ function InspectorPanel({
         </section>
 
         <section className="inspector-card">
-          <div className="inspector-card-title">Recent Process Events</div>
-          {recentTimeline.length > 0 ? (
-            <div className="inspector-timeline">
+          <div className="inspector-card-title">过程事件流</div>
+          {processTimeline.length > 0 ? (
+            <div className="inspector-process-timeline">
               {recentTimeline.map((item) => (
                 <div key={item.id} className="inspector-timeline-item">
                   <div className="inspector-timeline-time">

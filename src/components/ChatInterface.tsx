@@ -501,7 +501,7 @@ function ChatInterface({
           <div className="chat-main-surface">
             {hasActiveSession ? (
               <>
-                <MessageList messages={messages} isBusy={isBusy} processTimeline={processTimeline} />
+                <MessageList messages={messages} isBusy={isBusy} />
                 {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                 <InputBox
                   onSendMessage={handleSendMessage}
