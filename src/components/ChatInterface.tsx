@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { TitleBar } from './TitleBar';
 import Toolbar from './Toolbar';
 import MessageList from './MessageList';
 import InputBox from './InputBox';
@@ -448,6 +449,14 @@ function ChatInterface({
 
   return (
     <div className="chat-interface">
+      <TitleBar
+        onToggleSessionList={handleSidebarToggle}
+        onToggleInspector={handleInspectorToggle}
+        onToggleTerminal={handleTerminalToggle}
+        isSessionListCollapsed={isSidebarCollapsed}
+        isInspectorCollapsed={isInspectorCollapsed}
+        isTerminalCollapsed={isTerminalCollapsed}
+      />
       <Toolbar
         workingDirectory={workingDirectory}
         modelOptions={modelOptions}
@@ -456,9 +465,6 @@ function ChatInterface({
         newChatDisabledReason={newChatDisabledReason}
         runState={runState}
         onModelChange={onProviderChange}
-        onSidebarToggle={handleSidebarToggle}
-        onInspectorToggle={handleInspectorToggle}
-        onTerminalToggle={handleTerminalToggle}
         onNewChat={onNewChat}
         onSettingsClick={onSettingsClick}
       />

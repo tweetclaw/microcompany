@@ -17,9 +17,6 @@ interface ToolbarProps {
   newChatDisabledReason: string | null;
   runState: AiRunState;
   onModelChange: (value: string) => void;
-  onSidebarToggle: () => void;
-  onInspectorToggle: () => void;
-  onTerminalToggle: () => void;
   onNewChat: () => void;
   onSettingsClick: () => void;
 }
@@ -32,9 +29,6 @@ function Toolbar({
   newChatDisabledReason,
   runState,
   onModelChange,
-  onSidebarToggle,
-  onInspectorToggle,
-  onTerminalToggle,
   onNewChat,
   onSettingsClick,
 }: ToolbarProps) {
@@ -116,37 +110,6 @@ function Toolbar({
           title={newChatDisabledReason || '新建对话'}
         >
           ➕ 新建
-        </button>
-        <div className="toolbar-divider"></div>
-        <button
-          className="toolbar-toggle-button"
-          onClick={onSidebarToggle}
-          title="切换左侧栏"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <rect x="1" y="2" width="5" height="12" rx="1" />
-            <rect x="7" y="2" width="8" height="12" rx="1" opacity="0.3" />
-          </svg>
-        </button>
-        <button
-          className="toolbar-toggle-button"
-          onClick={onInspectorToggle}
-          title="切换右侧栏"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <rect x="1" y="2" width="8" height="12" rx="1" opacity="0.3" />
-            <rect x="10" y="2" width="5" height="12" rx="1" />
-          </svg>
-        </button>
-        <button
-          className="toolbar-toggle-button"
-          onClick={onTerminalToggle}
-          title="切换底部终端"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <rect x="1" y="2" width="14" height="6" rx="1" opacity="0.3" />
-            <rect x="1" y="9" width="14" height="5" rx="1" />
-          </svg>
         </button>
         <div className="toolbar-divider"></div>
         <button
