@@ -1,6 +1,7 @@
 export interface LayoutState {
   isSidebarCollapsed: boolean;
   isInspectorCollapsed: boolean;
+  isTerminalCollapsed: boolean;
 }
 
 const STORAGE_KEY = 'microcompany-layout-state';
@@ -10,6 +11,7 @@ export function loadLayoutState(): LayoutState {
     return {
       isSidebarCollapsed: false,
       isInspectorCollapsed: false,
+      isTerminalCollapsed: false,
     };
   }
 
@@ -19,6 +21,7 @@ export function loadLayoutState(): LayoutState {
       return {
         isSidebarCollapsed: false,
         isInspectorCollapsed: false,
+        isTerminalCollapsed: false,
       };
     }
 
@@ -26,11 +29,13 @@ export function loadLayoutState(): LayoutState {
     return {
       isSidebarCollapsed: Boolean(parsed.isSidebarCollapsed),
       isInspectorCollapsed: Boolean(parsed.isInspectorCollapsed),
+      isTerminalCollapsed: Boolean(parsed.isTerminalCollapsed),
     };
   } catch {
     return {
       isSidebarCollapsed: false,
       isInspectorCollapsed: false,
+      isTerminalCollapsed: false,
     };
   }
 }

@@ -6,6 +6,7 @@ import MessageList from './MessageList';
 import InputBox from './InputBox';
 import Sidebar from './Sidebar';
 import InspectorPanel from './InspectorPanel';
+import TerminalPanel from './TerminalPanel';
 import { ToolIndicator } from './ToolIndicator';
 import { Message, ToolCall } from '../types';
 import { ProviderConfig } from '../types/settings';
@@ -53,6 +54,7 @@ function ChatInterface({
   const initialLayout = useMemo(() => loadLayoutState(), []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialLayout.isSidebarCollapsed);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(initialLayout.isInspectorCollapsed);
+  const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(initialLayout.isTerminalCollapsed);
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
   const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 1280 : false);
@@ -69,8 +71,9 @@ function ChatInterface({
     saveLayoutState({
       isSidebarCollapsed,
       isInspectorCollapsed,
+      isTerminalCollapsed,
     });
-  }, [isSidebarCollapsed, isInspectorCollapsed]);
+  }, [isSidebarCollapsed, isInspectorCollapsed, isTerminalCollapsed]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -295,6 +298,10 @@ function ChatInterface({
     setIsInspectorCollapsed((prev) => !prev);
   };
 
+  const handleTerminalToggle = () => {
+    setIsTerminalCollapsed((prev) => !prev);
+  };
+
   return (
     <div className="chat-interface">
       <Toolbar
@@ -306,6 +313,7 @@ function ChatInterface({
         onModelChange={onProviderChange}
         onSidebarToggle={handleSidebarToggle}
         onInspectorToggle={handleInspectorToggle}
+        onTerminalToggle={handleTerminalToggle}
         onNewChat={onNewChat}
         onSettingsClick={onSettingsClick}
       />
@@ -365,6 +373,8 @@ function ChatInterface({
           isCompact={isCompact}
         />
       </div>
+
+      <TerminalPanel collapsed={isTerminalCollapsed} />
     </div>
   );
 }
