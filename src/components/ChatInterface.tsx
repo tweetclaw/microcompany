@@ -151,16 +151,65 @@ function ChatInterface({
     };
   }, []);
 
-  const modelOptions = useMemo(() => {
-    return availableProviders
-      .filter((provider) => provider.enabled && (provider.apiKey || provider.id === 'ollama'))
-      .map((provider) => ({
-        value: `${provider.id}::${provider.model}`,
-        providerId: provider.id,
-        providerName: provider.name,
-        model: provider.model,
-      }));
+  const validProviders = useMemo(() => {
+    return availableProviders.filter((provider) => {
+      if (!provider.enabled) return false;
+      if (!provider.model.trim()) return false;
+      if (provider.id !== 'ollama' && !provider.apiKey.trim()) return false;
+      return true;
+    });
   }, [availableProviders]);
+
+  const modelOptions = useMemo(() => {
+    return validProviders.map((provider) => ({
+      value: `${provider.id}::${provider.model}`,
+      providerId: provider.id,
+      providerName: provider.name,
+      model: provider.model,
+    }));
+  }, [validProviders]);
+
+  const selectedModelValid = useMemo(() => {
+    return modelOptions.some((option) => option.value === selectedProviderValue);
+  }, [modelOptions, selectedProviderValue]);
+
+  const modelStatusText = useMemo(() => {
+    if (!workingDirectory) {
+      return '请先选择工作目录';
+    }
+
+    if (modelOptions.length > 0) {
+      if (!selectedProviderValue || !selectedModelValid) {
+        return '请先从下拉框选择一个可用模型';
+      }
+      return null;
+    }
+
+    if (availableProviders.length === 0) {
+      return '还没有配置任何 Provider，请在设置中添加';
+    }
+
+    if (!availableProviders.some((provider) => provider.enabled)) {
+      return '没有启用的 Provider，请在设置中启用至少一个';
+    }
+
+    if (availableProviders.some((provider) => provider.enabled && !provider.model.trim())) {
+      return '存在未填写模型名的 Provider，请先补全 Model';
+    }
+
+    if (availableProviders.some((provider) => provider.enabled && provider.id !== 'ollama' && !provider.apiKey.trim())) {
+      return '存在缺少 API Key 的 Provider，请先补全';
+    }
+
+    return '暂无可用模型，请检查设置';
+  }, [availableProviders, modelOptions.length, selectedModelValid, selectedProviderValue, workingDirectory]);
+
+  const newChatDisabledReason = useMemo(() => {
+    if (!workingDirectory) return '请先选择工作目录';
+    if (modelOptions.length === 0) return modelStatusText || '暂无可用模型';
+    if (!selectedProviderValue || !selectedModelValid) return '请先选择一个可用模型';
+    return null;
+  }, [modelOptions.length, modelStatusText, selectedModelValid, selectedProviderValue, workingDirectory]);
 
   const handleSendMessage = async (content: string) => {
     const newMessage: Message = {
@@ -252,6 +301,8 @@ function ChatInterface({
         workingDirectory={workingDirectory}
         modelOptions={modelOptions}
         selectedModelValue={selectedProviderValue}
+        modelStatusText={modelStatusText}
+        newChatDisabledReason={newChatDisabledReason}
         onModelChange={onProviderChange}
         onSidebarToggle={handleSidebarToggle}
         onInspectorToggle={handleInspectorToggle}

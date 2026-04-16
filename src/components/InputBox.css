@@ -3,6 +3,7 @@
   border-top: 1px solid var(--border-default);
   padding: var(--space-4) var(--space-6);
   flex-shrink: 0;
+  z-index: 2;
 }
 
 .input-container {

@@ -4,7 +4,7 @@ import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
 import { Settings } from './components/Settings';
 import { Message } from './types';
-import { ProviderConfig, SettingsData } from './types/settings';
+import { ProviderConfig, SettingsData, normalizeSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import './App.css';
 
@@ -58,7 +58,8 @@ function App() {
 
   const loadConfig = async () => {
     try {
-      const config = await invoke<SettingsData>('get_config');
+      const rawConfig = await invoke('get_config');
+      const config: SettingsData = normalizeSettingsData(rawConfig);
       const enabledProviders = config.providers.filter((provider) => provider.enabled && (provider.apiKey || provider.id === 'ollama'));
       setAvailableProviders(config.providers);
 

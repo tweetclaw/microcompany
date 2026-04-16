@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { SettingsData, ProviderConfig, ProviderInfo } from '../types/settings';
+import {
+  SettingsData,
+  ProviderConfig,
+  ProviderInfo,
+  normalizeProviderInfo,
+  normalizeSettingsData,
+  toBackendSettingsData,
+} from '../types/settings';
 import './Settings.css';
 
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+function createCustomProviderId() {
+  return `custom-${Date.now().toString(36)}`;
 }
 
 export function Settings({ isOpen, onClose }: SettingsProps) {
@@ -16,6 +27,17 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
+
+  const editingProviderInfo = editingProvider
+    ? availableProviders.find((provider) => provider.id === editingProvider.id)
+    : undefined;
+  const isCustomProvider = Boolean(editingProvider && !editingProviderInfo);
+  const apiKeyRequired = editingProvider ? (editingProviderInfo?.requiresApiKey ?? true) : true;
+  const providerFormInvalid = !editingProvider
+    || !editingProvider.name.trim()
+    || !editingProvider.model.trim()
+    || (apiKeyRequired && !editingProvider.apiKey.trim())
+    || (isCustomProvider && !editingProvider.baseUrl?.trim());
 
   useEffect(() => {
     if (isOpen) {
@@ -28,8 +50,8 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
     setLoading(true);
     setError(null);
     try {
-      const data = await invoke<SettingsData>('get_config');
-      setConfig(data);
+      const data = await invoke('get_config');
+      setConfig(normalizeSettingsData(data));
     } catch (e) {
       setError(`Failed to load config: ${e}`);
     } finally {
@@ -39,8 +61,8 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
   const loadAvailableProviders = async () => {
     try {
-      const providers = await invoke<ProviderInfo[]>('get_available_providers');
-      setAvailableProviders(providers);
+      const providers = await invoke<unknown[]>('get_available_providers');
+      setAvailableProviders(providers.map(normalizeProviderInfo));
     } catch (e) {
       console.error('Failed to load available providers:', e);
     }
@@ -54,7 +76,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
     setSuccessMessage(null);
 
     try {
-      await invoke('save_config', { config });
+      await invoke('save_config', { config: toBackendSettingsData(config) });
       setSuccessMessage('Settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (e) {
@@ -65,6 +87,8 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   };
 
   const handleProviderSelect = (providerId: string) => {
+    if (!providerId) return;
+
     const providerInfo = availableProviders.find(p => p.id === providerId);
     if (!providerInfo) return;
 
@@ -82,6 +106,17 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
         enabled: true,
       });
     }
+  };
+
+  const handleCreateCustomProvider = () => {
+    setEditingProvider({
+      id: createCustomProviderId(),
+      name: '',
+      apiKey: '',
+      baseUrl: '',
+      model: '',
+      enabled: true,
+    });
   };
 
   const handleSaveProvider = () => {
@@ -187,16 +222,25 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                 <div className="add-provider-section">
                   <label>Add Provider:</label>
                   <select
-                    onChange={(e) => handleProviderSelect(e.target.value)}
-                    value=""
+                    onChange={(e) => {
+                      handleProviderSelect(e.target.value);
+                      e.currentTarget.value = '';
+                    }}
+                    defaultValue=""
                   >
-                    <option value="">Select a provider...</option>
+                    <option value="" disabled>Select a provider...</option>
                     {availableProviders.map((provider) => (
                       <option key={provider.id} value={provider.id}>
                         {provider.name}
                       </option>
                     ))}
                   </select>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleCreateCustomProvider}
+                  >
+                    自定义模型
+                  </button>
                 </div>
               </div>
             </>
@@ -205,23 +249,29 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           {editingProvider && (
             <div className="settings-section">
               <h3>
-                {config?.providers.find(p => p.id === editingProvider.id)
-                  ? 'Edit Provider'
-                  : 'Add Provider'}
+                {isCustomProvider
+                  ? 'Add Custom Provider'
+                  : config?.providers.find(p => p.id === editingProvider.id)
+                    ? 'Edit Provider'
+                    : 'Add Provider'}
               </h3>
 
               <div className="form-group">
-                <label>Provider</label>
+                <label>Provider Name *</label>
                 <input
                   type="text"
                   value={editingProvider.name}
-                  disabled
-                  className="input-disabled"
+                  onChange={(e) =>
+                    setEditingProvider({ ...editingProvider, name: e.target.value })
+                  }
+                  placeholder="e.g., My OpenAI Compatible"
+                  disabled={!isCustomProvider}
+                  className={!isCustomProvider ? 'input-disabled' : ''}
                 />
               </div>
 
               <div className="form-group">
-                <label>API Key *</label>
+                <label>{apiKeyRequired ? 'API Key *' : 'API Key (optional)'}</label>
                 <input
                   type="password"
                   value={editingProvider.apiKey}
@@ -233,14 +283,14 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
               </div>
 
               <div className="form-group">
-                <label>Base URL (optional)</label>
+                <label>{isCustomProvider ? 'Base URL *' : 'Base URL (optional)'}</label>
                 <input
                   type="text"
                   value={editingProvider.baseUrl || ''}
                   onChange={(e) =>
                     setEditingProvider({ ...editingProvider, baseUrl: e.target.value })
                   }
-                  placeholder="Default URL will be used if empty"
+                  placeholder={isCustomProvider ? 'https://api.example.com' : 'Default URL will be used if empty'}
                 />
               </div>
 
@@ -266,7 +316,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                 <button
                   className="btn-primary"
                   onClick={handleSaveProvider}
-                  disabled={!editingProvider.apiKey || !editingProvider.model}
+                  disabled={providerFormInvalid}
                 >
                   Save Provider
                 </button>

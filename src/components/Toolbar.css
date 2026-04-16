@@ -65,6 +65,21 @@
   background: rgba(10, 22, 40, 0.4);
 }
 
+.toolbar-model-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolbar-model-status {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .toolbar-picker-label {
   font-size: var(--text-sm);
   color: var(--text-secondary);
@@ -162,6 +177,10 @@
 
   .toolbar-model-select {
     min-width: 180px;
+    max-width: 220px;
+  }
+
+  .toolbar-model-status {
     max-width: 220px;
   }
 

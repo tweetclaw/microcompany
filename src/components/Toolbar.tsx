@@ -12,6 +12,8 @@ interface ToolbarProps {
   workingDirectory: string | null;
   modelOptions: ModelOption[];
   selectedModelValue: string;
+  modelStatusText: string | null;
+  newChatDisabledReason: string | null;
   onModelChange: (value: string) => void;
   onSidebarToggle: () => void;
   onInspectorToggle: () => void;
@@ -23,6 +25,8 @@ function Toolbar({
   workingDirectory,
   modelOptions,
   selectedModelValue,
+  modelStatusText,
+  newChatDisabledReason,
   onModelChange,
   onSidebarToggle,
   onInspectorToggle,
@@ -56,28 +60,36 @@ function Toolbar({
       <div className="toolbar-right">
         <div className="toolbar-model-picker">
           <span className="toolbar-picker-label">对话模型</span>
-          <select
-            className="toolbar-model-select"
-            value={selectedModelValue}
-            onChange={(e) => onModelChange(e.target.value)}
-            disabled={modelOptions.length === 0}
-          >
-            {modelOptions.length === 0 ? (
-              <option value="">暂无可用模型</option>
-            ) : (
-              modelOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.providerName} · {option.model}
-                </option>
-              ))
+          <div className="toolbar-model-picker-body">
+            <select
+              className="toolbar-model-select"
+              value={selectedModelValue}
+              onChange={(e) => onModelChange(e.target.value)}
+              disabled={modelOptions.length === 0}
+              title={modelStatusText || '选择会话模型'}
+            >
+              {modelOptions.length === 0 ? (
+                <option value="">暂无可用模型</option>
+              ) : (
+                modelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.providerName} · {option.model}
+                  </option>
+                ))
+              )}
+            </select>
+            {modelStatusText && (
+              <div className="toolbar-model-status" title={modelStatusText}>
+                {modelStatusText}
+              </div>
             )}
-          </select>
+          </div>
         </div>
         <button
           className="toolbar-new-chat-button"
           onClick={onNewChat}
-          disabled={!workingDirectory || modelOptions.length === 0}
-          title="新建对话"
+          disabled={Boolean(newChatDisabledReason)}
+          title={newChatDisabledReason || '新建对话'}
         >
           ➕ 新建
         </button>
