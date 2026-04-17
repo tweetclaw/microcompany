@@ -37,11 +37,13 @@ interface ChatInterfaceProps {
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
+  onSessionDeleted?: (sessionId: string) => void;
   onNewChatWithModel: (modelValue: string) => void;
   hasActiveSession: boolean;
   isDraftConversation: boolean;
   onEnsureSession: () => Promise<string | null>;
   onSettingsClick: () => void;
+  onCancelRequest?: () => Promise<void>;
 }
 
 const RUNNING_STATES: AiRunState[] = [
@@ -63,6 +65,7 @@ function ChatInterface({
   onMessagesChange,
   sessionListRefreshKey,
   onSessionSelected,
+  onSessionDeleted,
   onNewChatWithModel,
   hasActiveSession,
   isDraftConversation,
@@ -292,7 +295,7 @@ function ChatInterface({
           status: 'running',
         });
         appendTimeline({
-          id: `${payload.request_id}-${Date.now()}-tool-start`,
+          id: `${payload.request_id}-${payload.tool}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           requestId: payload.request_id,
           kind: 'tool_start',
           text: payload.action,
@@ -561,6 +564,7 @@ function ChatInterface({
           currentSessionId={currentSessionId}
           sessionListRefreshKey={sessionListRefreshKey}
           onSessionSelected={onSessionSelected}
+          onSessionDeleted={onSessionDeleted}
         />
 
         <main className="chat-main-column">

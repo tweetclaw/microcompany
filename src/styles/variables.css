@@ -106,28 +106,49 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
   --shadow-glow: 0 0 20px rgba(30, 64, 175, 0.4);
+
+  /* Badge Colors */
+  --badge-bg: rgba(30, 64, 175, 0.18);
+  --badge-text: #93c5fd;
+  --badge-border: rgba(30, 64, 175, 0.3);
+
+  /* Button Colors */
+  --btn-primary-bg: rgba(30, 64, 175, 0.18);
+  --btn-primary-text: #93c5fd;
+  --btn-primary-border: rgba(30, 64, 175, 0.3);
+  --btn-primary-hover-bg: rgba(30, 64, 175, 0.28);
+  --btn-primary-hover-border: rgba(30, 64, 175, 0.5);
+  --btn-primary-hover-text: #bfdbfe;
+
+  /* Badge Variant Colors */
+  --badge-builtin-bg: rgba(30, 64, 175, 0.12);
+  --badge-builtin-text: #60a5fa;
+  --badge-builtin-border: rgba(30, 64, 175, 0.25);
+  --badge-success-bg: rgba(16, 185, 129, 0.12);
+  --badge-success-text: #34d399;
+  --badge-success-border: rgba(16, 185, 129, 0.25);
 }
 
 :root[data-theme="light"] {
   /* Background Colors */
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F8FAFC;
-  --bg-tertiary: #F1F5F9;
+  --bg-primary: #FAFBFC;
+  --bg-secondary: #F3F4F6;
+  --bg-tertiary: #DBEAFE;
   --bg-elevated: #FFFFFF;
-  --bg-overlay: rgba(255, 255, 255, 0.95);
-  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-overlay: rgba(15, 23, 42, 0.75);
+  --bg-hover: rgba(59, 130, 246, 0.08);
 
   /* Text Colors */
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-tertiary: #64748B;
-  --text-disabled: #94A3B8;
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+  --text-disabled: #9CA3AF;
   --text-inverse: #FFFFFF;
 
   /* Border Colors */
-  --border-subtle: rgba(15, 23, 42, 0.08);
-  --border-default: rgba(15, 23, 42, 0.12);
-  --border-strong: rgba(15, 23, 42, 0.2);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
 
   /* Functional Colors */
   --success-start: #059669;
@@ -142,7 +163,86 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-glow: 0 0 20px rgba(30, 64, 175, 0.2);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+
+  /* Badge Colors */
+  --badge-bg: rgba(59, 130, 246, 0.1);
+  --badge-text: #2563eb;
+  --badge-border: rgba(59, 130, 246, 0.3);
+
+  /* Button Colors */
+  --btn-primary-bg: #3B82F6;
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-border: #3B82F6;
+  --btn-primary-hover-bg: #2563EB;
+  --btn-primary-hover-border: #2563EB;
+  --btn-primary-hover-text: #FFFFFF;
+
+  /* Badge Variant Colors */
+  --badge-builtin-bg: rgba(59, 130, 246, 0.15);
+  --badge-builtin-text: #3B82F6;
+  --badge-builtin-border: rgba(59, 130, 246, 0.35);
+  --badge-success-bg: rgba(5, 150, 105, 0.15);
+  --badge-success-text: #059669;
+  --badge-success-border: rgba(5, 150, 105, 0.35);
+}
+
+:root[data-theme="ocean"] {
+  /* Background Colors */
+  --bg-primary: #0C1821;
+  --bg-secondary: #1B2838;
+  --bg-tertiary: #243B4A;
+  --bg-elevated: #2D4A5C;
+  --bg-overlay: rgba(12, 24, 33, 0.95);
+  --bg-hover: rgba(100, 200, 200, 0.08);
+
+  /* Text Colors */
+  --text-primary: #E0F2F1;
+  --text-secondary: #B2DFDB;
+  --text-tertiary: #80CBC4;
+  --text-disabled: #4DB6AC;
+  --text-inverse: #0C1821;
+
+  /* Border Colors */
+  --border-subtle: rgba(128, 203, 196, 0.12);
+  --border-default: rgba(128, 203, 196, 0.2);
+  --border-strong: rgba(128, 203, 196, 0.35);
+
+  /* Functional Colors */
+  --success-start: #26A69A;
+  --success-bg: rgba(38, 166, 154, 0.15);
+  --success-border: rgba(38, 166, 154, 0.4);
+
+  --error-start: #EF5350;
+  --error-bg: rgba(239, 83, 80, 0.15);
+  --error-border: rgba(239, 83, 80, 0.4);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(38, 166, 154, 0.3);
+
+  /* Badge Colors */
+  --badge-bg: rgba(38, 166, 154, 0.15);
+  --badge-text: #5eead4;
+  --badge-border: rgba(38, 166, 154, 0.4);
+
+  /* Button Colors */
+  --btn-primary-bg: rgba(38, 166, 154, 0.18);
+  --btn-primary-text: #5eead4;
+  --btn-primary-border: rgba(38, 166, 154, 0.4);
+  --btn-primary-hover-bg: rgba(38, 166, 154, 0.28);
+  --btn-primary-hover-border: rgba(38, 166, 154, 0.6);
+  --btn-primary-hover-text: #99f6e4;
+
+  /* Badge Variant Colors */
+  --badge-builtin-bg: rgba(38, 166, 154, 0.12);
+  --badge-builtin-text: #5eead4;
+  --badge-builtin-border: rgba(38, 166, 154, 0.35);
+  --badge-success-bg: rgba(52, 211, 153, 0.12);
+  --badge-success-text: #6ee7b7;
+  --badge-success-border: rgba(52, 211, 153, 0.35);
 }
 
 @media (max-width: 1279px) {

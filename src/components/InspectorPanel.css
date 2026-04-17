@@ -2,7 +2,7 @@
   width: var(--layout-inspector-width);
   min-width: var(--layout-inspector-width);
   border-left: 1px solid var(--border-default);
-  background: linear-gradient(180deg, rgba(36, 53, 80, 0.96) 0%, rgba(15, 31, 58, 0.96) 100%);
+  background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -50,7 +50,7 @@
   padding: var(--space-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  background: rgba(10, 22, 40, 0.42);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-sm);
 }
 

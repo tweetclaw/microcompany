@@ -1,7 +1,7 @@
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   z-index: 999;
   animation: fadeIn 0.2s ease;
 }

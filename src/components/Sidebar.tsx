@@ -11,6 +11,7 @@ interface SidebarProps {
   currentSessionId?: string | null;
   sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
 function Sidebar({
@@ -22,6 +23,7 @@ function Sidebar({
   currentSessionId,
   sessionListRefreshKey,
   onSessionSelected,
+  onSessionDeleted,
 }: SidebarProps) {
   const handleSessionSelected = (sessionId: string) => {
     onSessionSelected(sessionId);
@@ -56,6 +58,7 @@ function Sidebar({
           currentSessionId={currentSessionId}
           refreshKey={sessionListRefreshKey}
           onSessionSelected={handleSessionSelected}
+          onSessionDeleted={onSessionDeleted}
         />
       </div>
     </div>

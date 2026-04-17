@@ -97,8 +97,8 @@
 }
 
 .window-btn.close-btn:hover {
-  background-color: #e81123;
-  color: white;
+  background-color: var(--error-start);
+  color: var(--text-inverse);
 }
 
 .window-btn svg {

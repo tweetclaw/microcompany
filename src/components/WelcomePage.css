@@ -38,9 +38,9 @@
 }
 
 .welcome-window-btn.close-btn:hover {
-  background: #ef4444;
-  border-color: #dc2626;
-  color: white;
+  background: var(--error-start);
+  border-color: var(--error-border);
+  color: var(--text-inverse);
 }
 
 .welcome-content {

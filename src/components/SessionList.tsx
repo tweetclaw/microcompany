@@ -19,9 +19,10 @@ interface SessionListProps {
   currentSessionId?: string | null;
   refreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
-function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected }: SessionListProps) {
+function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected, onSessionDeleted }: SessionListProps) {
   const [sessions, setSessions] = React.useState<SessionInfo[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -56,6 +57,12 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
 
     try {
       await invoke('delete_session', { sessionId });
+
+      // 通知父组件 session 已被删除
+      if (onSessionDeleted) {
+        onSessionDeleted(sessionId);
+      }
+
       await loadSessions();
     } catch (error) {
       console.error('Failed to delete session:', error);

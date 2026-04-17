@@ -1,7 +1,7 @@
 .settings-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,7 +10,7 @@
 }
 
 .settings-dialog {
-  background: #1e1e1e;
+  background: var(--bg-secondary);
   border-radius: 12px;
   width: 90%;
   max-width: 900px;
@@ -18,8 +18,8 @@
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-default);
 }
 
 .settings-dialog-wide {
@@ -31,26 +31,26 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .settings-header h2 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 .settings-subtitle {
   margin: 0.35rem 0 0;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
 }
 
 .close-button {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
@@ -59,8 +59,8 @@
 }
 
 .close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .settings-layout {
@@ -72,12 +72,12 @@
 }
 
 .settings-nav {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--border-subtle);
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-primary);
 }
 
 .settings-nav-item {
@@ -85,7 +85,7 @@
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
   border-radius: 10px;
   font-size: 0.95rem;
   font-weight: 600;
@@ -94,14 +94,14 @@
 }
 
 .settings-nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .settings-nav-item.active {
-  background: rgba(88, 166, 255, 0.16);
-  border-color: rgba(88, 166, 255, 0.35);
-  color: #ffffff;
+  background: rgba(30, 64, 175, 0.16);
+  border-color: var(--primary-blue-start);
+  color: var(--text-primary);
 }
 
 .settings-content {
@@ -117,8 +117,8 @@
 }
 
 .settings-section-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 1.25rem;
 }
@@ -127,7 +127,7 @@
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 .settings-section-header-row {
@@ -141,7 +141,7 @@
 .section-description {
   margin: 0;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-tertiary);
 }
 
 .providers-list {
@@ -156,15 +156,15 @@
   gap: 1rem;
   align-items: flex-start;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   transition: all 0.2s ease;
 }
 
 .provider-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: var(--bg-hover);
+  border-color: var(--border-default);
 }
 
 .provider-info {
@@ -181,7 +181,7 @@
 
 .provider-name {
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 .provider-type-badge,
@@ -197,28 +197,30 @@
 }
 
 .provider-type-badge {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.82);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .provider-kind-badge {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.74);
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
 }
 
 .provider-kind-badge.builtin {
-  background: rgba(88, 166, 255, 0.16);
-  color: #9fd0ff;
+  background: var(--badge-builtin-bg);
+  color: var(--badge-builtin-text);
+  border: 1px solid var(--badge-builtin-border);
 }
 
 .provider-kind-badge.custom {
-  background: rgba(34, 197, 94, 0.16);
-  color: #86efac;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border: 1px solid var(--badge-success-border);
 }
 
 .active-badge {
-  background: #58a6ff;
-  color: #fff;
+  background: var(--primary-blue-start);
+  color: var(--text-inverse);
 }
 
 .placeholder-badge {
@@ -228,7 +230,7 @@
 
 .provider-details {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--text-tertiary);
 }
 
 .provider-secondary-line {
@@ -244,8 +246,8 @@
 
 .provider-editor-card {
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
 }
 
@@ -267,14 +269,14 @@
 .provider-editor-header h4 {
   margin: 0 0 0.3rem;
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
 }
 
 .text-button {
   align-self: flex-start;
   background: transparent;
   border: none;
-  color: #79c0ff;
+  color: var(--primary-blue-start);
   cursor: pointer;
   padding: 0;
   font-size: 0.9rem;
@@ -292,32 +294,77 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   font-size: 0.875rem;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle input {
+  flex: 1;
+  padding-right: 2.5rem;
+}
+
+.toggle-visibility-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-tertiary);
+  transition: color 0.2s ease;
+}
+
+.toggle-visibility-btn:hover {
+  color: var(--text-primary);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
   font-size: 0.875rem;
+  font-family: var(--font-sans);
   transition: all 0.2s ease;
   box-sizing: border-box;
+}
+
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+.form-group input:hover,
+.form-group select:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #58a6ff;
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary-blue-start);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
 }
 
 .form-group input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-disabled);
 }
 
 .input-disabled {
@@ -329,7 +376,7 @@
 .placeholder-note {
   margin-top: 0.45rem;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--text-tertiary);
 }
 
 .validation-message {
@@ -349,7 +396,7 @@
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .placeholder-block {
@@ -369,22 +416,22 @@
   gap: 1rem;
   padding: 1rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
 }
 
 .placeholder-summary-label {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   margin-bottom: 0.25rem;
 }
 
 .placeholder-summary-title {
   font-size: 1rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-primary);
 }
 
 .placeholder-summary-status {
@@ -403,21 +450,21 @@
   text-align: left;
   padding: 1rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .theme-option:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 
 .theme-option.active {
-  border-color: rgba(88, 166, 255, 0.45);
-  background: rgba(88, 166, 255, 0.16);
+  border-color: var(--primary-blue-start);
+  background: rgba(30, 64, 175, 0.16);
 }
 
 .theme-option-title {
@@ -429,7 +476,7 @@
 .theme-option-subtitle {
   display: block;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-tertiary);
 }
 
 .theme-placeholder-note {
@@ -442,7 +489,7 @@
   gap: 0.75rem;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .settings-footer-minimal {
@@ -455,15 +502,15 @@
 }
 
 .settings-status-saving {
-  color: #79c0ff;
+  color: var(--primary-blue-start);
 }
 
 .settings-status-saved {
-  color: #22c55e;
+  color: var(--success-start);
 }
 
 .settings-status-error {
-  color: #ef4444;
+  color: var(--error-start);
 }
 
 .btn-primary,
@@ -479,12 +526,15 @@
 }
 
 .btn-primary {
-  background: #58a6ff;
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: 1px solid var(--btn-primary-border);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #79c0ff;
+  background: var(--btn-primary-hover-bg);
+  border-color: var(--btn-primary-hover-border);
+  color: var(--btn-primary-hover-text);
 }
 
 .btn-primary:disabled {
@@ -493,20 +543,20 @@
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--error-bg);
+  color: var(--error-start);
+  border: 1px solid var(--error-border);
 }
 
 .btn-danger:hover {
@@ -516,10 +566,10 @@
 
 .error-message {
   padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
-  color: #ef4444;
+  color: var(--error-start);
   font-size: 0.875rem;
 }
 
@@ -528,16 +578,16 @@
 }
 
 .settings-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-primary);
 }
 
 .settings-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--border-default);
   border-radius: 4px;
 }
 
 .settings-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--border-strong);
 }
 
 @media (max-width: 900px) {
@@ -547,7 +597,7 @@
 
   .settings-nav {
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--border-subtle);
     flex-direction: row;
     overflow-x: auto;
   }

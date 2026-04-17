@@ -398,10 +398,4 @@ impl ClaurstSession {
     pub fn get_session_id(&self) -> &str {
         &self.session_id
     }
-
-    pub fn clear_history(&mut self) -> anyhow::Result<()> {
-        self.storage.clear_messages(&self.session_id)?;
-        self.messages.clear();
-        Ok(())
-    }
 }

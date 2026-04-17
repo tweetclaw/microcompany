@@ -60,10 +60,12 @@
   margin-top: var(--space-2);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
-  background: rgba(30, 64, 175, 0.14);
-  color: #bfdbfe;
+  background: var(--badge-bg);
+  color: var(--badge-text);
   font-size: var(--text-xs);
   line-height: 1.4;
+  font-weight: var(--font-medium);
+  border: 1px solid var(--badge-border);
 }
 
 .session-delete {

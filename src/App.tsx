@@ -6,7 +6,7 @@ import { Settings } from './components/Settings';
 import { Message } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
-import { ThemePreference, applyTheme, loadThemePreference, resolveTheme, saveThemePreference, watchSystemTheme } from './utils/themeState';
+import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
 
 interface SessionSummary {
@@ -33,7 +33,7 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+  const [themePreference, setThemePreference] = useState<ThemePreference>('dark');
 
   // 草稿对话状态：用于"新建"时不立即创建后端 session
   const [isDraftConversation, setIsDraftConversation] = useState(false);
@@ -45,7 +45,7 @@ function App() {
     // Initialize theme
     const savedTheme = loadThemePreference();
     setThemePreference(savedTheme);
-    applyTheme(resolveTheme(savedTheme));
+    applyTheme(savedTheme);
   }, []);
 
   useEffect(() => {
@@ -64,12 +64,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (themePreference === 'system') {
-      const unwatch = watchSystemTheme((systemTheme) => {
-        applyTheme(systemTheme);
-      });
-      return unwatch;
-    } else {
+    if (themePreference) {
       applyTheme(themePreference);
     }
   }, [themePreference]);
@@ -125,7 +120,7 @@ function App() {
     if (validConfig.theme && validConfig.theme !== themePreference) {
       setThemePreference(validConfig.theme);
       saveThemePreference(validConfig.theme);
-      applyTheme(resolveTheme(validConfig.theme));
+      applyTheme(validConfig.theme);
     }
 
     const enabledProviders = validConfig.providers.filter((provider) => isProviderUsable(provider, providerCatalog.find((item) => item.id === provider.id)));
@@ -223,6 +218,31 @@ function App() {
     setHasActiveSession(true);
   };
 
+  const handleSessionDeleted = async (deletedSessionId: string) => {
+    // 如果删除的是当前正在使用的 session
+    if (currentSessionId === deletedSessionId) {
+      // 先尝试取消正在进行的请求
+      try {
+        await invoke('cancel_message');
+      } catch (error) {
+        // 如果没有正在进行的请求，忽略错误
+        console.log('No active request to cancel:', error);
+      }
+
+      // 清空对话界面
+      setCurrentSessionId(null);
+      setCurrentSessionTitle(null);
+      setCurrentProviderName(null);
+      setCurrentModelName(null);
+      setMessages([]);
+      setHasActiveSession(false);
+      setIsDraftConversation(false);
+    }
+
+    // 刷新 session 列表
+    setSessionListRefreshKey((prev) => prev + 1);
+  };
+
   // 确保当前有一个真实的后端 session（懒创建）
   const ensureActiveSession = async (): Promise<string | null> => {
     // 如果已经有真实 session，直接返回
@@ -290,6 +310,7 @@ function App() {
         onMessagesChange={setMessages}
         sessionListRefreshKey={sessionListRefreshKey}
         onSessionSelected={handleSessionSelected}
+        onSessionDeleted={handleSessionDeleted}
         onNewChatWithModel={handleNewChatWithModel}
         hasActiveSession={hasActiveSession}
         isDraftConversation={isDraftConversation}
@@ -306,7 +327,7 @@ function App() {
         onThemeChange={(theme) => {
           setThemePreference(theme);
           saveThemePreference(theme);
-          applyTheme(resolveTheme(theme));
+          applyTheme(theme);
         }}
       />
     </div>

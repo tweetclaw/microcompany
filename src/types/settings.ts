@@ -17,7 +17,7 @@ export interface SettingsData {
   activeProvider: string;
   providers: ProviderConfig[];
   braveSearchApiKey?: string;
-  theme?: 'light' | 'dark' | 'system';
+  theme?: 'light' | 'dark' | 'ocean';
 }
 
 export interface ProviderInfo {
@@ -187,7 +187,7 @@ export function normalizeSettingsData(raw: unknown): SettingsData {
     ?? '';
 
   const braveSearchApiKey = source.braveSearchApiKey ?? source.brave_search_api_key;
-  const theme = source.theme as 'light' | 'dark' | 'system' | undefined;
+  const theme = source.theme as 'light' | 'dark' | 'ocean' | undefined;
 
   return {
     activeProvider,
