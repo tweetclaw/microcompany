@@ -3,7 +3,7 @@ use claurst_query::{QueryConfig, QueryOutcome, QueryEvent, run_query_loop};
 use claurst_tools::{
     Tool, ToolContext,
     FileReadTool, FileEditTool, FileWriteTool,
-    BashTool, GlobTool, GrepTool,
+    BashTool, GlobTool, GrepTool, WebSearchTool,
 };
 use claurst_api::{AnthropicClient, client::ClientConfig};
 use crate::storage::{ConversationStorage, StoredMessage};
@@ -94,6 +94,7 @@ impl ClaurstSession {
             Box::new(BashTool),
             Box::new(GlobTool),
             Box::new(GrepTool),
+            Box::new(WebSearchTool),
         ];
 
         // 6. 创建 ToolContext
