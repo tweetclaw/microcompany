@@ -46,4 +46,5 @@ echo "  - 停止服务: Ctrl+C"
 echo ""
 
 # 启动开发服务器并将所有输出重定向到日志文件
-npm run tauri dev 2>&1 | tee "$LOG_FILE"
+# 启用详细的 Rust 日志以捕获工具执行错误
+RUST_LOG=claurst_tools=debug,app_lib=debug npm run tauri dev 2>&1 | tee "$LOG_FILE"

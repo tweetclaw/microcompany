@@ -222,6 +222,14 @@ impl ClaurstSession {
                     }
                     QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
                         let now = chrono::Utc::now().timestamp_millis();
+
+                        // Log tool execution result
+                        if is_error {
+                            log::error!("Tool '{}' failed with error: {}", tool_name, result);
+                        } else {
+                            log::info!("Tool '{}' completed successfully", tool_name);
+                        }
+
                         let _ = event_window.emit("tool-call-end", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
