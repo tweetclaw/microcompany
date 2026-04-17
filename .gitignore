@@ -36,3 +36,4 @@ src-tauri/.DS_Store
 dist/
 src-tauri/dev.pid
 dev.pid
+.claude
