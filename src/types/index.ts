@@ -101,3 +101,23 @@ export interface AppState {
   inputValue: string;
   error: string | null;
 }
+
+// Task types
+export interface TaskRole {
+  id: string;
+  name: string;
+  identity: string;
+  providerId: string;
+  providerName: string;
+  model: string;
+  systemPrompt?: string;
+  sessionId: string | null;
+  sessionReady: boolean;
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  roles: TaskRole[];
+  createdAt: number;
+}

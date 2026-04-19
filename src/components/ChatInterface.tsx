@@ -39,6 +39,7 @@ interface ChatInterfaceProps {
   onSessionSelected: (sessionId: string) => void;
   onSessionDeleted?: (sessionId: string) => void;
   onNewChatWithModel: (modelValue: string) => void;
+  onNewTask: () => void;
   hasActiveSession: boolean;
   isDraftConversation: boolean;
   onEnsureSession: () => Promise<string | null>;
@@ -67,6 +68,7 @@ function ChatInterface({
   onSessionSelected,
   onSessionDeleted,
   onNewChatWithModel,
+  onNewTask,
   hasActiveSession,
   isDraftConversation,
   onEnsureSession,
@@ -551,6 +553,7 @@ function ChatInterface({
         newChatDisabledReason={newChatDisabledReason}
         runState={runState}
         onNewChatWithModel={onNewChatWithModel}
+        onNewTask={onNewTask}
         onSettingsClick={onSettingsClick}
       />
 

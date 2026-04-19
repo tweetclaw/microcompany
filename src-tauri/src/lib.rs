@@ -21,6 +21,7 @@ pub fn run() {
       commands::get_session_state,
       commands::close_session,
       commands::send_message,
+      commands::forward_message,
       commands::cancel_message,
       commands::list_sessions,
       commands::delete_session,
@@ -30,6 +31,10 @@ pub fn run() {
       commands::save_config,
       commands::get_available_providers,
       commands::validate_provider_config,
+      commands::save_task,
+      commands::load_task,
+      commands::list_tasks,
+      commands::delete_task,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

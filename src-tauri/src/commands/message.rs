@@ -32,6 +32,27 @@ pub async fn send_message(
 }
 
 #[tauri::command]
+pub async fn forward_message(
+    target_session_id: String,
+    message_content: String,
+) -> Result<(), String> {
+    let storage = crate::storage::ConversationStorage::new()
+        .map_err(|e| format!("Failed to create storage: {}", e))?;
+
+    let now = chrono::Utc::now().timestamp();
+    let message = crate::storage::StoredMessage {
+        role: "user".to_string(),
+        content: message_content,
+        timestamp: now,
+    };
+
+    storage.save_message(&target_session_id, message)
+        .map_err(|e| format!("Failed to forward message: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn cancel_message(
     state: State<'_, AppState>,
 ) -> Result<(), String> {

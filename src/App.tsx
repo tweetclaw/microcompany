@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import WelcomePage from './components/WelcomePage';
 import ChatInterface from './components/ChatInterface';
+import TaskBuilder from './components/TaskBuilder';
+import TaskWorkspace from './components/TaskWorkspace';
+import ForwardLatestReplyModal from './components/ForwardLatestReplyModal';
 import { Settings } from './components/Settings';
-import { Message } from './types';
+import { Message, Task } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
@@ -37,6 +40,11 @@ function App() {
 
   // 草稿对话状态：用于"新建"时不立即创建后端 session
   const [isDraftConversation, setIsDraftConversation] = useState(false);
+
+  // Task 状态
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [currentTaskRoleId, setCurrentTaskRoleId] = useState<string | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -243,6 +251,122 @@ function App() {
     setSessionListRefreshKey((prev) => prev + 1);
   };
 
+  // Task 相关处理函数
+  const handleNewTask = () => {
+    if (!workingDirectory) return;
+    setIsCreatingTask(true);
+    setCurrentTask(null);
+    setCurrentTaskRoleId(null);
+  };
+
+  const handleCancelTaskCreation = () => {
+    setIsCreatingTask(false);
+    setCurrentTask(null);
+  };
+
+  const handleTaskCreated = async (task: Task) => {
+    try {
+      // 保存 Task 到后端
+      await invoke('save_task', { task });
+
+      setCurrentTask(task);
+      setIsCreatingTask(false);
+
+      // 默认选中第一个角色
+      if (task.roles.length > 0) {
+        setCurrentTaskRoleId(task.roles[0].id);
+        // 切换到第一个角色的 session
+        const firstRole = task.roles[0];
+        if (firstRole.sessionId) {
+          handleSessionSelected(firstRole.sessionId);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save task:', error);
+      alert(`Failed to save task: ${error}`);
+    }
+  };
+
+  const handleTaskRoleSelected = async (roleId: string) => {
+    if (!currentTask) return;
+
+    const role = currentTask.roles.find((r) => r.id === roleId);
+    if (!role) return;
+
+    setCurrentTaskRoleId(roleId);
+
+    // 切换到该角色的 session
+    if (role.sessionId) {
+      await handleSessionSelected(role.sessionId);
+    }
+  };
+
+  const [showForwardModal, setShowForwardModal] = useState(false);
+
+  const handleForwardLatestReply = () => {
+    setShowForwardModal(true);
+  };
+
+  const handleForwardConfirm = async (targetRoleId: string, note: string) => {
+    if (!currentTask) return;
+
+    const targetRole = currentTask.roles.find((r) => r.id === targetRoleId);
+    if (!targetRole || !targetRole.sessionId) {
+      alert('Target role session not found');
+      setShowForwardModal(false);
+      return;
+    }
+
+    const currentRole = currentTask.roles.find((r) => r.id === currentTaskRoleId);
+    const latestAssistantMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === 'assistant');
+
+    if (!latestAssistantMessage) {
+      alert('No assistant message to forward');
+      setShowForwardModal(false);
+      return;
+    }
+
+    // 构造转发消息
+    let forwardedContent = '';
+    if (note.trim()) {
+      forwardedContent += `[Note from user]\n${note.trim()}\n\n`;
+    }
+    forwardedContent += `[Forwarded Latest Reply from ${currentRole?.name}]\n${latestAssistantMessage.content}`;
+
+    try {
+      // 调用后端 API 转发消息
+      await invoke('forward_message', {
+        targetSessionId: targetRole.sessionId,
+        messageContent: forwardedContent,
+      });
+
+      // 关闭弹层
+      setShowForwardModal(false);
+
+      // 显示成功提示
+      alert(`Forwarded to ${targetRole.name}`);
+    } catch (error) {
+      console.error('Failed to forward message:', error);
+      alert(`Failed to forward message: ${error}`);
+    }
+  };
+
+  const handleExitTask = async () => {
+    if (currentTask) {
+      try {
+        // 保存当前 Task 状态
+        await invoke('save_task', { task: currentTask });
+      } catch (error) {
+        console.error('Failed to save task on exit:', error);
+      }
+    }
+
+    setCurrentTask(null);
+    setCurrentTaskRoleId(null);
+  };
+
   // 确保当前有一个真实的后端 session（懒创建）
   const ensureActiveSession = async (): Promise<string | null> => {
     // 如果已经有真实 session，直接返回
@@ -298,25 +422,66 @@ function App() {
 
   return (
     <div className="app">
-      <ChatInterface
-        workingDirectory={workingDirectory}
-        currentSessionId={currentSessionId}
-        currentSessionTitle={currentSessionTitle}
-        currentProviderName={currentProviderName}
-        currentModelName={currentModelName}
-        availableProviders={availableProviders}
-        selectedProviderValue={selectedProviderValue}
-        messages={messages}
-        onMessagesChange={setMessages}
-        sessionListRefreshKey={sessionListRefreshKey}
-        onSessionSelected={handleSessionSelected}
-        onSessionDeleted={handleSessionDeleted}
-        onNewChatWithModel={handleNewChatWithModel}
-        hasActiveSession={hasActiveSession}
-        isDraftConversation={isDraftConversation}
-        onEnsureSession={ensureActiveSession}
-        onSettingsClick={() => setIsSettingsOpen(true)}
-      />
+      {isCreatingTask ? (
+        <TaskBuilder
+          workingDirectory={workingDirectory}
+          availableProviders={availableProviders}
+          onTaskCreated={handleTaskCreated}
+          onCancel={handleCancelTaskCreation}
+        />
+      ) : currentTask ? (
+        <TaskWorkspace
+          task={currentTask}
+          workingDirectory={workingDirectory}
+          availableProviders={availableProviders}
+          currentRoleId={currentTaskRoleId}
+          onRoleSelected={handleTaskRoleSelected}
+          onForwardLatestReply={handleForwardLatestReply}
+          onExitTask={handleExitTask}
+        >
+          <ChatInterface
+            workingDirectory={workingDirectory}
+            currentSessionId={currentSessionId}
+            currentSessionTitle={currentSessionTitle}
+            currentProviderName={currentProviderName}
+            currentModelName={currentModelName}
+            availableProviders={availableProviders}
+            selectedProviderValue={selectedProviderValue}
+            messages={messages}
+            onMessagesChange={setMessages}
+            sessionListRefreshKey={sessionListRefreshKey}
+            onSessionSelected={handleSessionSelected}
+            onSessionDeleted={handleSessionDeleted}
+            onNewChatWithModel={handleNewChatWithModel}
+            onNewTask={handleNewTask}
+            hasActiveSession={hasActiveSession}
+            isDraftConversation={isDraftConversation}
+            onEnsureSession={ensureActiveSession}
+            onSettingsClick={() => setIsSettingsOpen(true)}
+          />
+        </TaskWorkspace>
+      ) : (
+        <ChatInterface
+          workingDirectory={workingDirectory}
+          currentSessionId={currentSessionId}
+          currentSessionTitle={currentSessionTitle}
+          currentProviderName={currentProviderName}
+          currentModelName={currentModelName}
+          availableProviders={availableProviders}
+          selectedProviderValue={selectedProviderValue}
+          messages={messages}
+          onMessagesChange={setMessages}
+          sessionListRefreshKey={sessionListRefreshKey}
+          onSessionSelected={handleSessionSelected}
+          onSessionDeleted={handleSessionDeleted}
+          onNewChatWithModel={handleNewChatWithModel}
+          onNewTask={handleNewTask}
+          hasActiveSession={hasActiveSession}
+          isDraftConversation={isDraftConversation}
+          onEnsureSession={ensureActiveSession}
+          onSettingsClick={() => setIsSettingsOpen(true)}
+        />
+      )}
       <Settings
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -330,6 +495,15 @@ function App() {
           applyTheme(theme);
         }}
       />
+      {showForwardModal && currentTask && currentTaskRoleId && (
+        <ForwardLatestReplyModal
+          task={currentTask}
+          currentRoleId={currentTaskRoleId}
+          messages={messages}
+          onForward={handleForwardConfirm}
+          onCancel={() => setShowForwardModal(false)}
+        />
+      )}
     </div>
   );
 }

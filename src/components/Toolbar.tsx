@@ -16,6 +16,7 @@ interface ToolbarProps {
   newChatDisabledReason: string | null;
   runState: AiRunState;
   onNewChatWithModel: (modelValue: string) => void;
+  onNewTask: () => void;
   onSettingsClick: () => void;
 }
 
@@ -25,6 +26,7 @@ function Toolbar({
   newChatDisabledReason,
   runState,
   onNewChatWithModel,
+  onNewTask,
   onSettingsClick,
 }: ToolbarProps) {
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -84,22 +86,22 @@ function Toolbar({
 
   return (
     <div className="toolbar" data-tauri-drag-region>
-      <div className="toolbar-left" data-tauri-drag-region>
-        <div className="toolbar-working-dir" data-tauri-drag-region>
-          <span className="working-dir-label" data-tauri-drag-region>工作目录</span>
+      <div className="toolbar-left">
+        <div className="toolbar-working-dir">
+          <span className="working-dir-label">工作目录</span>
           {workingDirectory ? (
-            <span className="working-dir-path" title={workingDirectory} data-tauri-drag-region>
+            <span className="working-dir-path" title={workingDirectory}>
               {getDirectoryName(workingDirectory)}
             </span>
           ) : (
-            <span className="working-dir-path toolbar-working-dir-empty" data-tauri-drag-region>
+            <span className="working-dir-path toolbar-working-dir-empty">
               未选择
             </span>
           )}
         </div>
-        <div className={`toolbar-run-state ${runStateClass}`} data-tauri-drag-region>
-          <span className="toolbar-run-state-dot" data-tauri-drag-region />
-          <span data-tauri-drag-region>{runStateLabel}</span>
+        <div className={`toolbar-run-state ${runStateClass}`}>
+          <span className="toolbar-run-state-dot" />
+          <span>{runStateLabel}</span>
         </div>
       </div>
       <div className="toolbar-right">
@@ -109,6 +111,7 @@ function Toolbar({
           onClick={handleNewChatClick}
           disabled={Boolean(newChatDisabledReason)}
           title={newChatDisabledReason || '新建对话'}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           ➕ 新建
         </button>
@@ -120,11 +123,21 @@ function Toolbar({
             triggerRect={newChatButtonRef.current.getBoundingClientRect()}
           />
         )}
+        <button
+          className="toolbar-new-task-button"
+          onClick={onNewTask}
+          disabled={!workingDirectory}
+          title={workingDirectory ? '新建任务' : '请先选择工作目录'}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          ➕ New Task
+        </button>
         <div className="toolbar-divider"></div>
         <button
           className="toolbar-settings-button"
           onClick={onSettingsClick}
           title="设置"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           ⚙️
         </button>
