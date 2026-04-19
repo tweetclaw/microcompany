@@ -1,0 +1,126 @@
+.task-inspector {
+  width: 300px;
+  height: 100vh;
+  background-color: var(--vscode-sideBar-background);
+  border-left: 1px solid var(--vscode-sideBar-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.task-inspector-section {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--vscode-sideBar-border);
+}
+
+.task-inspector-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+.role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.role-card {
+  padding: 12px;
+  background-color: var(--vscode-list-inactiveSelectionBackground);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.role-card:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  border-color: var(--vscode-list-hoverBorder);
+}
+
+.role-card.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  border-color: var(--vscode-list-activeSelectionBorder);
+}
+
+.role-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.role-active-indicator {
+  font-size: 12px;
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.role-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.role-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.role-identity,
+.role-model {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-action-button {
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.1s ease;
+}
+
+.task-action-button:hover:not(:disabled) {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.task-action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.task-action-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.activity-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.activity-log-placeholder {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+  padding: 20px;
+}

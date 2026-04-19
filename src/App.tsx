@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import WelcomePage from './components/WelcomePage';
-import ChatInterface from './components/ChatInterface';
+import MainNavigation, { NavigationMode } from './components/MainNavigation';
+import NormalModeLayout from './components/NormalModeLayout';
+import TaskModeLayout from './components/TaskModeLayout';
 import TaskBuilder from './components/TaskBuilder';
-import TaskWorkspace from './components/TaskWorkspace';
 import ForwardLatestReplyModal from './components/ForwardLatestReplyModal';
+import ModelDropdown from './components/ModelDropdown';
 import { Settings } from './components/Settings';
 import { Message, Task } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
@@ -41,10 +43,16 @@ function App() {
   // 草稿对话状态：用于"新建"时不立即创建后端 session
   const [isDraftConversation, setIsDraftConversation] = useState(false);
 
+  // Navigation mode
+  const [navigationMode, setNavigationMode] = useState<NavigationMode>('normal');
+
   // Task 状态
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [currentTaskRoleId, setCurrentTaskRoleId] = useState<string | null>(null);
+
+  // Model dropdown state for new chat
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -420,6 +428,17 @@ function App() {
     );
   }
 
+  const handleNavigationModeChange = (mode: NavigationMode) => {
+    setNavigationMode(mode);
+    if (mode === 'task') {
+      setIsCreatingTask(false);
+    }
+  };
+
+  const handleNewChatClick = () => {
+    setShowModelDropdown(true);
+  };
+
   return (
     <div className="app">
       {isCreatingTask ? (
@@ -429,59 +448,60 @@ function App() {
           onTaskCreated={handleTaskCreated}
           onCancel={handleCancelTaskCreation}
         />
-      ) : currentTask ? (
-        <TaskWorkspace
-          task={currentTask}
-          workingDirectory={workingDirectory}
-          availableProviders={availableProviders}
-          currentRoleId={currentTaskRoleId}
-          onRoleSelected={handleTaskRoleSelected}
-          onForwardLatestReply={handleForwardLatestReply}
-          onExitTask={handleExitTask}
-        >
-          <ChatInterface
-            workingDirectory={workingDirectory}
-            currentSessionId={currentSessionId}
-            currentSessionTitle={currentSessionTitle}
-            currentProviderName={currentProviderName}
-            currentModelName={currentModelName}
-            availableProviders={availableProviders}
-            selectedProviderValue={selectedProviderValue}
-            messages={messages}
-            onMessagesChange={setMessages}
-            sessionListRefreshKey={sessionListRefreshKey}
-            onSessionSelected={handleSessionSelected}
-            onSessionDeleted={handleSessionDeleted}
-            onNewChatWithModel={handleNewChatWithModel}
-            onNewTask={handleNewTask}
-            hasActiveSession={hasActiveSession}
-            isDraftConversation={isDraftConversation}
-            onEnsureSession={ensureActiveSession}
-            onSettingsClick={() => setIsSettingsOpen(true)}
-            hideSidebar={true}
-          />
-        </TaskWorkspace>
       ) : (
-        <ChatInterface
-          workingDirectory={workingDirectory}
-          currentSessionId={currentSessionId}
-          currentSessionTitle={currentSessionTitle}
-          currentProviderName={currentProviderName}
-          currentModelName={currentModelName}
-          availableProviders={availableProviders}
-          selectedProviderValue={selectedProviderValue}
-          messages={messages}
-          onMessagesChange={setMessages}
-          sessionListRefreshKey={sessionListRefreshKey}
-          onSessionSelected={handleSessionSelected}
-          onSessionDeleted={handleSessionDeleted}
-          onNewChatWithModel={handleNewChatWithModel}
-          onNewTask={handleNewTask}
-          hasActiveSession={hasActiveSession}
-          isDraftConversation={isDraftConversation}
-          onEnsureSession={ensureActiveSession}
-          onSettingsClick={() => setIsSettingsOpen(true)}
-        />
+        <>
+          <MainNavigation
+            currentMode={navigationMode}
+            onModeChange={handleNavigationModeChange}
+            onSettingsClick={() => setIsSettingsOpen(true)}
+          />
+          {navigationMode === 'normal' ? (
+            <NormalModeLayout
+              workingDirectory={workingDirectory}
+              currentSessionId={currentSessionId}
+              currentSessionTitle={currentSessionTitle}
+              currentProviderName={currentProviderName}
+              currentModelName={currentModelName}
+              availableProviders={availableProviders}
+              selectedProviderValue={selectedProviderValue}
+              messages={messages}
+              onMessagesChange={setMessages}
+              sessionListRefreshKey={sessionListRefreshKey}
+              onSessionSelected={handleSessionSelected}
+              onSessionDeleted={handleSessionDeleted}
+              onNewChatWithModel={handleNewChatWithModel}
+              onNewTask={handleNewTask}
+              hasActiveSession={hasActiveSession}
+              isDraftConversation={isDraftConversation}
+              onEnsureSession={ensureActiveSession}
+              onNewChatClick={handleNewChatClick}
+            />
+          ) : (
+            <TaskModeLayout
+              workingDirectory={workingDirectory}
+              currentSessionId={currentSessionId}
+              currentSessionTitle={currentSessionTitle}
+              currentProviderName={currentProviderName}
+              currentModelName={currentModelName}
+              availableProviders={availableProviders}
+              selectedProviderValue={selectedProviderValue}
+              messages={messages}
+              onMessagesChange={setMessages}
+              sessionListRefreshKey={sessionListRefreshKey}
+              onSessionSelected={handleSessionSelected}
+              onSessionDeleted={handleSessionDeleted}
+              onNewChatWithModel={handleNewChatWithModel}
+              onNewTask={handleNewTask}
+              hasActiveSession={hasActiveSession}
+              isDraftConversation={isDraftConversation}
+              onEnsureSession={ensureActiveSession}
+              currentTask={currentTask}
+              currentTaskRoleId={currentTaskRoleId}
+              onTaskRoleSelected={handleTaskRoleSelected}
+              onForwardLatestReply={handleForwardLatestReply}
+            />
+          )}
+        </>
       )}
       <Settings
         isOpen={isSettingsOpen}
@@ -496,6 +516,17 @@ function App() {
           applyTheme(theme);
         }}
       />
+      {showModelDropdown && (
+        <ModelDropdown
+          availableProviders={availableProviders}
+          selectedValue={selectedProviderValue}
+          onSelect={(value) => {
+            handleNewChatWithModel(value);
+            setShowModelDropdown(false);
+          }}
+          onClose={() => setShowModelDropdown(false)}
+        />
+      )}
       {showForwardModal && currentTask && currentTaskRoleId && (
         <ForwardLatestReplyModal
           task={currentTask}

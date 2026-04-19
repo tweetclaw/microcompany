@@ -1,0 +1,51 @@
+.main-navigation {
+  width: 40px;
+  height: 100vh;
+  background-color: var(--vscode-activityBar-background);
+  border-right: 1px solid var(--vscode-activityBar-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.main-navigation-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.main-navigation-footer {
+  padding-bottom: 8px;
+}
+
+.main-navigation-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  color: var(--vscode-activityBar-foreground);
+  transition: background-color 0.1s ease;
+  position: relative;
+}
+
+.main-navigation-item:hover {
+  background-color: var(--vscode-activityBar-hoverBackground);
+}
+
+.main-navigation-item.active {
+  background-color: var(--vscode-activityBar-activeBackground);
+  border-left-color: var(--vscode-activityBar-activeBorder);
+}
+
+.main-navigation-icon {
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+}
