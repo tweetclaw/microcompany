@@ -45,6 +45,7 @@ interface ChatInterfaceProps {
   onEnsureSession: () => Promise<string | null>;
   onSettingsClick: () => void;
   onCancelRequest?: () => Promise<void>;
+  hideSidebar?: boolean;
 }
 
 const RUNNING_STATES: AiRunState[] = [
@@ -73,6 +74,7 @@ function ChatInterface({
   isDraftConversation,
   onEnsureSession,
   onSettingsClick,
+  hideSidebar = false,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
   const [runState, setRunState] = useState<AiRunState>('idle');
@@ -558,17 +560,19 @@ function ChatInterface({
       />
 
       <div className="ide-workspace">
-        <Sidebar
-          isOpen={isSidebarDrawerOpen}
-          collapsed={isSidebarCollapsed}
-          isCompact={isCompact}
-          onClose={() => setIsSidebarDrawerOpen(false)}
-          currentWorkingDirectory={workingDirectory || ''}
-          currentSessionId={currentSessionId}
-          sessionListRefreshKey={sessionListRefreshKey}
-          onSessionSelected={onSessionSelected}
-          onSessionDeleted={onSessionDeleted}
-        />
+        {!hideSidebar && (
+          <Sidebar
+            isOpen={isSidebarDrawerOpen}
+            collapsed={isSidebarCollapsed}
+            isCompact={isCompact}
+            onClose={() => setIsSidebarDrawerOpen(false)}
+            currentWorkingDirectory={workingDirectory || ''}
+            currentSessionId={currentSessionId}
+            sessionListRefreshKey={sessionListRefreshKey}
+            onSessionSelected={onSessionSelected}
+            onSessionDeleted={onSessionDeleted}
+          />
+        )}
 
         <main className="chat-main-column">
           <div className="chat-main-surface">

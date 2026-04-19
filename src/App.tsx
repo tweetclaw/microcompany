@@ -458,6 +458,7 @@ function App() {
             isDraftConversation={isDraftConversation}
             onEnsureSession={ensureActiveSession}
             onSettingsClick={() => setIsSettingsOpen(true)}
+            hideSidebar={true}
           />
         </TaskWorkspace>
       ) : (
