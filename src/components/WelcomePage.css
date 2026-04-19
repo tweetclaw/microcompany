@@ -8,6 +8,15 @@
   position: relative;
 }
 
+.welcome-drag-region {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  z-index: 1;
+}
+
 .welcome-window-controls {
   position: absolute;
   top: 16px;

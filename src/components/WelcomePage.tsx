@@ -108,6 +108,7 @@ function WelcomePage({ onDirectorySelected }: WelcomePageProps) {
 
   return (
     <div className="welcome-page">
+      <div className="welcome-drag-region" data-tauri-drag-region></div>
       <div className="welcome-window-controls">
         <button className="welcome-window-btn minimize-btn" onClick={handleMinimize} title="最小化">
           <svg width="12" height="12" viewBox="0 0 12 12">

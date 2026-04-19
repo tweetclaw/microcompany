@@ -83,23 +83,23 @@ function Toolbar({
           : 'toolbar-run-state-working';
 
   return (
-    <div className="toolbar">
-      <div className="toolbar-left">
-        <div className="toolbar-working-dir">
-          <span className="working-dir-label">工作目录</span>
+    <div className="toolbar" data-tauri-drag-region>
+      <div className="toolbar-left" data-tauri-drag-region>
+        <div className="toolbar-working-dir" data-tauri-drag-region>
+          <span className="working-dir-label" data-tauri-drag-region>工作目录</span>
           {workingDirectory ? (
-            <span className="working-dir-path" title={workingDirectory}>
+            <span className="working-dir-path" title={workingDirectory} data-tauri-drag-region>
               {getDirectoryName(workingDirectory)}
             </span>
           ) : (
-            <span className="working-dir-path toolbar-working-dir-empty">
+            <span className="working-dir-path toolbar-working-dir-empty" data-tauri-drag-region>
               未选择
             </span>
           )}
         </div>
-        <div className={`toolbar-run-state ${runStateClass}`}>
-          <span className="toolbar-run-state-dot" />
-          <span>{runStateLabel}</span>
+        <div className={`toolbar-run-state ${runStateClass}`} data-tauri-drag-region>
+          <span className="toolbar-run-state-dot" data-tauri-drag-region />
+          <span data-tauri-drag-region>{runStateLabel}</span>
         </div>
       </div>
       <div className="toolbar-right">

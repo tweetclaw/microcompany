@@ -8,6 +8,8 @@
   justify-content: space-between;
   gap: var(--space-4);
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .toolbar-left {
@@ -87,6 +89,11 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+
+.toolbar-right button,
+.toolbar-right select {
+  -webkit-app-region: no-drag;
 }
 
 .toolbar-model-picker {
