@@ -1,5 +1,5 @@
 use rusqlite::params;
-use crate::api::{TaskCreateRequest, TaskUpdateRequest, Task, TaskRole, TaskSummary, DeleteTaskResult};
+use crate::api::{TaskCreateRequest, Task, TaskRole};
 use crate::database::get_pool;
 use uuid::Uuid;
 use chrono::Utc;
@@ -26,7 +26,7 @@ pub async fn create_task(
 
         for role in &task_request.roles {
             let role_id = format!("role-{}", Uuid::new_v4());
-            let session_id = format!("task-{}-role-{}-{}", task_id, role_id, Uuid::new_v4());
+            let session_id = format!("session-{}", Uuid::new_v4());
 
             tx.execute(
                 "INSERT INTO roles (id, task_id, name, identity, model, provider)
@@ -150,7 +150,6 @@ async fn create_claurst_session_api(
 ) -> Result<(), String> {
     use crate::config::AppConfig;
     use crate::claurst::ClaurstSession;
-    use std::path::PathBuf;
 
     let config = AppConfig::load()
         .map_err(|e| format!("Failed to load config: {}", e))?;

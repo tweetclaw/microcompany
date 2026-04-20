@@ -217,20 +217,25 @@ function App() {
     try {
       const session = await getSession(sessionId);
 
-      await invoke<string>('init_session', {
-        workingDir: workingDirectory,
+      // 任务会话不需要调用 init_session，直接使用数据库会话
+      if (session.type === 'normal') {
+        await invoke<string>('init_session', {
+          workingDir: workingDirectory,
+          sessionId,
+          providerId: null,
+        });
+      }
+
+      // 从数据库加载消息（任务会话和普通会话都支持）
+      const messages = await invoke<Array<{ id: string; role: string; content: string; created_at: string }>>('get_messages', {
         sessionId,
-        providerId: null,
       });
 
-      const storedMessages = await invoke<Array<{ role: string; content: string; timestamp: number }>>('load_messages', {
-        sessionId,
-      });
-      const loadedMessages: Message[] = storedMessages.map((msg, index) => ({
-        id: `${msg.timestamp}-${index}`,
+      const loadedMessages: Message[] = messages.map((msg) => ({
+        id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
-        timestamp: msg.timestamp * 1000,
+        timestamp: new Date(msg.created_at).getTime(),
       }));
 
       setCurrentSessionId(sessionId);

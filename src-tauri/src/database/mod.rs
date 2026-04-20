@@ -6,8 +6,7 @@ mod migration;
 mod error;
 pub mod pool;
 
-pub use error::DatabaseError;
-pub use pool::{get_pool, init_pool};
+pub use pool::get_pool;
 
 pub fn optimize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
