@@ -63,17 +63,20 @@
   padding: 12px;
   margin-bottom: 4px;
   border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
-  transition: background-color 0.1s ease;
+  transition: all 0.1s ease;
 }
 
 .task-list-item:hover {
   background-color: var(--vscode-list-hoverBackground);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .task-list-item.active {
   background-color: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .task-list-item-icon {

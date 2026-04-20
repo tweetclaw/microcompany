@@ -566,6 +566,7 @@ function App() {
               onSettingsClick={() => setIsSettingsOpen(true)}
               isSessionListCollapsed={isSessionListCollapsed}
               isInspectorCollapsed={isInspectorCollapsed}
+              isTerminalCollapsed={isTerminalCollapsed}
             />
           )}
         </div>

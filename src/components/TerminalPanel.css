@@ -5,6 +5,7 @@
   border-top: 1px solid var(--border-default);
   height: 200px;
   min-height: 200px;
+  z-index: 2;
 }
 
 .terminal-header {

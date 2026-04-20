@@ -32,6 +32,7 @@ interface TaskModeLayoutProps {
   onSettingsClick: () => void;
   isSessionListCollapsed?: boolean;
   isInspectorCollapsed?: boolean;
+  isTerminalCollapsed?: boolean;
 }
 
 export default function TaskModeLayout(props: TaskModeLayoutProps) {
@@ -50,31 +51,34 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
       )}
       {props.currentTask ? (
         <>
-          <ChatInterface
-            workingDirectory={props.workingDirectory}
-            currentSessionId={props.currentSessionId}
-            currentSessionTitle={props.currentSessionTitle}
-            currentProviderName={props.currentProviderName}
-            currentModelName={props.currentModelName}
-            availableProviders={props.availableProviders}
-            selectedProviderValue={props.selectedProviderValue}
-            messages={props.messages}
-            onMessagesChange={props.onMessagesChange}
-            sessionListRefreshKey={props.sessionListRefreshKey}
-            onSessionSelected={props.onSessionSelected}
-            onSessionDeleted={props.onSessionDeleted}
-            onNewChatWithModel={props.onNewChatWithModel}
-            onNewTask={props.onNewTask}
-            hasActiveSession={props.hasActiveSession}
-            isDraftConversation={props.isDraftConversation}
-            onEnsureSession={props.onEnsureSession}
-            onSettingsClick={props.onSettingsClick}
-            hideSidebar={true}
-            hideInspector={true}
-            hideNewButtons={true}
-            hideToolbar={true}
-            hideTitleBar={true}
-          />
+          <div className="task-mode-chat-wrapper">
+            <ChatInterface
+              workingDirectory={props.workingDirectory}
+              currentSessionId={props.currentSessionId}
+              currentSessionTitle={props.currentSessionTitle}
+              currentProviderName={props.currentProviderName}
+              currentModelName={props.currentModelName}
+              availableProviders={props.availableProviders}
+              selectedProviderValue={props.selectedProviderValue}
+              messages={props.messages}
+              onMessagesChange={props.onMessagesChange}
+              sessionListRefreshKey={props.sessionListRefreshKey}
+              onSessionSelected={props.onSessionSelected}
+              onSessionDeleted={props.onSessionDeleted}
+              onNewChatWithModel={props.onNewChatWithModel}
+              onNewTask={props.onNewTask}
+              hasActiveSession={props.hasActiveSession}
+              isDraftConversation={props.isDraftConversation}
+              onEnsureSession={props.onEnsureSession}
+              onSettingsClick={props.onSettingsClick}
+              hideSidebar={true}
+              hideInspector={true}
+              hideNewButtons={true}
+              hideToolbar={true}
+              hideTitleBar={true}
+              externalTerminalCollapsed={props.isTerminalCollapsed}
+            />
+          </div>
           {!props.isInspectorCollapsed && (
             <TaskInspector
               task={props.currentTask}
