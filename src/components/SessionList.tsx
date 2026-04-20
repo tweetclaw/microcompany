@@ -1,5 +1,6 @@
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { deleteSession } from '../api';
 import './SessionList.css';
 
 export interface SessionInfo {
@@ -56,9 +57,8 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     }
 
     try {
-      await invoke('delete_session', { sessionId });
+      await deleteSession(sessionId);
 
-      // 通知父组件 session 已被删除
       if (onSessionDeleted) {
         onSessionDeleted(sessionId);
       }

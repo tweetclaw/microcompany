@@ -14,6 +14,7 @@ import {
   toProviderConfig,
   toProviderDraft,
 } from '../types/settings';
+import DatabasePanel from './DatabasePanel';
 import './Settings.css';
 
 interface SettingsProps {
@@ -26,7 +27,7 @@ interface SettingsProps {
   onThemeChange: (theme: 'light' | 'dark' | 'ocean') => void;
 }
 
-type SettingsSection = 'providers' | 'search' | 'theme';
+type SettingsSection = 'providers' | 'search' | 'theme' | 'database';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const CUSTOM_PROVIDER_TYPE_OPTIONS: ProviderType[] = [
@@ -317,6 +318,12 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
             >
               Theme
             </button>
+            <button
+              className={`settings-nav-item ${activeSection === 'database' ? 'active' : ''}`}
+              onClick={() => setActiveSection('database')}
+            >
+              Database
+            </button>
           </aside>
 
           <div className="settings-content settings-panel-stack">
@@ -583,6 +590,18 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
                 <div className="placeholder-note theme-placeholder-note">
                   Theme changes take effect immediately and persist across sessions.
                 </div>
+              </div>
+            )}
+
+            {activeSection === 'database' && (
+              <div className="settings-section-card">
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>Database Management</h3>
+                    <p className="section-description">View statistics and manage database backups and optimization.</p>
+                  </div>
+                </div>
+                <DatabasePanel />
               </div>
             )}
           </div>

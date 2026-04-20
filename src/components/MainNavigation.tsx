@@ -7,9 +7,10 @@ interface MainNavigationProps {
   currentMode: NavigationMode;
   onModeChange: (mode: NavigationMode) => void;
   onSettingsClick: () => void;
+  onSearchClick: () => void;
 }
 
-export default function MainNavigation({ currentMode, onModeChange, onSettingsClick }: MainNavigationProps) {
+export default function MainNavigation({ currentMode, onModeChange, onSettingsClick, onSearchClick }: MainNavigationProps) {
   return (
     <div className="main-navigation">
       <div className="main-navigation-items">
@@ -29,6 +30,13 @@ export default function MainNavigation({ currentMode, onModeChange, onSettingsCl
         </button>
       </div>
       <div className="main-navigation-footer">
+        <button
+          className="main-navigation-item"
+          onClick={onSearchClick}
+          title="Search Messages (Cmd+K)"
+        >
+          <span className="main-navigation-icon">🔍</span>
+        </button>
         <button
           className="main-navigation-item"
           onClick={onSettingsClick}

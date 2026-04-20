@@ -1,5 +1,6 @@
 import React from 'react';
 import { Task, TaskRole } from '../types';
+import { useTaskStatistics } from '../hooks/useApi';
 import './TaskInspector.css';
 
 interface TaskInspectorProps {
@@ -17,6 +18,8 @@ export default function TaskInspector({
   onForwardLatestReply,
   hasLatestReply,
 }: TaskInspectorProps) {
+  const { stats, loading, error } = useTaskStatistics(task.id);
+
   return (
     <div className="task-inspector">
       <div className="task-inspector-section">
@@ -55,10 +58,36 @@ export default function TaskInspector({
       </div>
 
       <div className="task-inspector-section">
-        <div className="task-inspector-section-title">Activity Log</div>
-        <div className="activity-log">
-          <div className="activity-log-placeholder">Activity log coming soon...</div>
-        </div>
+        <div className="task-inspector-section-title">Statistics</div>
+        {loading ? (
+          <div className="task-stats-loading">Loading...</div>
+        ) : error ? (
+          <div className="task-stats-error">Failed to load statistics</div>
+        ) : stats ? (
+          <div className="task-stats">
+            <div className="task-stat-item">
+              <span className="task-stat-label">Total Messages</span>
+              <span className="task-stat-value">{stats.total_messages}</span>
+            </div>
+            <div className="task-stat-item">
+              <span className="task-stat-label">Created</span>
+              <span className="task-stat-value">{new Date(stats.created_at).toLocaleDateString()}</span>
+            </div>
+            {stats.messages_by_role.length > 0 && (
+              <div className="task-stat-roles">
+                <div className="task-stat-roles-title">Messages by Role</div>
+                {stats.messages_by_role.slice(0, 3).map((roleStats) => (
+                  <div key={roleStats.role_id} className="task-stat-role-item">
+                    <span className="task-stat-role-name">{roleStats.role_name}</span>
+                    <span className="task-stat-role-count">{roleStats.message_count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="task-stats-empty">No statistics available</div>
+        )}
       </div>
     </div>
   );

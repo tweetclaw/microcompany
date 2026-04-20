@@ -7,11 +7,13 @@ import NormalModeLayout from './components/NormalModeLayout';
 import TaskModeLayout from './components/TaskModeLayout';
 import TaskBuilder from './components/TaskBuilder';
 import ForwardLatestReplyModal from './components/ForwardLatestReplyModal';
+import SearchModal from './components/SearchModal';
 import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
 import { Settings } from './components/Settings';
 import { Message, Task, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
+import { getSession } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
@@ -40,6 +42,7 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>('dark');
 
   // 草稿对话状态：用于"新建"时不立即创建后端 session
@@ -70,6 +73,18 @@ function App() {
     return () => {
       unlistenStatus.then((fn) => fn());
     };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -483,6 +498,24 @@ function App() {
     }
   };
 
+  const handleSearchResultClick = async (sessionId: string, sessionType: string, taskId: string | null) => {
+    if (sessionType === 'task' && taskId) {
+      try {
+        // Fetch the session to get the actual task_id
+        const session = await getSession(sessionId);
+        if (session.task_id) {
+          const task = await invoke<Task>('get_task', { taskId: session.task_id });
+          await handleTaskSelected(task);
+        }
+      } catch (error) {
+        console.error('Failed to load task from search:', error);
+      }
+    } else {
+      await handleSessionSelected(sessionId);
+      setNavigationMode('normal');
+    }
+  };
+
 
   const handleToggleSessionList = () => {
     setIsSessionListCollapsed(!isSessionListCollapsed);
@@ -523,6 +556,7 @@ function App() {
             currentMode={navigationMode}
             onModeChange={handleNavigationModeChange}
             onSettingsClick={() => setIsSettingsOpen(true)}
+            onSearchClick={() => setIsSearchOpen(true)}
           />
           {navigationMode === 'normal' ? (
             <NormalModeLayout
@@ -593,6 +627,11 @@ function App() {
           saveThemePreference(theme);
           applyTheme(theme);
         }}
+      />
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onResultClick={handleSearchResultClick}
       />
       {showForwardModal && currentTask && currentTaskRoleId && (
         <ForwardLatestReplyModal
