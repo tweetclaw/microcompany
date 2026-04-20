@@ -2,8 +2,8 @@
   width: 260px;
   height: 100%;
   background-color: var(--vscode-sideBar-background);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid var(--border-default);
+  border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -11,7 +11,7 @@
 
 .session-list-panel-header {
   padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 

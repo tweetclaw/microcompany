@@ -75,12 +75,22 @@ function App() {
   useEffect(() => {
     loadConfig();
     loadProviderCatalog();
+    initializeDb();
 
     // Initialize theme
     const savedTheme = loadThemePreference();
     setThemePreference(savedTheme);
     applyTheme(savedTheme);
   }, []);
+
+  const initializeDb = async () => {
+    try {
+      await invoke('initialize_database');
+      console.log('Database initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+    }
+  };
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;

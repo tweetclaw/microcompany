@@ -1,12 +1,16 @@
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::time::Duration;
-use once_cell::sync::OnceCell;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 
-static DB_POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
+static DB_POOL: Lazy<Mutex<Option<Pool<SqliteConnectionManager>>>> = Lazy::new(|| Mutex::new(None));
 
-pub fn get_pool() -> Result<&'static Pool<SqliteConnectionManager>, String> {
-    DB_POOL.get().ok_or_else(|| "Database pool not initialized".to_string())
+pub fn get_pool() -> Result<Pool<SqliteConnectionManager>, String> {
+    DB_POOL.lock()
+        .map_err(|e| format!("Failed to lock pool: {}", e))?
+        .clone()
+        .ok_or_else(|| "Database pool not initialized".to_string())
 }
 
 pub fn init_pool(db_path: &str) -> Result<(), String> {
@@ -22,8 +26,21 @@ pub fn init_pool(db_path: &str) -> Result<(), String> {
         .build(manager)
         .map_err(|e| format!("Failed to create connection pool: {}", e))?;
 
-    DB_POOL.set(pool)
-        .map_err(|_| "Database pool already initialized".to_string())?;
+    let mut pool_guard = DB_POOL.lock()
+        .map_err(|e| format!("Failed to lock pool: {}", e))?;
+
+    *pool_guard = Some(pool);
+
+    Ok(())
+}
+
+pub fn close_pool() -> Result<(), String> {
+    let mut pool_guard = DB_POOL.lock()
+        .map_err(|e| format!("Failed to lock pool: {}", e))?;
+
+    if let Some(pool) = pool_guard.take() {
+        drop(pool);
+    }
 
     Ok(())
 }

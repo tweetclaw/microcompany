@@ -98,6 +98,60 @@ async fn delete_session_api(session_id: String) -> Result<api::DeleteSessionResu
     api::delete_session(session_id).await
 }
 
+#[tauri::command]
+async fn search_messages(
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<api::MessageSearchResult>, String> {
+    api::search_messages(query, limit).await
+}
+
+#[tauri::command]
+async fn get_statistics() -> Result<api::Statistics, String> {
+    api::get_statistics().await
+}
+
+#[tauri::command]
+async fn get_task_statistics(task_id: String) -> Result<api::TaskStatistics, String> {
+    api::get_task_statistics(task_id).await
+}
+
+#[tauri::command]
+async fn create_backup(app_handle: tauri::AppHandle) -> Result<api::BackupInfo, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    api::create_backup(app_dir).await
+}
+
+#[tauri::command]
+async fn list_backups(app_handle: tauri::AppHandle) -> Result<Vec<api::BackupInfo>, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    api::list_backups(app_dir).await
+}
+
+#[tauri::command]
+async fn restore_backup(backup_path: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    api::restore_backup(backup_path, app_dir).await
+}
+
+#[tauri::command]
+async fn vacuum_database(app_handle: tauri::AppHandle) -> Result<api::VacuumResult, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    api::vacuum_database(app_dir).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -135,6 +189,13 @@ pub fn run() {
       get_session,
       list_normal_sessions,
       delete_session_api,
+      search_messages,
+      get_statistics,
+      get_task_statistics,
+      create_backup,
+      list_backups,
+      restore_backup,
+      vacuum_database,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

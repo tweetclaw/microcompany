@@ -146,9 +146,9 @@
   --text-inverse: #FFFFFF;
 
   /* Border Colors */
-  --border-subtle: rgba(0, 0, 0, 0.06);
-  --border-default: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-default: rgba(0, 0, 0, 0.15);
+  --border-strong: rgba(0, 0, 0, 0.25);
 
   /* Functional Colors */
   --success-start: #059669;

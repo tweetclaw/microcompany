@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Task } from '../types';
+import { listTasks, deleteTask } from '../api';
+import { TaskSummary } from '../types/api';
 import './TaskListPanel.css';
 
 interface TaskListPanelProps {
   onNewTaskClick: () => void;
-  onTaskSelected: (task: Task) => void;
+  onTaskSelected: (task: TaskSummary) => void;
   currentTaskId: string | null;
   refreshKey?: number;
 }
 
 export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentTaskId, refreshKey }: TaskListPanelProps) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentT
   const loadTasks = async () => {
     try {
       setLoading(true);
-      const loadedTasks = await invoke<Task[]>('list_tasks');
+      const loadedTasks = await listTasks();
       setTasks(loadedTasks);
     } catch (error) {
       console.error('Failed to load tasks:', error);
@@ -34,7 +34,7 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentT
     e.stopPropagation();
     if (window.confirm('确定要删除这个任务吗？')) {
       try {
-        await invoke('delete_task', { taskId });
+        await deleteTask(taskId);
         await loadTasks();
       } catch (error) {
         console.error('Failed to delete task:', error);
