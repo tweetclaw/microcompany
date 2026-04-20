@@ -8,6 +8,13 @@ pub struct TaskCreateRequest {
     pub roles: Vec<RoleConfig>,
 }
 
+#[derive(Deserialize)]
+pub struct TaskUpdateRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+}
+
 #[derive(Deserialize, Clone)]
 pub struct RoleConfig {
     pub name: String,
@@ -36,4 +43,24 @@ pub struct TaskRole {
     pub provider: String,
     pub session_id: String,
     pub created_at: String,
+}
+
+#[derive(Serialize)]
+pub struct TaskSummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub icon: String,
+    pub role_count: i32,
+    pub total_messages: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize)]
+pub struct DeleteTaskResult {
+    pub deleted_task_id: String,
+    pub deleted_role_count: i32,
+    pub deleted_session_count: i32,
+    pub deleted_message_count: i32,
 }

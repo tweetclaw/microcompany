@@ -30,6 +30,74 @@ async fn create_task(task: api::TaskCreateRequest) -> Result<api::Task, String> 
     api::create_task(task).await
 }
 
+#[tauri::command]
+async fn get_task(task_id: String) -> Result<api::Task, String> {
+    api::get_task(task_id).await
+}
+
+#[tauri::command]
+async fn list_tasks() -> Result<Vec<api::TaskSummary>, String> {
+    api::list_tasks().await
+}
+
+#[tauri::command]
+async fn update_task(task_id: String, updates: api::TaskUpdateRequest) -> Result<api::Task, String> {
+    api::update_task(task_id, updates).await
+}
+
+#[tauri::command]
+async fn delete_task(task_id: String) -> Result<api::DeleteTaskResult, String> {
+    api::delete_task(task_id).await
+}
+
+#[tauri::command]
+async fn get_messages(
+    session_id: String,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<Vec<api::Message>, String> {
+    api::get_messages(session_id, limit, offset).await
+}
+
+#[tauri::command]
+async fn save_message(message: api::MessageCreateRequest) -> Result<String, String> {
+    api::save_message(message).await
+}
+
+#[tauri::command]
+async fn update_message_content(
+    message_id: String,
+    content: String,
+    is_streaming: bool,
+) -> Result<(), String> {
+    api::update_message_content(message_id, content, is_streaming).await
+}
+
+#[tauri::command]
+async fn create_normal_session(
+    name: String,
+    model: String,
+    provider: String,
+    working_directory: String,
+) -> Result<String, String> {
+    api::create_normal_session(name, model, provider, working_directory).await
+}
+
+#[tauri::command]
+async fn get_session(session_id: String) -> Result<api::Session, String> {
+    api::get_session(session_id).await
+}
+
+#[tauri::command]
+async fn list_normal_sessions() -> Result<Vec<api::SessionSummary>, String> {
+    api::list_normal_sessions().await
+}
+
+#[tauri::command]
+async fn delete_session_api(session_id: String) -> Result<api::DeleteSessionResult, String> {
+    api::delete_session(session_id).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -56,6 +124,17 @@ pub fn run() {
       commands::validate_provider_config,
       initialize_database,
       create_task,
+      get_task,
+      list_tasks,
+      update_task,
+      delete_task,
+      get_messages,
+      save_message,
+      update_message_content,
+      create_normal_session,
+      get_session,
+      list_normal_sessions,
+      delete_session_api,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -1,5 +1,5 @@
 use rusqlite::params;
-use crate::api::{TaskCreateRequest, Task, TaskRole};
+use crate::api::{TaskCreateRequest, TaskUpdateRequest, Task, TaskRole, TaskSummary, DeleteTaskResult};
 use crate::database::get_pool;
 use uuid::Uuid;
 use chrono::Utc;
@@ -177,7 +177,7 @@ async fn create_claurst_session_api(
     Ok(())
 }
 
-async fn delete_claurst_session(session_id: &str) -> Result<(), String> {
+pub(super) async fn delete_claurst_session(session_id: &str) -> Result<(), String> {
     use crate::storage::ConversationStorage;
 
     let storage = ConversationStorage::new()
