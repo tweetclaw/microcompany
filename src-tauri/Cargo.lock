@@ -124,6 +124,7 @@ dependencies = [
  "claurst-tools",
  "dirs 5.0.1",
  "log",
+ "once_cell",
  "parking_lot",
  "r2d2",
  "r2d2_sqlite",

@@ -3,6 +3,7 @@ mod claurst;
 mod storage;
 mod config;
 mod database;
+mod api;
 
 use commands::session::AppState;
 use std::sync::Arc;
@@ -20,7 +21,13 @@ async fn initialize_database(app_handle: tauri::AppHandle) -> Result<(), String>
     let db_path_str = db_path.to_string_lossy().to_string();
 
     database::initialize_database(&db_path_str)?;
+    database::pool::init_pool(&db_path_str)?;
     Ok(())
+}
+
+#[tauri::command]
+async fn create_task(task: api::TaskCreateRequest) -> Result<api::Task, String> {
+    api::create_task(task).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,11 +54,8 @@ pub fn run() {
       commands::save_config,
       commands::get_available_providers,
       commands::validate_provider_config,
-      commands::save_task,
-      commands::load_task,
-      commands::list_tasks,
-      commands::delete_task,
       initialize_database,
+      create_task,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

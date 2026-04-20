@@ -3,6 +3,11 @@ use std::path::Path;
 use std::fs;
 
 mod migration;
+mod error;
+pub mod pool;
+
+pub use error::DatabaseError;
+pub use pool::{get_pool, init_pool};
 
 pub fn optimize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute("PRAGMA journal_mode=WAL", [])?;
@@ -30,6 +35,9 @@ pub fn initialize_database(db_path: &str) -> Result<(), String> {
 
     conn.execute("PRAGMA integrity_check", [])
         .map_err(|e| format!("Database integrity check failed: {}", e))?;
+
+    // Initialize connection pool
+    pool::init_pool(db_path)?;
 
     println!("Database initialized successfully at {}", db_path);
     Ok(())
