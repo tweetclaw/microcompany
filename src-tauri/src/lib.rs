@@ -2,10 +2,26 @@ mod commands;
 mod claurst;
 mod storage;
 mod config;
+mod database;
 
 use commands::session::AppState;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tauri::Manager;
+
+#[tauri::command]
+async fn initialize_database(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    let db_path = app_dir.join(".mc").join("data.db");
+    let db_path_str = db_path.to_string_lossy().to_string();
+
+    database::initialize_database(&db_path_str)?;
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,6 +51,7 @@ pub fn run() {
       commands::load_task,
       commands::list_tasks,
       commands::delete_task,
+      initialize_database,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
