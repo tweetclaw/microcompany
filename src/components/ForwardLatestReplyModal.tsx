@@ -6,7 +6,7 @@ interface ForwardLatestReplyModalProps {
   task: Task;
   currentRoleId: string;
   messages: Message[];
-  onForward: (targetRoleId: string, note: string) => void;
+  onForward: (targetRoleId: string, note: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -28,14 +28,18 @@ function ForwardLatestReplyModal({
     .reverse()
     .find((m) => m.role === 'assistant');
 
-  const handleForward = () => {
+  const handleForward = async () => {
     if (!targetRoleId) {
       alert('Please select a target role');
       return;
     }
 
     setIsForwarding(true);
-    onForward(targetRoleId, note);
+    try {
+      await onForward(targetRoleId, note);
+    } finally {
+      setIsForwarding(false);
+    }
   };
 
   return (
