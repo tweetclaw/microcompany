@@ -18,6 +18,12 @@ function MessageList({ messages, isBusy }: MessageListProps) {
   return (
     <div className="message-list">
       <div className="message-list-content">
+        {messages.length === 0 && !isBusy && (
+          <div className="message-list-empty">
+            <p>开始对话，输入你的问题...</p>
+          </div>
+        )}
+
         {messages.map((message) => (
           <MessageItem key={message.id} message={message} />
         ))}

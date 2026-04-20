@@ -1,16 +1,18 @@
 .session-list-panel {
   width: 260px;
-  height: 100vh;
+  height: 100%;
   background-color: var(--vscode-sideBar-background);
-  border-right: 1px solid var(--vscode-sideBar-border);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
-.session-list-header {
+.session-list-panel-header {
   padding: 12px;
-  border-bottom: 1px solid var(--vscode-sideBar-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .new-chat-button {
@@ -34,12 +36,8 @@
   background-color: var(--vscode-button-hoverBackground);
 }
 
-.new-chat-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
 .session-list-content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }

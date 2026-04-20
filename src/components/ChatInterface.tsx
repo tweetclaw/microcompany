@@ -46,6 +46,12 @@ interface ChatInterfaceProps {
   onSettingsClick: () => void;
   onCancelRequest?: () => Promise<void>;
   hideSidebar?: boolean;
+  hideInspector?: boolean;
+  hideNewButtons?: boolean;
+  hideToolbar?: boolean;
+  hideTitleBar?: boolean;
+  externalInspectorCollapsed?: boolean;
+  externalTerminalCollapsed?: boolean;
 }
 
 const RUNNING_STATES: AiRunState[] = [
@@ -75,6 +81,12 @@ function ChatInterface({
   onEnsureSession,
   onSettingsClick,
   hideSidebar = false,
+  hideInspector = false,
+  hideNewButtons = false,
+  hideToolbar = false,
+  hideTitleBar = false,
+  externalInspectorCollapsed,
+  externalTerminalCollapsed,
 }: ChatInterfaceProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
   const [runState, setRunState] = useState<AiRunState>('idle');
@@ -86,6 +98,9 @@ function ChatInterface({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialLayout.isSidebarCollapsed);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(initialLayout.isInspectorCollapsed);
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(initialLayout.isTerminalCollapsed);
+
+  const effectiveInspectorCollapsed = externalInspectorCollapsed !== undefined ? externalInspectorCollapsed : isInspectorCollapsed;
+  const effectiveTerminalCollapsed = externalTerminalCollapsed !== undefined ? externalTerminalCollapsed : isTerminalCollapsed;
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [isInspectorDrawerOpen, setIsInspectorDrawerOpen] = useState(false);
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1280 : false));
@@ -541,24 +556,6 @@ function ChatInterface({
 
   return (
     <div className="chat-interface">
-      <TitleBar
-        onToggleSessionList={handleSidebarToggle}
-        onToggleInspector={handleInspectorToggle}
-        onToggleTerminal={handleTerminalToggle}
-        isSessionListCollapsed={isSidebarCollapsed}
-        isInspectorCollapsed={isInspectorCollapsed}
-        isTerminalCollapsed={isTerminalCollapsed}
-      />
-      <Toolbar
-        workingDirectory={workingDirectory}
-        modelOptions={modelOptions}
-        newChatDisabledReason={newChatDisabledReason}
-        runState={runState}
-        onNewChatWithModel={onNewChatWithModel}
-        onNewTask={onNewTask}
-        onSettingsClick={onSettingsClick}
-      />
-
       <div className="ide-workspace">
         {!hideSidebar && (
           <Sidebar
@@ -574,7 +571,8 @@ function ChatInterface({
           />
         )}
 
-        <main className="chat-main-column">
+        <div className="chat-main-wrapper">
+          <main className="chat-main-column">
           <div className="chat-main-surface">
             {hasActiveSession && !isDraftConversation ? (
               <>
@@ -632,7 +630,9 @@ function ChatInterface({
               </div>
             )}
           </div>
+          <TerminalPanel collapsed={effectiveTerminalCollapsed} />
         </main>
+        </div>
 
         {isCompact && isInspectorDrawerOpen && (
           <div
@@ -641,23 +641,23 @@ function ChatInterface({
           ></div>
         )}
 
-        <InspectorPanel
-          workingDirectory={workingDirectory}
-          currentSessionTitle={currentSessionTitle}
-          currentSessionId={currentSessionId}
-          messageCount={messages.length}
-          currentToolCall={currentToolCall}
-          runState={runState}
-          processTimeline={processTimeline}
-          lastError={lastError}
-          providerLabel={currentProviderName}
-          modelLabel={currentModelName}
-          collapsed={isCompact ? !isInspectorDrawerOpen : isInspectorCollapsed}
-          isCompact={isCompact}
-        />
+        {!hideInspector && (
+          <InspectorPanel
+            workingDirectory={workingDirectory}
+            currentSessionTitle={currentSessionTitle}
+            currentSessionId={currentSessionId}
+            messageCount={messages.length}
+            currentToolCall={currentToolCall}
+            runState={runState}
+            processTimeline={processTimeline}
+            lastError={lastError}
+            providerLabel={currentProviderName}
+            modelLabel={currentModelName}
+            collapsed={isCompact ? !isInspectorDrawerOpen : effectiveInspectorCollapsed}
+            isCompact={isCompact}
+          />
+        )}
       </div>
-
-      <TerminalPanel collapsed={isTerminalCollapsed} />
     </div>
   );
 }

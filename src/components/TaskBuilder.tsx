@@ -47,61 +47,66 @@ function TaskBuilder({
   };
 
   return (
-    <div className="task-builder">
-      <div className="task-builder-header">
-        <h2>New Task</h2>
-      </div>
+    <>
+      <div className="task-builder-overlay" onClick={onCancel}>
+        <div className="task-builder-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="task-builder-header">
+            <h2>New Task</h2>
+            <button className="task-builder-close" onClick={onCancel}>✕</button>
+          </div>
 
-      <div className="task-builder-content">
-        <div className="task-builder-field">
-          <label>Task Name:</label>
-          <input
-            type="text"
-            value={taskName}
-            onChange={(e) => setTaskName(e.target.value)}
-            placeholder="Enter task name"
-            className="task-name-input"
-          />
-        </div>
-
-        <div className="task-builder-field">
-          <label>Roles</label>
-          {roles.length === 0 ? (
-            <div className="task-builder-empty">
-              <p>No roles yet. Create the first role for this task.</p>
+          <div className="task-builder-content">
+            <div className="task-builder-field">
+              <label>Task Name:</label>
+              <input
+                type="text"
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+                placeholder="Enter task name"
+                className="task-name-input"
+              />
             </div>
-          ) : (
-            <div className="task-roles-list">
-              {roles.map((role) => (
-                <div key={role.id} className="task-role-card">
-                  <div className="task-role-name">{role.name}</div>
-                  <div className="task-role-meta">
-                    {role.identity} · {role.providerName} · {role.model}
-                  </div>
-                  <div className="task-role-status">
-                    {role.sessionReady ? 'Session ready' : 'Creating session...'}
-                  </div>
+
+            <div className="task-builder-field">
+              <label>Roles</label>
+              {roles.length === 0 ? (
+                <div className="task-builder-empty">
+                  <p>No roles yet. Create the first role for this task.</p>
                 </div>
-              ))}
+              ) : (
+                <div className="task-roles-list">
+                  {roles.map((role) => (
+                    <div key={role.id} className="task-role-card">
+                      <div className="task-role-name">{role.name}</div>
+                      <div className="task-role-meta">
+                        {role.identity} · {role.providerName} · {role.model}
+                      </div>
+                      <div className="task-role-status">
+                        {role.sessionReady ? 'Session ready' : 'Creating session...'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button className="task-add-role-button" onClick={handleAddRole}>
+                + Add Role
+              </button>
             </div>
-          )}
-          <button className="task-add-role-button" onClick={handleAddRole}>
-            + Add Role
-          </button>
-        </div>
-      </div>
+          </div>
 
-      <div className="task-builder-footer">
-        <button className="task-builder-cancel" onClick={onCancel}>
-          Cancel
-        </button>
-        <button
-          className="task-builder-start"
-          onClick={handleStartTask}
-          disabled={roles.length === 0}
-        >
-          Start Task
-        </button>
+          <div className="task-builder-footer">
+            <button className="task-builder-cancel" onClick={onCancel}>
+              Cancel
+            </button>
+            <button
+              className="task-builder-start"
+              onClick={handleStartTask}
+              disabled={roles.length === 0}
+            >
+              Start Task
+            </button>
+          </div>
+        </div>
       </div>
 
       {showAddRoleModal && (
@@ -112,7 +117,7 @@ function TaskBuilder({
           onCancel={() => setShowAddRoleModal(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 

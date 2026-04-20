@@ -22,20 +22,26 @@ interface NormalModeLayoutProps {
   hasActiveSession: boolean;
   isDraftConversation: boolean;
   onEnsureSession: () => Promise<string | null>;
-  onNewChatClick: () => void;
+  onSettingsClick: () => void;
+  isSessionListCollapsed?: boolean;
+  isInspectorCollapsed?: boolean;
+  isTerminalCollapsed?: boolean;
 }
 
 export default function NormalModeLayout(props: NormalModeLayoutProps) {
   return (
     <div className="normal-mode-layout">
-      <SessionListPanel
-        workingDirectory={props.workingDirectory}
-        currentSessionId={props.currentSessionId}
-        sessionListRefreshKey={props.sessionListRefreshKey}
-        onSessionSelected={props.onSessionSelected}
-        onSessionDeleted={props.onSessionDeleted}
-        onNewChatClick={props.onNewChatClick}
-      />
+      {!props.isSessionListCollapsed && (
+        <SessionListPanel
+          workingDirectory={props.workingDirectory}
+          currentSessionId={props.currentSessionId}
+          sessionListRefreshKey={props.sessionListRefreshKey}
+          availableProviders={props.availableProviders}
+          onSessionSelected={props.onSessionSelected}
+          onSessionDeleted={props.onSessionDeleted}
+          onNewChatWithModel={props.onNewChatWithModel}
+        />
+      )}
       <ChatInterface
         workingDirectory={props.workingDirectory}
         currentSessionId={props.currentSessionId}
@@ -54,7 +60,13 @@ export default function NormalModeLayout(props: NormalModeLayoutProps) {
         hasActiveSession={props.hasActiveSession}
         isDraftConversation={props.isDraftConversation}
         onEnsureSession={props.onEnsureSession}
+        onSettingsClick={props.onSettingsClick}
         hideSidebar={true}
+        hideInspector={false}
+        hideTitleBar={true}
+        hideToolbar={true}
+        externalInspectorCollapsed={props.isInspectorCollapsed}
+        externalTerminalCollapsed={props.isTerminalCollapsed}
       />
     </div>
   );

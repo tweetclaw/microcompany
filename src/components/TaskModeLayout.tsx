@@ -27,6 +27,11 @@ interface TaskModeLayoutProps {
   currentTaskRoleId: string | null;
   onTaskRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
+  onTaskSelected: (task: Task) => void;
+  taskListRefreshKey: number;
+  onSettingsClick: () => void;
+  isSessionListCollapsed?: boolean;
+  isInspectorCollapsed?: boolean;
 }
 
 export default function TaskModeLayout(props: TaskModeLayoutProps) {
@@ -35,35 +40,62 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
 
   return (
     <div className="task-mode-layout">
-      <TaskListPanel onNewTaskClick={props.onNewTask} />
-      <ChatInterface
-        workingDirectory={props.workingDirectory}
-        currentSessionId={props.currentSessionId}
-        currentSessionTitle={props.currentSessionTitle}
-        currentProviderName={props.currentProviderName}
-        currentModelName={props.currentModelName}
-        availableProviders={props.availableProviders}
-        selectedProviderValue={props.selectedProviderValue}
-        messages={props.messages}
-        onMessagesChange={props.onMessagesChange}
-        sessionListRefreshKey={props.sessionListRefreshKey}
-        onSessionSelected={props.onSessionSelected}
-        onSessionDeleted={props.onSessionDeleted}
-        onNewChatWithModel={props.onNewChatWithModel}
-        onNewTask={props.onNewTask}
-        hasActiveSession={props.hasActiveSession}
-        isDraftConversation={props.isDraftConversation}
-        onEnsureSession={props.onEnsureSession}
-        hideSidebar={true}
-      />
-      {props.currentTask && (
-        <TaskInspector
-          task={props.currentTask}
-          currentRoleId={props.currentTaskRoleId}
-          onRoleSelected={props.onTaskRoleSelected}
-          onForwardLatestReply={props.onForwardLatestReply}
-          hasLatestReply={hasLatestReply}
+      {!props.isSessionListCollapsed && (
+        <TaskListPanel
+          onNewTaskClick={props.onNewTask}
+          onTaskSelected={props.onTaskSelected}
+          currentTaskId={props.currentTask?.id || null}
+          refreshKey={props.taskListRefreshKey}
         />
+      )}
+      {props.currentTask ? (
+        <>
+          <ChatInterface
+            workingDirectory={props.workingDirectory}
+            currentSessionId={props.currentSessionId}
+            currentSessionTitle={props.currentSessionTitle}
+            currentProviderName={props.currentProviderName}
+            currentModelName={props.currentModelName}
+            availableProviders={props.availableProviders}
+            selectedProviderValue={props.selectedProviderValue}
+            messages={props.messages}
+            onMessagesChange={props.onMessagesChange}
+            sessionListRefreshKey={props.sessionListRefreshKey}
+            onSessionSelected={props.onSessionSelected}
+            onSessionDeleted={props.onSessionDeleted}
+            onNewChatWithModel={props.onNewChatWithModel}
+            onNewTask={props.onNewTask}
+            hasActiveSession={props.hasActiveSession}
+            isDraftConversation={props.isDraftConversation}
+            onEnsureSession={props.onEnsureSession}
+            onSettingsClick={props.onSettingsClick}
+            hideSidebar={true}
+            hideInspector={true}
+            hideNewButtons={true}
+            hideToolbar={true}
+            hideTitleBar={true}
+          />
+          {!props.isInspectorCollapsed && (
+            <TaskInspector
+              task={props.currentTask}
+              currentRoleId={props.currentTaskRoleId}
+              onRoleSelected={props.onTaskRoleSelected}
+              onForwardLatestReply={props.onForwardLatestReply}
+              hasLatestReply={hasLatestReply}
+            />
+          )}
+        </>
+      ) : (
+        <div className="task-mode-empty">
+          <div className="task-mode-empty-content">
+            <div className="task-mode-empty-icon">📋</div>
+            <h2>No Task Selected</h2>
+            <p>Create a new task or select an existing one from the list</p>
+            <button className="task-mode-empty-button" onClick={props.onNewTask}>
+              Create New Task
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

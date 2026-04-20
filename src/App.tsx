@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
 import NormalModeLayout from './components/NormalModeLayout';
 import TaskModeLayout from './components/TaskModeLayout';
 import TaskBuilder from './components/TaskBuilder';
 import ForwardLatestReplyModal from './components/ForwardLatestReplyModal';
-import ModelDropdown from './components/ModelDropdown';
+import { TitleBar } from './components/TitleBar';
+import Toolbar from './components/Toolbar';
 import { Settings } from './components/Settings';
-import { Message, Task } from './types';
+import { Message, Task, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
@@ -50,9 +52,25 @@ function App() {
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [currentTaskRoleId, setCurrentTaskRoleId] = useState<string | null>(null);
+  const [taskListRefreshKey, setTaskListRefreshKey] = useState(0);
 
-  // Model dropdown state for new chat
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  // AI run state
+  const [runState, setRunState] = useState<AiRunState>('idle');
+
+  // Layout panel visibility state
+  const [isSessionListCollapsed, setIsSessionListCollapsed] = useState(false);
+  const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
+  const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
+
+  useEffect(() => {
+    const unlistenStatus = listen<{ state: AiRunState }>('ai_status', (event) => {
+      setRunState(event.payload.state);
+    });
+
+    return () => {
+      unlistenStatus.then((fn) => fn());
+    };
+  }, []);
 
   useEffect(() => {
     loadConfig();
@@ -309,6 +327,26 @@ function App() {
     }
   };
 
+  const handleTaskSelected = async (task: Task) => {
+    try {
+      setCurrentTask(task);
+      setNavigationMode('task');
+      setTaskListRefreshKey((prev) => prev + 1);
+
+      // 选择第一个角色
+      if (task.roles.length > 0) {
+        setCurrentTaskRoleId(task.roles[0].id);
+        const firstRole = task.roles[0];
+        if (firstRole.sessionId) {
+          await handleSessionSelected(firstRole.sessionId);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to handle task selection:', error);
+      alert(`Failed to handle task selection: ${error}`);
+    }
+  };
+
   const [showForwardModal, setShowForwardModal] = useState(false);
 
   const handleForwardLatestReply = () => {
@@ -435,12 +473,33 @@ function App() {
     }
   };
 
-  const handleNewChatClick = () => {
-    setShowModelDropdown(true);
+
+  const handleToggleSessionList = () => {
+    setIsSessionListCollapsed(!isSessionListCollapsed);
+  };
+
+  const handleToggleInspector = () => {
+    setIsInspectorCollapsed(!isInspectorCollapsed);
+  };
+
+  const handleToggleTerminal = () => {
+    setIsTerminalCollapsed(!isTerminalCollapsed);
   };
 
   return (
     <div className="app">
+      {!isCreatingTask && (
+        <div className="app-header">
+          <TitleBar
+            onToggleSessionList={handleToggleSessionList}
+            onToggleInspector={handleToggleInspector}
+            onToggleTerminal={handleToggleTerminal}
+            isSessionListCollapsed={isSessionListCollapsed}
+            isInspectorCollapsed={isInspectorCollapsed}
+            isTerminalCollapsed={isTerminalCollapsed}
+          />
+        </div>
+      )}
       {isCreatingTask ? (
         <TaskBuilder
           workingDirectory={workingDirectory}
@@ -449,7 +508,7 @@ function App() {
           onCancel={handleCancelTaskCreation}
         />
       ) : (
-        <>
+        <div className="app-body">
           <MainNavigation
             currentMode={navigationMode}
             onModeChange={handleNavigationModeChange}
@@ -474,7 +533,10 @@ function App() {
               hasActiveSession={hasActiveSession}
               isDraftConversation={isDraftConversation}
               onEnsureSession={ensureActiveSession}
-              onNewChatClick={handleNewChatClick}
+              onSettingsClick={() => setIsSettingsOpen(true)}
+              isSessionListCollapsed={isSessionListCollapsed}
+              isInspectorCollapsed={isInspectorCollapsed}
+              isTerminalCollapsed={isTerminalCollapsed}
             />
           ) : (
             <TaskModeLayout
@@ -499,9 +561,14 @@ function App() {
               currentTaskRoleId={currentTaskRoleId}
               onTaskRoleSelected={handleTaskRoleSelected}
               onForwardLatestReply={handleForwardLatestReply}
+              onTaskSelected={handleTaskSelected}
+              taskListRefreshKey={taskListRefreshKey}
+              onSettingsClick={() => setIsSettingsOpen(true)}
+              isSessionListCollapsed={isSessionListCollapsed}
+              isInspectorCollapsed={isInspectorCollapsed}
             />
           )}
-        </>
+        </div>
       )}
       <Settings
         isOpen={isSettingsOpen}
@@ -516,17 +583,6 @@ function App() {
           applyTheme(theme);
         }}
       />
-      {showModelDropdown && (
-        <ModelDropdown
-          availableProviders={availableProviders}
-          selectedValue={selectedProviderValue}
-          onSelect={(value) => {
-            handleNewChatWithModel(value);
-            setShowModelDropdown(false);
-          }}
-          onClose={() => setShowModelDropdown(false)}
-        />
-      )}
       {showForwardModal && currentTask && currentTaskRoleId && (
         <ForwardLatestReplyModal
           task={currentTask}

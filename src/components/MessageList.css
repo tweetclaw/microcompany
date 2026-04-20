@@ -9,8 +9,17 @@
 .message-list-content {
   max-width: var(--layout-center-max-width);
   margin: 0 auto;
-  padding: var(--space-4) var(--space-5) var(--space-8);
+  padding: var(--space-8) var(--space-5) var(--space-8);
   min-height: 100%;
+}
+
+.message-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 
 .loading-indicator {

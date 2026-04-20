@@ -1,159 +1,210 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .add-role-modal {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 12px;
   max-width: 600px;
   width: 90%;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
-  padding: var(--space-6);
-  border-bottom: 1px solid var(--border-default);
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.3);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: rgba(51, 65, 85, 0.3);
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
 }
 
 .modal-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: var(--text-secondary);
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  font-size: 18px;
+  color: #94a3b8;
   cursor: pointer;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  transition: var(--transition-all);
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .modal-close:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 .modal-body {
-  padding: var(--space-6);
+  padding: 24px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 20px;
+  background: transparent;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .form-field label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  color: #cbd5e1;
+  letter-spacing: 0;
 }
 
 .form-field input,
 .form-field select,
 .form-field textarea {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: var(--text-base);
+  padding: 10px 14px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 14px;
   outline: none;
-  transition: var(--transition-all);
+  transition: all 0.15s ease;
   font-family: inherit;
 }
 
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  border-color: var(--primary-blue-start);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
+  border-color: rgba(59, 130, 246, 0.6);
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #64748b;
 }
 
 .form-field input:disabled,
 .form-field select:disabled,
 .form-field textarea:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .form-field textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 100px;
+  line-height: 1.6;
 }
 
 .no-providers-warning {
-  padding: var(--space-4);
-  background: rgba(251, 191, 36, 0.1);
+  padding: 14px 16px;
+  background: rgba(251, 191, 36, 0.15);
   border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 13px;
   margin: 0;
+  line-height: 1.5;
 }
 
 .error-message {
-  padding: var(--space-3) var(--space-4);
-  background: rgba(239, 68, 68, 0.1);
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md);
-  color: #ef4444;
-  font-size: var(--text-sm);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .modal-footer {
-  padding: var(--space-6);
-  border-top: 1px solid var(--border-default);
+  padding: 16px 24px;
+  border-top: 1px solid rgba(71, 85, 105, 0.3);
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-3);
+  gap: 10px;
+  background: rgba(51, 65, 85, 0.3);
 }
 
 .modal-cancel,
 .modal-create {
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
+  padding: 9px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: var(--transition-all);
+  transition: all 0.15s ease;
 }
 
 .modal-cancel {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
+  background: rgba(51, 65, 85, 0.5);
+  color: #cbd5e1;
+  border: 1px solid rgba(71, 85, 105, 0.5);
 }
 
 .modal-cancel:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(71, 85, 105, 0.7);
 }
 
 .modal-create {
-  background: var(--primary-blue-start);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
   border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .modal-create:hover:not(:disabled) {
-  background: var(--primary-blue-end);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .modal-cancel:disabled,
 .modal-create:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
