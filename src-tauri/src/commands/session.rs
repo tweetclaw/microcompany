@@ -77,6 +77,19 @@ pub async fn init_session(
             provider.base_url.clone(),
         ).map_err(|e| format!("Failed to create session: {}", e))?;
 
+        // Also create database record for the session
+        let pool = crate::database::get_pool()
+            .map_err(|e| format!("Failed to get database pool: {}", e))?;
+        let conn = pool.get()
+            .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+        let created_at = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO sessions (id, type, name, model, provider, working_directory, status, created_at, updated_at)
+             VALUES (?1, 'normal', 'Untitled', ?2, ?3, ?4, 'initializing', ?5, ?5)",
+            rusqlite::params![&created_session_id, &provider.model, &provider.id, &working_dir, &created_at],
+        ).map_err(|e| format!("Failed to insert session into database: {}", e))?;
+
         (created_session_id, provider)
     };
 
@@ -98,6 +111,55 @@ pub async fn init_session(
         selected_provider.model.clone(),
         selected_provider.base_url.clone(),
     ).map_err(|e| format!("Failed to create session: {}", e))?;
+
+    *state.session.lock().await = Some(session);
+    *state.cancel_token.lock().await = None;
+    *state.active_request_id.lock().await = None;
+
+    // Update session status to 'ready' in database if this was a new session
+    if session_id.starts_with("session-") {
+        if let Ok(pool) = crate::database::get_pool() {
+            if let Ok(conn) = pool.get() {
+                let _ = conn.execute(
+                    "UPDATE sessions SET status = 'ready' WHERE id = ?1",
+                    rusqlite::params![&session_id],
+                );
+            }
+        }
+    }
+
+    Ok(session_id)
+}
+
+#[tauri::command]
+pub async fn init_task_session(
+    session_id: String,
+    model: String,
+    provider: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let app_config = crate::config::AppConfig::load()
+        .map_err(|e| format!("Failed to load config: {}", e))?;
+
+    let provider_config = app_config.providers.iter()
+        .find(|p| p.id == provider)
+        .ok_or_else(|| format!("Provider '{}' not found in configuration", provider))?;
+
+    if provider_config.id != "ollama" && provider_config.api_key.is_empty() {
+        return Err(format!("API key not configured for provider '{}'", provider_config.name));
+    }
+
+    // 任务会话使用当前工作目录
+    let working_dir = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let session = ClaurstSession::new(
+        session_id.clone(),
+        working_dir,
+        provider_config.api_key.clone(),
+        model,
+        provider_config.base_url.clone(),
+    ).map_err(|e| format!("Failed to create Claurst session: {}", e))?;
 
     *state.session.lock().await = Some(session);
     *state.cancel_token.lock().await = None;

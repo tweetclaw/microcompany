@@ -1,19 +1,7 @@
 import React from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { deleteSession } from '../api';
+import { listNormalSessions, deleteSession } from '../api';
+import { SessionSummary } from '../types/api';
 import './SessionList.css';
-
-export interface SessionInfo {
-  session_id: string;
-  working_directory: string;
-  title: string;
-  message_count: number;
-  last_activity: number;
-  created_at: number;
-  provider_id?: string | null;
-  provider_name?: string | null;
-  model?: string | null;
-}
 
 interface SessionListProps {
   workingDirectory: string;
@@ -24,7 +12,7 @@ interface SessionListProps {
 }
 
 function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected, onSessionDeleted }: SessionListProps) {
-  const [sessions, setSessions] = React.useState<SessionInfo[]>([]);
+  const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -40,7 +28,7 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
 
     try {
       setLoading(true);
-      const result = await invoke<SessionInfo[]>('list_sessions', { workingDir: workingDirectory });
+      const result = await listNormalSessions();
       setSessions(result);
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -70,9 +58,10 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     }
   };
 
-  const formatTime = (timestamp: number) => {
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
     const now = Date.now();
-    const diff = now - timestamp * 1000;
+    const diff = now - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
@@ -81,7 +70,6 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     if (days === 1) return '昨天';
     if (days < 7) return `${days} 天前`;
 
-    const date = new Date(timestamp * 1000);
     return date.toLocaleDateString('zh-CN');
   };
 
@@ -98,7 +86,7 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     return (
       <div className="session-list-empty">
         <p>暂无历史会话</p>
-        <p className="session-list-empty-hint">点击右上角“新建”开始第一段对话</p>
+        <p className="session-list-empty-hint">点击右上角"新建"开始第一段对话</p>
       </div>
     );
   }
@@ -107,28 +95,29 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     <div className="session-list">
       {sessions.map((session) => (
         <div
-          key={session.session_id}
+          key={session.id}
           className={[
             'session-item',
-            currentSessionId === session.session_id ? 'session-item-active' : '',
+            currentSessionId === session.id ? 'session-item-active' : '',
           ].filter(Boolean).join(' ')}
-          onClick={() => onSessionSelected(session.session_id)}
+          onClick={() => onSessionSelected(session.id)}
         >
           <div className="session-icon">💬</div>
           <div className="session-info">
-            <div className="session-name">{session.title}</div>
+            <div className="session-name">{session.name}</div>
             <div className="session-meta">
-              {session.message_count} 条消息 · {formatTime(session.last_activity)}
+              <span className="session-time">{formatTime(session.updated_at)}</span>
+              <span className="session-count">{session.message_count} 条消息</span>
+              {session.provider && (
+                <span className="session-provider">
+                  {session.provider} · {session.model}
+                </span>
+              )}
             </div>
-            {(session.provider_name || session.model) && (
-              <div className="session-provider-badge">
-                {session.provider_name || session.provider_id || 'Provider'} · {session.model || 'Default'}
-              </div>
-            )}
           </div>
           <button
             className="session-delete"
-            onClick={(e) => handleDeleteSession(session.session_id, e)}
+            onClick={(e) => handleDeleteSession(session.id, e)}
             title="删除会话"
           >
             🗑️

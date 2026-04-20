@@ -45,6 +45,7 @@ interface ChatInterfaceProps {
   onEnsureSession: () => Promise<string | null>;
   onSettingsClick: () => void;
   onCancelRequest?: () => Promise<void>;
+  onMessageCompleted?: () => void;
   hideSidebar?: boolean;
   hideInspector?: boolean;
   hideNewButtons?: boolean;
@@ -80,6 +81,7 @@ function ChatInterface({
   isDraftConversation,
   onEnsureSession,
   onSettingsClick,
+  onMessageCompleted,
   hideSidebar = false,
   hideInspector = false,
   hideNewButtons = false,
@@ -354,6 +356,10 @@ function ChatInterface({
         if (payload.result === 'success') {
           setRunState('completed');
           resetRunIfTerminal();
+          // Refresh session list to update title
+          if (onMessageCompleted) {
+            onMessageCompleted();
+          }
         } else if (payload.result === 'cancelled') {
           setRunState('cancelled');
           resetRunIfTerminal(450);

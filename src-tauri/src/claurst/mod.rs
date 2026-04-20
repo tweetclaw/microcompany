@@ -14,6 +14,24 @@ use tauri::{Emitter, Window};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+/// Generate a title from the first user message
+fn generate_title(first_message: &str) -> String {
+    let max_length = 30;
+    let trimmed = first_message.trim();
+
+    if trimmed.len() <= max_length {
+        trimmed.to_string()
+    } else {
+        // Find the last space before max_length to avoid cutting words
+        let truncated = &trimmed[..max_length];
+        if let Some(last_space) = truncated.rfind(' ') {
+            format!("{}...", &trimmed[..last_space])
+        } else {
+            format!("{}...", truncated)
+        }
+    }
+}
+
 fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
     blocks
         .iter()
@@ -169,6 +187,34 @@ impl ClaurstSession {
         ) {
             log::warn!("Failed to save user message to storage: {}", e);
             // Non-fatal: continue even if storage fails
+        }
+
+        // Also save to database
+        if let Ok(pool) = crate::database::get_pool() {
+            if let Ok(conn) = pool.get() {
+                let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                let created_at = chrono::Utc::now().to_rfc3339();
+                let _ = conn.execute(
+                    "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                     VALUES (?1, ?2, 'user', ?3, ?4, ?5, 0)",
+                    rusqlite::params![&msg_id, &self.session_id, message, &created_at, request_id],
+                );
+
+                // Update session title if this is the first user message
+                let message_count: i32 = conn.query_row(
+                    "SELECT COUNT(*) FROM messages WHERE session_id = ?1 AND role = 'user'",
+                    rusqlite::params![&self.session_id],
+                    |row| row.get(0),
+                ).unwrap_or(0);
+
+                if message_count == 1 {
+                    let title = generate_title(message);
+                    let _ = conn.execute(
+                        "UPDATE sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
+                        rusqlite::params![&title, &created_at, &self.session_id],
+                    );
+                }
+            }
         }
 
         let timestamp = chrono::Utc::now().timestamp_millis();
@@ -343,6 +389,19 @@ impl ClaurstSession {
                     },
                 ) {
                     log::warn!("Failed to save assistant message to storage: {}", e);
+                }
+
+                // Also save to database
+                if let Ok(pool) = crate::database::get_pool() {
+                    if let Ok(conn) = pool.get() {
+                        let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                        let created_at = chrono::Utc::now().to_rfc3339();
+                        let _ = conn.execute(
+                            "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                             VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
+                            rusqlite::params![&msg_id, &self.session_id, &text, &created_at, &request_id_owned],
+                        );
+                    }
                 }
 
                 let now = chrono::Utc::now().timestamp_millis();

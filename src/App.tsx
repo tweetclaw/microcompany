@@ -217,8 +217,15 @@ function App() {
     try {
       const session = await getSession(sessionId);
 
-      // 任务会话不需要调用 init_session，直接使用数据库会话
-      if (session.type === 'normal') {
+      // 任务会话需要特殊初始化：直接创建 Claurst 会话
+      if (session.type === 'task') {
+        await invoke<string>('init_task_session', {
+          sessionId,
+          model: session.model,
+          provider: session.provider,
+        });
+      } else {
+        // 普通会话使用原有流程
         await invoke<string>('init_session', {
           workingDir: workingDirectory,
           sessionId,
@@ -294,6 +301,11 @@ function App() {
     }
 
     // 刷新 session 列表
+    setSessionListRefreshKey((prev) => prev + 1);
+  };
+
+  const handleMessageCompleted = () => {
+    // 刷新会话列表以更新标题
     setSessionListRefreshKey((prev) => prev + 1);
   };
 

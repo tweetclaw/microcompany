@@ -36,18 +36,32 @@ pub async fn forward_message(
     target_session_id: String,
     message_content: String,
 ) -> Result<(), String> {
+    // Save to file storage (for Claurst compatibility)
     let storage = crate::storage::ConversationStorage::new()
         .map_err(|e| format!("Failed to create storage: {}", e))?;
 
     let now = chrono::Utc::now().timestamp();
     let message = crate::storage::StoredMessage {
         role: "user".to_string(),
-        content: message_content,
+        content: message_content.clone(),
         timestamp: now,
     };
 
     storage.save_message(&target_session_id, message)
         .map_err(|e| format!("Failed to forward message: {}", e))?;
+
+    // Also save to database
+    if let Ok(pool) = crate::database::get_pool() {
+        if let Ok(conn) = pool.get() {
+            let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+            let created_at = chrono::Utc::now().to_rfc3339();
+            let _ = conn.execute(
+                "INSERT INTO messages (id, session_id, role, content, created_at, is_streaming)
+                 VALUES (?1, ?2, 'user', ?3, ?4, 0)",
+                rusqlite::params![&msg_id, &target_session_id, &message_content, &created_at],
+            );
+        }
+    }
 
     Ok(())
 }
