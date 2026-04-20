@@ -10,12 +10,12 @@ pub use error::DatabaseError;
 pub use pool::{get_pool, init_pool};
 
 pub fn optimize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
-    conn.execute("PRAGMA journal_mode=WAL", [])?;
-    conn.execute("PRAGMA cache_size=-64000", [])?;
-    conn.execute("PRAGMA temp_store=MEMORY", [])?;
-    conn.execute("PRAGMA synchronous=NORMAL", [])?;
-    conn.execute("PRAGMA mmap_size=268435456", [])?;
-    conn.execute("PRAGMA foreign_keys=ON", [])?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "cache_size", -64000)?;
+    conn.pragma_update(None, "temp_store", "MEMORY")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.pragma_update(None, "mmap_size", 268435456)?;
+    conn.pragma_update(None, "foreign_keys", true)?;
     Ok(())
 }
 
@@ -33,8 +33,13 @@ pub fn initialize_database(db_path: &str) -> Result<(), String> {
 
     migration::run_migrations(&mut conn)?;
 
-    conn.execute("PRAGMA integrity_check", [])
+    // Run integrity check using pragma_query since it returns results
+    let integrity: String = conn.pragma_query_value(None, "integrity_check", |row| row.get(0))
         .map_err(|e| format!("Database integrity check failed: {}", e))?;
+
+    if integrity != "ok" {
+        return Err(format!("Database integrity check failed: {}", integrity));
+    }
 
     // Initialize connection pool
     pool::init_pool(db_path)?;

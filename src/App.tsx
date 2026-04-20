@@ -11,21 +11,12 @@ import SearchModal from './components/SearchModal';
 import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
 import { Settings } from './components/Settings';
-import { Message, Task, AiRunState } from './types';
+import { Message, Task, TaskCreateRequest, TaskSummary, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
-import { getSession } from './api';
+import { getSession, createTask } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
-
-interface SessionSummary {
-  session_id: string;
-  working_directory: string;
-  title: string;
-  provider_id?: string | null;
-  provider_name?: string | null;
-  model?: string | null;
-}
 
 function App() {
   const [workingDirectory, setWorkingDirectory] = useState<string | null>(null);
@@ -88,9 +79,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    loadConfig();
-    loadProviderCatalog();
-    initializeDb();
+    const initialize = async () => {
+      await initializeDb();
+      loadConfig();
+      loadProviderCatalog();
+    };
+
+    initialize();
 
     // Initialize theme
     const savedTheme = loadThemePreference();
@@ -99,11 +94,13 @@ function App() {
   }, []);
 
   const initializeDb = async () => {
+    console.log('[App] Starting database initialization...');
     try {
       await invoke('initialize_database');
-      console.log('Database initialized successfully');
+      console.log('[App] Database initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize database:', error);
+      console.error('[App] Failed to initialize database:', error);
+      alert(`Database initialization failed: ${error}`);
     }
   };
 
@@ -218,12 +215,7 @@ function App() {
 
     setIsInitializing(true);
     try {
-      const sessions = await invoke<SessionSummary[]>('list_sessions', { workingDir: workingDirectory });
-      const session = sessions.find((item) => item.session_id === sessionId);
-
-      if (!session) {
-        throw new Error('会话不存在或不属于当前工作目录');
-      }
+      const session = await getSession(sessionId);
 
       await invoke<string>('init_session', {
         workingDir: workingDirectory,
@@ -242,12 +234,10 @@ function App() {
       }));
 
       setCurrentSessionId(sessionId);
-      setCurrentSessionTitle(session.title);
-      setCurrentProviderName(session.provider_name || null);
-      setCurrentModelName(session.model || null);
-      if (session.provider_id && session.model) {
-        setSelectedProviderValue(`${session.provider_id}::${session.model}`);
-      }
+      setCurrentSessionTitle(session.name);
+      setCurrentProviderName(session.provider);
+      setCurrentModelName(session.model);
+      setSelectedProviderValue(`${session.provider}::${session.model}`);
       setMessages(loadedMessages);
       setHasActiveSession(true);
       setIsDraftConversation(false);
@@ -315,26 +305,25 @@ function App() {
     setCurrentTask(null);
   };
 
-  const handleTaskCreated = async (task: Task) => {
+  const handleTaskCreated = async (taskRequest: TaskCreateRequest) => {
     try {
-      // 保存 Task 到后端
-      await invoke('save_task', { task });
+      const createdTask = await createTask(taskRequest);
 
-      setCurrentTask(task);
+      setCurrentTask(createdTask);
       setIsCreatingTask(false);
 
       // 默认选中第一个角色
-      if (task.roles.length > 0) {
-        setCurrentTaskRoleId(task.roles[0].id);
+      if (createdTask.roles.length > 0) {
+        setCurrentTaskRoleId(createdTask.roles[0].id);
         // 切换到第一个角色的 session
-        const firstRole = task.roles[0];
-        if (firstRole.sessionId) {
-          handleSessionSelected(firstRole.sessionId);
+        const firstRole = createdTask.roles[0];
+        if (firstRole.session_id) {
+          handleSessionSelected(firstRole.session_id);
         }
       }
     } catch (error) {
-      console.error('Failed to save task:', error);
-      alert(`Failed to save task: ${error}`);
+      console.error('Failed to create task:', error);
+      alert(`Failed to create task: ${error}`);
     }
   };
 
@@ -347,13 +336,14 @@ function App() {
     setCurrentTaskRoleId(roleId);
 
     // 切换到该角色的 session
-    if (role.sessionId) {
-      await handleSessionSelected(role.sessionId);
+    if (role.session_id) {
+      await handleSessionSelected(role.session_id);
     }
   };
 
-  const handleTaskSelected = async (task: Task) => {
+  const handleTaskSelected = async (taskSummary: TaskSummary) => {
     try {
+      const task = await invoke<Task>('get_task', { taskId: taskSummary.id });
       setCurrentTask(task);
       setNavigationMode('task');
       setTaskListRefreshKey((prev) => prev + 1);
@@ -362,8 +352,8 @@ function App() {
       if (task.roles.length > 0) {
         setCurrentTaskRoleId(task.roles[0].id);
         const firstRole = task.roles[0];
-        if (firstRole.sessionId) {
-          await handleSessionSelected(firstRole.sessionId);
+        if (firstRole.session_id) {
+          await handleSessionSelected(firstRole.session_id);
         }
       }
     } catch (error) {
@@ -382,7 +372,7 @@ function App() {
     if (!currentTask) return;
 
     const targetRole = currentTask.roles.find((r) => r.id === targetRoleId);
-    if (!targetRole || !targetRole.sessionId) {
+    if (!targetRole || !targetRole.session_id) {
       alert('Target role session not found');
       setShowForwardModal(false);
       return;
@@ -409,7 +399,7 @@ function App() {
     try {
       // 调用后端 API 转发消息
       await invoke('forward_message', {
-        targetSessionId: targetRole.sessionId,
+        targetSessionId: targetRole.session_id,
         messageContent: forwardedContent,
       });
 
@@ -425,15 +415,7 @@ function App() {
   };
 
   const handleExitTask = async () => {
-    if (currentTask) {
-      try {
-        // 保存当前 Task 状态
-        await invoke('save_task', { task: currentTask });
-      } catch (error) {
-        console.error('Failed to save task on exit:', error);
-      }
-    }
-
+    // 任务状态已由后端自动持久化，无需手动保存
     setCurrentTask(null);
     setCurrentTaskRoleId(null);
   };
@@ -501,11 +483,20 @@ function App() {
   const handleSearchResultClick = async (sessionId: string, sessionType: string, taskId: string | null) => {
     if (sessionType === 'task' && taskId) {
       try {
-        // Fetch the session to get the actual task_id
         const session = await getSession(sessionId);
         if (session.task_id) {
-          const task = await invoke<Task>('get_task', { taskId: session.task_id });
-          await handleTaskSelected(task);
+          // Create a minimal TaskSummary to pass to handleTaskSelected
+          const taskSummary: TaskSummary = {
+            id: session.task_id,
+            name: '',
+            description: '',
+            icon: '',
+            role_count: 0,
+            total_messages: 0,
+            created_at: '',
+            updated_at: '',
+          };
+          await handleTaskSelected(taskSummary);
         }
       } catch (error) {
         console.error('Failed to load task from search:', error);

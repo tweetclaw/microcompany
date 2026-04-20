@@ -66,7 +66,7 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentT
               <div className="task-list-item-content">
                 <div className="task-list-item-name">{task.name}</div>
                 <div className="task-list-item-meta">
-                  {task.roles.length} roles
+                  {task.role_count} roles
                 </div>
               </div>
               <button

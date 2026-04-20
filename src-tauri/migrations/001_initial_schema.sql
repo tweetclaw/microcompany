@@ -51,13 +51,13 @@ CREATE TABLE messages (
 );
 
 -- 全文搜索索引（SQLite FTS5）
--- 使用 simple 分词器以更好地支持中文搜索
+-- 使用 unicode61 分词器（FTS5 默认，支持中文）
 -- 注意：由于 messages 表使用 TEXT 类型的 id 作为主键，我们不能使用 content_rowid
 -- 因此使用 contentless 模式，手动维护 FTS 索引
 CREATE VIRTUAL TABLE messages_fts USING fts5(
     message_id UNINDEXED,
     content,
-    tokenize='simple'
+    tokenize='unicode61'
 );
 
 -- 触发器：自动更新全文搜索索引

@@ -13,7 +13,7 @@ interface NormalModeLayoutProps {
   availableProviders: ProviderConfig[];
   selectedProviderValue: string;
   messages: Message[];
-  onMessagesChange: (messages: Message[]) => void;
+  onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey: number;
   onSessionSelected: (sessionId: string) => void;
   onSessionDeleted: (sessionId: string) => void;

@@ -19,6 +19,7 @@ export default function TaskInspector({
   hasLatestReply,
 }: TaskInspectorProps) {
   const { stats, loading, error } = useTaskStatistics(task.id);
+  const [showAllRoles, setShowAllRoles] = React.useState(false);
 
   return (
     <div className="task-inspector">
@@ -76,12 +77,20 @@ export default function TaskInspector({
             {stats.messages_by_role.length > 0 && (
               <div className="task-stat-roles">
                 <div className="task-stat-roles-title">Messages by Role</div>
-                {stats.messages_by_role.slice(0, 3).map((roleStats) => (
+                {(showAllRoles ? stats.messages_by_role : stats.messages_by_role.slice(0, 3)).map((roleStats) => (
                   <div key={roleStats.role_id} className="task-stat-role-item">
                     <span className="task-stat-role-name">{roleStats.role_name}</span>
                     <span className="task-stat-role-count">{roleStats.message_count}</span>
                   </div>
                 ))}
+                {stats.messages_by_role.length > 3 && (
+                  <button
+                    className="task-stat-show-more"
+                    onClick={() => setShowAllRoles(!showAllRoles)}
+                  >
+                    {showAllRoles ? '收起' : `显示全部 ${stats.messages_by_role.length} 个角色`}
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -12,16 +12,39 @@ use tauri::Manager;
 
 #[tauri::command]
 async fn initialize_database(app_handle: tauri::AppHandle) -> Result<(), String> {
+    println!("[initialize_database] Starting database initialization...");
+
     let app_dir = app_handle
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to get app data directory: {}", e);
+            println!("[initialize_database] ERROR: {}", err_msg);
+            err_msg
+        })?;
+
+    println!("[initialize_database] App data directory: {:?}", app_dir);
 
     let db_path = app_dir.join(".mc").join("data.db");
     let db_path_str = db_path.to_string_lossy().to_string();
 
-    database::initialize_database(&db_path_str)?;
-    database::pool::init_pool(&db_path_str)?;
+    println!("[initialize_database] Database path: {}", db_path_str);
+
+    database::initialize_database(&db_path_str).map_err(|e| {
+        let err_msg = format!("Failed to initialize database: {}", e);
+        println!("[initialize_database] ERROR: {}", err_msg);
+        err_msg
+    })?;
+
+    println!("[initialize_database] Database schema initialized");
+
+    database::pool::init_pool(&db_path_str).map_err(|e| {
+        let err_msg = format!("Failed to initialize connection pool: {}", e);
+        println!("[initialize_database] ERROR: {}", err_msg);
+        err_msg
+    })?;
+
+    println!("[initialize_database] Connection pool initialized successfully");
     Ok(())
 }
 

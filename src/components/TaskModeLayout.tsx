@@ -2,7 +2,7 @@ import React from 'react';
 import TaskListPanel from './TaskListPanel';
 import ChatInterface from './ChatInterface';
 import TaskInspector from './TaskInspector';
-import { Message, Task, ProviderConfig } from '../types';
+import { Message, Task, TaskSummary, ProviderConfig } from '../types';
 import './TaskModeLayout.css';
 
 interface TaskModeLayoutProps {
@@ -14,7 +14,7 @@ interface TaskModeLayoutProps {
   availableProviders: ProviderConfig[];
   selectedProviderValue: string;
   messages: Message[];
-  onMessagesChange: (messages: Message[]) => void;
+  onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey: number;
   onSessionSelected: (sessionId: string) => void;
   onSessionDeleted: (sessionId: string) => void;
@@ -27,7 +27,7 @@ interface TaskModeLayoutProps {
   currentTaskRoleId: string | null;
   onTaskRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
-  onTaskSelected: (task: Task) => void;
+  onTaskSelected: (taskSummary: TaskSummary) => void;
   taskListRefreshKey: number;
   onSettingsClick: () => void;
   isSessionListCollapsed?: boolean;

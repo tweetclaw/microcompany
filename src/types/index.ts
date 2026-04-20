@@ -102,22 +102,8 @@ export interface AppState {
   error: string | null;
 }
 
-// Task types
-export interface TaskRole {
-  id: string;
-  name: string;
-  identity: string;
-  providerId: string;
-  providerName: string;
-  model: string;
-  systemPrompt?: string;
-  sessionId: string | null;
-  sessionReady: boolean;
-}
+// Re-export Task types from API (unified type system)
+export type { Task, TaskRole, TaskSummary, TaskCreateRequest, RoleConfig } from './api';
 
-export interface Task {
-  id: string;
-  name: string;
-  roles: TaskRole[];
-  createdAt: number;
-}
+// Re-export settings types
+export type { ProviderConfig } from './settings';

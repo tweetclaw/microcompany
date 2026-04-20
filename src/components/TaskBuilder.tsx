@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Task, TaskRole } from '../types';
+import { TaskCreateRequest, RoleConfig } from '../types';
 import { ProviderConfig } from '../types/settings';
 import AddRoleModal from './AddRoleModal';
 import './TaskBuilder.css';
@@ -7,7 +7,7 @@ import './TaskBuilder.css';
 interface TaskBuilderProps {
   workingDirectory: string;
   availableProviders: ProviderConfig[];
-  onTaskCreated: (task: Task) => void;
+  onTaskCreated: (taskRequest: TaskCreateRequest) => void;
   onCancel: () => void;
 }
 
@@ -18,7 +18,7 @@ function TaskBuilder({
   onCancel,
 }: TaskBuilderProps) {
   const [taskName, setTaskName] = useState('');
-  const [roles, setRoles] = useState<TaskRole[]>([]);
+  const [roles, setRoles] = useState<RoleConfig[]>([]);
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
 
   const handleStartTask = () => {
@@ -27,21 +27,21 @@ function TaskBuilder({
       return;
     }
 
-    const task: Task = {
-      id: `task-${Date.now()}`,
+    const taskRequest: TaskCreateRequest = {
       name: taskName || 'Untitled Task',
+      description: '',
+      icon: '📋',
       roles,
-      createdAt: Date.now(),
     };
 
-    onTaskCreated(task);
+    onTaskCreated(taskRequest);
   };
 
   const handleAddRole = () => {
     setShowAddRoleModal(true);
   };
 
-  const handleRoleCreated = (role: TaskRole) => {
+  const handleRoleCreated = (role: RoleConfig) => {
     setRoles([...roles, role]);
     setShowAddRoleModal(false);
   };
@@ -75,14 +75,11 @@ function TaskBuilder({
                 </div>
               ) : (
                 <div className="task-roles-list">
-                  {roles.map((role) => (
-                    <div key={role.id} className="task-role-card">
+                  {roles.map((role, index) => (
+                    <div key={index} className="task-role-card">
                       <div className="task-role-name">{role.name}</div>
                       <div className="task-role-meta">
-                        {role.identity} · {role.providerName} · {role.model}
-                      </div>
-                      <div className="task-role-status">
-                        {role.sessionReady ? 'Session ready' : 'Creating session...'}
+                        {role.identity} · {role.provider} · {role.model}
                       </div>
                     </div>
                   ))}
