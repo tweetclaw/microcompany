@@ -36,15 +36,7 @@ async fn initialize_database(app_handle: tauri::AppHandle) -> Result<(), String>
         err_msg
     })?;
 
-    println!("[initialize_database] Database schema initialized");
-
-    database::pool::init_pool(&db_path_str).map_err(|e| {
-        let err_msg = format!("Failed to initialize connection pool: {}", e);
-        println!("[initialize_database] ERROR: {}", err_msg);
-        err_msg
-    })?;
-
-    println!("[initialize_database] Connection pool initialized successfully");
+    println!("[initialize_database] Database schema and connection pool initialized successfully");
     Ok(())
 }
 

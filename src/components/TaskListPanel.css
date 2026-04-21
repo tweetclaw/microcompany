@@ -123,3 +123,53 @@
   opacity: 1 !important;
   background-color: rgba(255, 0, 0, 0.1);
 }
+
+.task-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 107, 107, 0.14), rgba(255, 107, 107, 0.08));
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.08);
+}
+
+.task-delete-confirm-text {
+  font-size: 12px;
+  color: #ff9b9b;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.task-delete-confirm-button {
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.1s ease, opacity 0.1s ease, transform 0.1s ease;
+}
+
+.task-delete-confirm-button:hover {
+  transform: translateY(-1px);
+}
+
+.task-delete-confirm-button.confirm {
+  background-color: rgba(255, 59, 48, 0.22);
+  color: #ffd5d2;
+}
+
+.task-delete-confirm-button.confirm:hover {
+  background-color: rgba(255, 59, 48, 0.32);
+}
+
+.task-delete-confirm-button.cancel {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--vscode-foreground);
+}
+
+.task-delete-confirm-button.cancel:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}

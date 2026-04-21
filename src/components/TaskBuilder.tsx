@@ -22,13 +22,18 @@ function TaskBuilder({
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
 
   const handleStartTask = () => {
+    if (!taskName.trim()) {
+      alert('请输入任务名称');
+      return;
+    }
+
     if (roles.length === 0) {
       alert('Please add at least one role');
       return;
     }
 
     const taskRequest: TaskCreateRequest = {
-      name: taskName || 'Untitled Task',
+      name: taskName.trim(),
       description: '',
       icon: '📋',
       roles,
