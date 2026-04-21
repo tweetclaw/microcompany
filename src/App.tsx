@@ -396,12 +396,18 @@ function App() {
     }
 
     const currentRole = currentTask.roles.find((r) => r.id === currentTaskRoleId);
+
+    console.log('[Forward] Current messages:', messages);
+    console.log('[Forward] Messages count:', messages.length);
+
     const latestAssistantMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'assistant');
 
+    console.log('[Forward] Latest assistant message:', latestAssistantMessage);
+
     if (!latestAssistantMessage) {
-      alert('No assistant message to forward');
+      alert('当前会话中没有AI回复可以转发');
       setShowForwardModal(false);
       return;
     }

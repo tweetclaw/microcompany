@@ -36,7 +36,21 @@ pub async fn forward_message(
     target_session_id: String,
     message_content: String,
 ) -> Result<(), String> {
-    // Save to file storage (for Claurst compatibility)
+    // Save to database (primary storage for task sessions)
+    let pool = crate::database::get_pool()
+        .map_err(|e| format!("Failed to get database pool: {}", e))?;
+    let conn = pool.get()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+    let created_at = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO messages (id, session_id, role, content, created_at, is_streaming)
+         VALUES (?1, ?2, 'user', ?3, ?4, 0)",
+        rusqlite::params![&msg_id, &target_session_id, &message_content, &created_at],
+    ).map_err(|e| format!("Failed to save message to database: {}", e))?;
+
+    // Also try to save to file storage (for normal sessions), but don't fail if session doesn't exist
     let storage = crate::storage::ConversationStorage::new()
         .map_err(|e| format!("Failed to create storage: {}", e))?;
 
@@ -47,21 +61,8 @@ pub async fn forward_message(
         timestamp: now,
     };
 
-    storage.save_message(&target_session_id, message)
-        .map_err(|e| format!("Failed to forward message: {}", e))?;
-
-    // Also save to database
-    if let Ok(pool) = crate::database::get_pool() {
-        if let Ok(conn) = pool.get() {
-            let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
-            let created_at = chrono::Utc::now().to_rfc3339();
-            let _ = conn.execute(
-                "INSERT INTO messages (id, session_id, role, content, created_at, is_streaming)
-                 VALUES (?1, ?2, 'user', ?3, ?4, 0)",
-                rusqlite::params![&msg_id, &target_session_id, &message_content, &created_at],
-            );
-        }
-    }
+    // Ignore errors for file storage - task sessions may not have file storage
+    let _ = storage.save_message(&target_session_id, message);
 
     Ok(())
 }

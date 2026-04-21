@@ -5,8 +5,8 @@ import './TaskWorkspace.css';
 
 interface TaskWorkspaceProps {
   task: Task;
-  workingDirectory: string;
-  availableProviders: ProviderConfig[];
+  workingDirectory?: string;
+  availableProviders?: ProviderConfig[];
   currentRoleId: string | null;
   onRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
