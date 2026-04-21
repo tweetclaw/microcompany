@@ -437,6 +437,32 @@ function App() {
     setCurrentTaskRoleId(null);
   };
 
+  const handleTaskDeleted = async (deletedTaskId: string) => {
+    // 如果删除的是当前正在查看的 task
+    if (currentTask && currentTask.id === deletedTaskId) {
+      // 先尝试取消正在进行的请求
+      try {
+        await invoke('cancel_message');
+      } catch (error) {
+        console.log('No active request to cancel:', error);
+      }
+
+      // 清空 task 相关状态
+      setCurrentTask(null);
+      setCurrentTaskRoleId(null);
+      setCurrentSessionId(null);
+      setCurrentSessionTitle(null);
+      setCurrentProviderName(null);
+      setCurrentModelName(null);
+      setMessages([]);
+      setHasActiveSession(false);
+      setIsDraftConversation(false);
+    }
+
+    // 刷新 task 列表
+    setTaskListRefreshKey((prev) => prev + 1);
+  };
+
   // 确保当前有一个真实的后端 session（懒创建）
   const ensureActiveSession = async (): Promise<string | null> => {
     // 如果已经有真实 session，直接返回
@@ -614,6 +640,7 @@ function App() {
               onTaskRoleSelected={handleTaskRoleSelected}
               onForwardLatestReply={handleForwardLatestReply}
               onTaskSelected={handleTaskSelected}
+              onTaskDeleted={handleTaskDeleted}
               taskListRefreshKey={taskListRefreshKey}
               onSettingsClick={() => setIsSettingsOpen(true)}
               isSessionListCollapsed={isSessionListCollapsed}

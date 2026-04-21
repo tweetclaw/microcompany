@@ -28,6 +28,7 @@ interface TaskModeLayoutProps {
   onTaskRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
   onTaskSelected: (taskSummary: TaskSummary) => void;
+  onTaskDeleted?: (taskId: string) => void;
   taskListRefreshKey: number;
   onSettingsClick: () => void;
   isSessionListCollapsed?: boolean;
@@ -45,6 +46,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         <TaskListPanel
           onNewTaskClick={props.onNewTask}
           onTaskSelected={props.onTaskSelected}
+          onTaskDeleted={props.onTaskDeleted}
           currentTaskId={props.currentTask?.id || null}
           refreshKey={props.taskListRefreshKey}
         />

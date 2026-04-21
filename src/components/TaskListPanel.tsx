@@ -6,11 +6,12 @@ import './TaskListPanel.css';
 interface TaskListPanelProps {
   onNewTaskClick: () => void;
   onTaskSelected: (task: TaskSummary) => void;
+  onTaskDeleted?: (taskId: string) => void;
   currentTaskId: string | null;
   refreshKey?: number;
 }
 
-export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentTaskId, refreshKey }: TaskListPanelProps) {
+export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDeleted, currentTaskId, refreshKey }: TaskListPanelProps) {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,12 +33,16 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, currentT
 
   const handleDeleteTask = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('确定要删除这个任务吗？')) {
+    if (window.confirm('确定要删除这个任务吗？所有相关的会话和消息都将被删除。')) {
       try {
         await deleteTask(taskId);
+        if (onTaskDeleted) {
+          onTaskDeleted(taskId);
+        }
         await loadTasks();
       } catch (error) {
         console.error('Failed to delete task:', error);
+        alert(`删除任务失败: ${error}`);
       }
     }
   };
