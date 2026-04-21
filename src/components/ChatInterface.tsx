@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import type React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import { TitleBar } from './TitleBar';
 import Toolbar from './Toolbar';
 import MessageList from './MessageList';
@@ -9,6 +11,7 @@ import Sidebar from './Sidebar';
 import InspectorPanel from './InspectorPanel';
 import TerminalPanel from './TerminalPanel';
 import { ToolIndicator } from './ToolIndicator';
+import './ResizeHandle.css';
 import {
   AiMessageChunkEvent,
   AiRequestEndEvent,
@@ -62,6 +65,12 @@ const RUNNING_STATES: AiRunState[] = [
   'finalizing',
 ];
 
+const PANEL_FILL_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+};
+
 function ChatInterface({
   workingDirectory,
   currentSessionId,
@@ -75,8 +84,6 @@ function ChatInterface({
   sessionListRefreshKey,
   onSessionSelected,
   onSessionDeleted,
-  onNewChatWithModel,
-  onNewTask,
   hasActiveSession,
   isDraftConversation,
   onEnsureSession,
@@ -84,9 +91,6 @@ function ChatInterface({
   onMessageCompleted,
   hideSidebar = false,
   hideInspector = false,
-  hideNewButtons = false,
-  hideToolbar = false,
-  hideTitleBar = false,
   externalInspectorCollapsed,
   externalTerminalCollapsed,
 }: ChatInterfaceProps) {
@@ -201,6 +205,7 @@ function ChatInterface({
 
   useEffect(() => {
     saveLayoutState({
+      ...loadLayoutState(),
       isSidebarCollapsed,
       isInspectorCollapsed,
       isTerminalCollapsed,
@@ -560,6 +565,22 @@ function ChatInterface({
     setIsTerminalCollapsed((prev) => !prev);
   };
 
+  const handleHorizontalLayoutChanged = (layout: Layout) => {
+    const size = layout['chat-inspector'];
+    if (typeof size !== 'number' || !Number.isFinite(size)) return;
+    const current = loadLayoutState();
+    if (Math.abs(current.inspectorSize - size) < 0.01) return;
+    saveLayoutState({ ...current, inspectorSize: size });
+  };
+
+  const handleVerticalLayoutChanged = (layout: Layout) => {
+    const size = layout['terminal'];
+    if (typeof size !== 'number' || !Number.isFinite(size)) return;
+    const current = loadLayoutState();
+    if (Math.abs(current.terminalSize - size) < 0.01) return;
+    saveLayoutState({ ...current, terminalSize: size });
+  };
+
   return (
     <div className="chat-interface">
       <div className="ide-workspace">
@@ -577,68 +598,104 @@ function ChatInterface({
           />
         )}
 
-        <div className="chat-main-wrapper">
-          <main className="chat-main-column">
-          <div className="chat-main-surface">
-            {hasActiveSession && !isDraftConversation ? (
-              <>
-                <MessageList messages={messages} isBusy={isBusy} />
-                {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
-                <InputBox
-                  onSendMessage={handleSendMessage}
-                  onCancelMessage={handleCancelMessage}
-                  isBusy={isBusy}
-                  canCancel={canCancel}
-                  isCancelling={isCancelling}
-                  isInputDisabled={isInputDisabled}
-                  currentProviderName={currentProviderName}
-                  currentModelName={currentModelName}
-                />
-              </>
-            ) : isDraftConversation ? (
-              <>
-                <div className="draft-conversation-placeholder">
-                  <div className="placeholder-content">
-                    <div className="placeholder-badge">新对话</div>
-                    <h2>开始一个新对话</h2>
-                    {modelOptions.length === 0 ? (
-                      <>
-                        <p>还没有配置可用的模型。请先在设置中添加并启用至少一个 Provider。</p>
-                        <button className="settings-link-button" onClick={onSettingsClick}>
-                          打开设置
-                        </button>
-                      </>
-                    ) : currentProviderName && currentModelName ? (
-                      <p>使用 {currentProviderName} · {currentModelName} 开始对话</p>
-                    ) : (
-                      <p>请点击"新建"按钮选择一个模型</p>
-                    )}
-                  </div>
+        <Group orientation="horizontal" className="chat-horizontal-group" onLayoutChanged={handleHorizontalLayoutChanged}>
+          <Panel minSize="30%" style={PANEL_FILL_STYLE}>
+            <div className="chat-main-wrapper">
+              <main className="chat-main-column">
+                <Group orientation="vertical" className="chat-vertical-group" onLayoutChanged={handleVerticalLayoutChanged}>
+              <Panel minSize="30%" style={PANEL_FILL_STYLE}>
+                <div className="chat-main-surface">
+                  {hasActiveSession && !isDraftConversation ? (
+                    <>
+                      <MessageList messages={messages} isBusy={isBusy} />
+                      {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
+                      <InputBox
+                        onSendMessage={handleSendMessage}
+                        onCancelMessage={handleCancelMessage}
+                        isBusy={isBusy}
+                        canCancel={canCancel}
+                        isCancelling={isCancelling}
+                        isInputDisabled={isInputDisabled}
+                        currentProviderName={currentProviderName}
+                        currentModelName={currentModelName}
+                      />
+                    </>
+                  ) : isDraftConversation ? (
+                    <>
+                      <div className="draft-conversation-placeholder">
+                        <div className="placeholder-content">
+                          <div className="placeholder-badge">新对话</div>
+                          <h2>开始一个新对话</h2>
+                          {modelOptions.length === 0 ? (
+                            <>
+                              <p>还没有配置可用的模型。请先在设置中添加并启用至少一个 Provider。</p>
+                              <button className="settings-link-button" onClick={onSettingsClick}>
+                                打开设置
+                              </button>
+                            </>
+                          ) : currentProviderName && currentModelName ? (
+                            <p>使用 {currentProviderName} · {currentModelName} 开始对话</p>
+                          ) : (
+                            <p>请点击"新建"按钮选择一个模型</p>
+                          )}
+                        </div>
+                      </div>
+                      <InputBox
+                        onSendMessage={handleSendMessage}
+                        onCancelMessage={handleCancelMessage}
+                        isBusy={isBusy}
+                        canCancel={canCancel}
+                        isCancelling={isCancelling}
+                        isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid}
+                        currentProviderName={currentProviderName}
+                        currentModelName={currentModelName}
+                      />
+                    </>
+                  ) : (
+                    <div className="no-session-placeholder">
+                      <div className="placeholder-content">
+                        <div className="placeholder-badge">IDE Workspace Ready</div>
+                        <h2>欢迎使用 AI IDE 助手</h2>
+                        <p>左侧管理会话，中间进行对话，右侧查看模型与工作区信息。点击右上角"新建"开始新的对话。</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <InputBox
-                  onSendMessage={handleSendMessage}
-                  onCancelMessage={handleCancelMessage}
-                  isBusy={isBusy}
-                  canCancel={canCancel}
-                  isCancelling={isCancelling}
-                  isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid}
-                  currentProviderName={currentProviderName}
-                  currentModelName={currentModelName}
+              </Panel>
+              {!effectiveTerminalCollapsed && (
+                <>
+                  <Separator />
+                  <Panel id="terminal" defaultSize={`${initialLayout.terminalSize}%`} minSize="10%" maxSize="60%" style={PANEL_FILL_STYLE}>
+                    <TerminalPanel collapsed={false} />
+                  </Panel>
+                </>
+              )}
+                </Group>
+              </main>
+            </div>
+          </Panel>
+          {!hideInspector && !effectiveInspectorCollapsed && !isCompact && (
+            <>
+              <Separator />
+              <Panel id="chat-inspector" defaultSize={`${initialLayout.inspectorSize}%`} minSize="20%" maxSize="45%" style={PANEL_FILL_STYLE}>
+                <InspectorPanel
+                  workingDirectory={workingDirectory}
+                  currentSessionTitle={currentSessionTitle}
+                  currentSessionId={currentSessionId}
+                  messageCount={messages.length}
+                  currentToolCall={currentToolCall}
+                  runState={runState}
+                  processTimeline={processTimeline}
+                  lastError={lastError}
+                  providerLabel={currentProviderName}
+                  modelLabel={currentModelName}
+                  collapsed={false}
+                  isCompact={false}
                 />
-              </>
-            ) : (
-              <div className="no-session-placeholder">
-                <div className="placeholder-content">
-                  <div className="placeholder-badge">IDE Workspace Ready</div>
-                  <h2>欢迎使用 AI IDE 助手</h2>
-                  <p>左侧管理会话，中间进行对话，右侧查看模型与工作区信息。点击右上角"新建"开始新的对话。</p>
-                </div>
-              </div>
-            )}
-          </div>
-          <TerminalPanel collapsed={effectiveTerminalCollapsed} />
-        </main>
-        </div>
+              </Panel>
+            </>
+          )}
+        </Group>
 
         {isCompact && isInspectorDrawerOpen && (
           <div
@@ -647,7 +704,7 @@ function ChatInterface({
           ></div>
         )}
 
-        {!hideInspector && (
+        {!hideInspector && isCompact && (
           <InspectorPanel
             workingDirectory={workingDirectory}
             currentSessionTitle={currentSessionTitle}
@@ -659,8 +716,8 @@ function ChatInterface({
             lastError={lastError}
             providerLabel={currentProviderName}
             modelLabel={currentModelName}
-            collapsed={isCompact ? !isInspectorDrawerOpen : effectiveInspectorCollapsed}
-            isCompact={isCompact}
+            collapsed={!isInspectorDrawerOpen}
+            isCompact={true}
           />
         )}
       </div>

@@ -1,12 +1,12 @@
 .inspector-panel {
-  width: var(--layout-inspector-width);
-  min-width: var(--layout-inspector-width);
+  width: 100%;
+  min-width: 0;
   border-left: 1px solid var(--border-default);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width var(--duration-normal) var(--ease-in-out), min-width var(--duration-normal) var(--ease-in-out), opacity var(--duration-fast) var(--ease-in-out);
+  transition: opacity var(--duration-fast) var(--ease-in-out);
 }
 
 .inspector-panel-collapsed {

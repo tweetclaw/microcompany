@@ -11,7 +11,6 @@ interface AddRoleModalProps {
 }
 
 function AddRoleModal({
-  workingDirectory,
   availableProviders,
   onRoleCreated,
   onCancel,

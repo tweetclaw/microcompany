@@ -1,0 +1,38 @@
+/* Vertical resize handle (for left/right panels) */
+[data-panel-resize-handle-id][data-resize-handle-active="pointer"] {
+  cursor: col-resize;
+}
+
+[data-panel-resize-handle-id]:not([data-resize-handle-active]) {
+  cursor: col-resize;
+}
+
+[data-panel-resize-handle-id][data-panel-group-direction="horizontal"] {
+  width: 4px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+[data-panel-resize-handle-id][data-panel-group-direction="horizontal"]:hover {
+  background-color: var(--vscode-focusBorder);
+}
+
+[data-panel-resize-handle-id][data-resize-handle-active="pointer"][data-panel-group-direction="horizontal"] {
+  background-color: var(--vscode-focusBorder);
+}
+
+/* Horizontal resize handle (for terminal panel) */
+[data-panel-resize-handle-id][data-panel-group-direction="vertical"] {
+  height: 4px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+  cursor: row-resize;
+}
+
+[data-panel-resize-handle-id][data-panel-group-direction="vertical"]:hover {
+  background-color: var(--vscode-focusBorder);
+}
+
+[data-panel-resize-handle-id][data-resize-handle-active="pointer"][data-panel-group-direction="vertical"] {
+  background-color: var(--vscode-focusBorder);
+}

@@ -16,8 +16,6 @@ interface TaskWorkspaceProps {
 
 function TaskWorkspace({
   task,
-  workingDirectory,
-  availableProviders,
   currentRoleId,
   onRoleSelected,
   onForwardLatestReply,
