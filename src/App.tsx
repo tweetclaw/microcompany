@@ -397,14 +397,9 @@ function App() {
 
     const currentRole = currentTask.roles.find((r) => r.id === currentTaskRoleId);
 
-    console.log('[Forward] Current messages:', messages);
-    console.log('[Forward] Messages count:', messages.length);
-
     const latestAssistantMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'assistant');
-
-    console.log('[Forward] Latest assistant message:', latestAssistantMessage);
 
     if (!latestAssistantMessage) {
       alert('当前会话中没有AI回复可以转发');
@@ -412,25 +407,32 @@ function App() {
       return;
     }
 
-    // 构造转发消息
     let forwardedContent = '';
     if (note.trim()) {
       forwardedContent += `[Note from user]\n${note.trim()}\n\n`;
     }
     forwardedContent += `[Forwarded Latest Reply from ${currentRole?.name}]\n${latestAssistantMessage.content}`;
 
+    setShowForwardModal(false);
+
     try {
-      // 调用后端 API 转发消息
-      await invoke('forward_message', {
-        targetSessionId: targetRole.session_id,
-        messageContent: forwardedContent,
-      });
+      if (targetRoleId !== currentTaskRoleId) {
+        await handleTaskRoleSelected(targetRoleId);
+        // 等待角色切换和消息加载完成
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
-      // 关闭弹层
-      setShowForwardModal(false);
+      // 先添加用户消息到前端显示
+      const forwardedUserMessage: Message = {
+        id: `forward-${Date.now()}`,
+        role: 'user',
+        content: forwardedContent,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, forwardedUserMessage]);
 
-      // 显示成功提示
-      alert(`Forwarded to ${targetRole.name}`);
+      // 触发AI响应,send_message会自动添加用户消息到数据库并触发AI处理
+      await invoke('send_message', { message: forwardedContent });
     } catch (error) {
       console.error('Failed to forward message:', error);
       alert(`Failed to forward message: ${error}`);

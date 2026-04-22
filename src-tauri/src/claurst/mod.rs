@@ -140,16 +140,74 @@ impl ClaurstSession {
         let storage = ConversationStorage::new()?;
 
         // 8. 加载历史消息(如果会话已存在)
-        let messages: Vec<Message> = if let Ok(stored_messages) = storage.load_messages(&session_id) {
-            stored_messages.into_iter().map(|m| {
-                if m.role == "user" {
-                    Message::user(m.content)
-                } else {
-                    Message::assistant(m.content)
+        // 优先从数据库加载（任务会话），fallback 到文件存储（普通会话）
+        let messages: Vec<Message> = if let Ok(pool) = crate::database::get_pool() {
+            if let Ok(conn) = pool.get() {
+                match conn.prepare("SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY created_at ASC") {
+                    Ok(mut stmt) => {
+                        match stmt.query_map(rusqlite::params![&session_id], |row| {
+                            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                        }) {
+                            Ok(rows) => {
+                                let db_messages: Vec<Message> = rows
+                                    .filter_map(|r| r.ok())
+                                    .map(|(role, content)| {
+                                        if role == "user" {
+                                            Message::user(content)
+                                        } else {
+                                            Message::assistant(content)
+                                        }
+                                    })
+                                    .collect();
+
+                                if !db_messages.is_empty() {
+                                    log::info!("Loaded {} messages from database for session {}", db_messages.len(), session_id);
+                                    db_messages
+                                } else {
+                                    // No messages in DB, try file storage
+                                    storage.load_messages(&session_id)
+                                        .map(|msgs| {
+                                            log::info!("Loaded {} messages from file storage for session {}", msgs.len(), session_id);
+                                            msgs.into_iter()
+                                                .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
+                                                .collect()
+                                        })
+                                        .unwrap_or_else(|_| {
+                                            log::info!("No messages found for session {}", session_id);
+                                            Vec::new()
+                                        })
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to query messages from database: {}, trying file storage", e);
+                                storage.load_messages(&session_id).unwrap_or_default()
+                                    .into_iter()
+                                    .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
+                                    .collect()
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to prepare statement: {}, trying file storage", e);
+                        storage.load_messages(&session_id).unwrap_or_default()
+                            .into_iter()
+                            .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
+                            .collect()
+                    }
                 }
-            }).collect()
+            } else {
+                log::warn!("Failed to get database connection, trying file storage");
+                storage.load_messages(&session_id).unwrap_or_default()
+                    .into_iter()
+                    .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
+                    .collect()
+            }
         } else {
-            Vec::new()
+            log::warn!("Database pool unavailable, trying file storage");
+            storage.load_messages(&session_id).unwrap_or_default()
+                .into_iter()
+                .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
+                .collect()
         };
 
         Ok(Self {
