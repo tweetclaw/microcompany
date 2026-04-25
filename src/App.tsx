@@ -57,8 +57,24 @@ function App() {
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
 
   useEffect(() => {
-    const unlistenStatus = listen<{ state: AiRunState }>('ai_status', (event) => {
-      setRunState(event.payload.state);
+    const unlistenStatus = listen<{ phase: string }>('ai-status', (event) => {
+      const phase = event.payload.phase;
+      console.log('[App] AI status changed, phase:', phase);
+
+      // Map phase to AiRunState
+      let state: AiRunState = 'idle';
+      if (phase === 'thinking') {
+        state = 'running_thinking';
+      } else if (phase === 'tool_running') {
+        state = 'running_tool';
+      } else if (phase === 'generating') {
+        state = 'running_generating';
+      } else if (phase === 'finalizing') {
+        state = 'finalizing';
+      }
+
+      console.log('[App] Mapped to runState:', state);
+      setRunState(state);
     });
 
     return () => {
@@ -654,6 +670,7 @@ function App() {
               isSessionListCollapsed={isSessionListCollapsed}
               isInspectorCollapsed={isInspectorCollapsed}
               isTerminalCollapsed={isTerminalCollapsed}
+              runState={runState}
             />
           )}
         </div>
