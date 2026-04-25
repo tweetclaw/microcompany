@@ -372,16 +372,9 @@ function App() {
   const handleTaskRoleSelected = async (roleId: string) => {
     if (!currentTask) return;
 
-    // 防止在AI工作时切换角色
-    if (runState !== 'idle') {
-      const confirmSwitch = window.confirm(
-        'AI正在处理中，切换角色将中断当前任务。确定要切换吗？'
-      );
-      if (!confirmSwitch) {
-        return;
-      }
-      // 用户确认切换，重置状态
-      setRunState('idle');
+    // AI 工作时禁止切换角色，防止并发
+    if (runState !== 'idle' && roleId !== currentTaskRoleId) {
+      return;
     }
 
     const role = currentTask.roles.find((r) => r.id === roleId);

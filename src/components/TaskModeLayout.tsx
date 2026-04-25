@@ -153,14 +153,19 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       {row.map((role) => {
                         const isActive = props.currentTaskRoleId === role.id;
                         const isWorking = isAiWorking && isActive;
-                        console.log('[TaskModeLayout] Rendering role:', role.name, 'roleId:', role.id, 'isActive:', isActive, 'isWorking:', isWorking);
+                        const isDisabled = isAiWorking && !isActive;
+                        const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
+                        console.log('[TaskModeLayout] Rendering role:', role.name, 'roleId:', role.id, 'isActive:', isActive, 'isWorking:', isWorking, 'isDisabled:', isDisabled);
 
                         return (
                           <button
                             key={role.id}
                             type="button"
-                            className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''}`}
+                            className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''} ${isDisabled ? 'disabled' : ''}`}
                             onClick={() => props.onTaskRoleSelected(role.id)}
+                            disabled={isDisabled}
+                            title={disabledReason}
+                            aria-label={isDisabled ? `${role.name}，当前有角色处理中，暂时无法切换` : role.name}
                           >
                             <div className="task-seat-avatar" aria-hidden="true">
                               {getSeatInitials(role.name)}
