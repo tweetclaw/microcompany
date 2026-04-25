@@ -57,6 +57,8 @@ function App() {
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
 
   useEffect(() => {
+    console.log('[App] Setting up event listeners for ai-status and ai-request-end');
+
     const unlistenStatus = listen<{ phase: string }>('ai-status', (event) => {
       const phase = event.payload.phase;
       console.log('[App] AI status changed, phase:', phase);
@@ -77,8 +79,15 @@ function App() {
       setRunState(state);
     });
 
+    const unlistenRequestEnd = listen<{ result: string; error_message?: string }>('ai-request-end', (event) => {
+      console.log('[App] AI request ended, result:', event.payload.result, 'error:', event.payload.error_message);
+      setRunState('idle');
+    });
+
     return () => {
+      console.log('[App] Cleaning up event listeners');
       unlistenStatus.then((fn) => fn());
+      unlistenRequestEnd.then((fn) => fn());
     };
   }, []);
 
@@ -362,6 +371,18 @@ function App() {
 
   const handleTaskRoleSelected = async (roleId: string) => {
     if (!currentTask) return;
+
+    // 防止在AI工作时切换角色
+    if (runState !== 'idle') {
+      const confirmSwitch = window.confirm(
+        'AI正在处理中，切换角色将中断当前任务。确定要切换吗？'
+      );
+      if (!confirmSwitch) {
+        return;
+      }
+      // 用户确认切换，重置状态
+      setRunState('idle');
+    }
 
     const role = currentTask.roles.find((r) => r.id === roleId);
     if (!role) return;
