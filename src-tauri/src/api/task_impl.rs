@@ -27,11 +27,27 @@ pub async fn create_task(
         for role in &task_request.roles {
             let role_id = format!("role-{}", Uuid::new_v4());
             let session_id = format!("session-{}", Uuid::new_v4());
+            let system_prompt_snapshot = build_system_prompt_snapshot(
+                role,
+                &task_request.name,
+                &task_request.description,
+            )?;
 
             tx.execute(
-                "INSERT INTO roles (id, task_id, name, identity, model, provider)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![&role_id, &task_id, &role.name, &role.identity, &role.model, &role.provider],
+                "INSERT INTO roles (id, task_id, name, identity, archetype_id, system_prompt_snapshot, model, provider, handoff_enabled, display_order)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    &role_id,
+                    &task_id,
+                    &role.name,
+                    &role.identity,
+                    &role.archetype_id,
+                    &system_prompt_snapshot,
+                    &role.model,
+                    &role.provider,
+                    &role.handoff_enabled,
+                    &role.display_order,
+                ],
             ).map_err(|e| format!("Failed to insert role: {}", e))?;
 
             tx.execute(
@@ -40,7 +56,7 @@ pub async fn create_task(
                 params![&session_id, &role.name, &role.model, &role.provider, &task_id, &role_id],
             ).map_err(|e| format!("Failed to insert session: {}", e))?;
 
-            session_configs.push((session_id, role_id, role.clone()));
+            session_configs.push((session_id, role_id, role.clone(), system_prompt_snapshot));
         }
 
         tx.commit()
@@ -51,10 +67,9 @@ pub async fn create_task(
     let mut created_sessions = Vec::new();
     let mut task_roles = Vec::new();
 
-    for (session_id, role_id, role) in session_configs {
-        match create_claurst_session_with_retry(&session_id, &role, 3).await {
+    for (session_id, role_id, role, system_prompt_snapshot) in session_configs {
+        match create_claurst_session_with_retry(&session_id, &role, system_prompt_snapshot.clone(), 3).await {
             Ok(_) => {
-                // Update session status to ready
                 let pool = get_pool()?;
                 let conn = pool.get()
                     .map_err(|e| format!("Failed to get database connection: {}", e))?;
@@ -73,8 +88,12 @@ pub async fn create_task(
                     id: role_id,
                     name: role.name.clone(),
                     identity: role.identity.clone(),
+                    archetype_id: role.archetype_id.clone(),
+                    system_prompt_snapshot,
                     model: role.model.clone(),
                     provider: role.provider.clone(),
+                    handoff_enabled: role.handoff_enabled,
+                    display_order: role.display_order,
                     session_id: session_id.clone(),
                     created_at: Utc::now().to_rfc3339(),
                 });
@@ -98,6 +117,26 @@ pub async fn create_task(
     })
 }
 
+fn build_system_prompt_snapshot(
+    role: &crate::api::RoleConfig,
+    task_name: &str,
+    task_description: &str,
+) -> Result<Option<String>, String> {
+    let archetype = match &role.archetype_id {
+        Some(archetype_id) => crate::archetypes::get_role_archetype(archetype_id)?,
+        None => None,
+    };
+
+    Ok(Some(crate::archetypes::build_role_system_prompt(
+        archetype.as_ref(),
+        &role.name,
+        &role.identity,
+        task_name,
+        task_description,
+        role.system_prompt_override.as_deref(),
+    )))
+}
+
 fn rollback_task(task_id: &str) {
     if let Ok(pool) = get_pool() {
         if let Ok(conn) = pool.get() {
@@ -118,15 +157,16 @@ fn cleanup_claurst_sessions(session_ids: &[String]) {
 }
 
 async fn create_claurst_session_with_retry(
-    _session_id: &str,
-    _role: &crate::api::RoleConfig,
+    session_id: &str,
+    role: &crate::api::RoleConfig,
+    system_prompt_snapshot: Option<String>,
     max_retries: u32,
 ) -> Result<(), String> {
     let mut retries = 0;
     let mut last_error = String::new();
 
     while retries <= max_retries {
-        match create_claurst_session_api(_session_id, _role).await {
+        match create_claurst_session_api(session_id, role, system_prompt_snapshot.clone()).await {
             Ok(_) => return Ok(()),
             Err(e) => {
                 last_error = e.to_string();
@@ -147,6 +187,7 @@ async fn create_claurst_session_with_retry(
 async fn create_claurst_session_api(
     session_id: &str,
     role: &crate::api::RoleConfig,
+    system_prompt_snapshot: Option<String>,
 ) -> Result<(), String> {
     use crate::config::AppConfig;
     use crate::claurst::ClaurstSession;
@@ -171,6 +212,7 @@ async fn create_claurst_session_api(
         provider.api_key.clone(),
         role.model.clone(),
         provider.base_url.clone(),
+        system_prompt_snapshot,
     ).map_err(|e| format!("Failed to create Claurst session: {}", e))?;
 
     Ok(())

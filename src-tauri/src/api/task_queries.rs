@@ -30,11 +30,11 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
 
     let roles = {
         let mut role_stmt = conn.prepare(
-            "SELECT r.id, r.name, r.identity, r.model, r.provider, s.id, r.created_at
+            "SELECT r.id, r.name, r.identity, r.archetype_id, r.system_prompt_snapshot, r.model, r.provider, r.handoff_enabled, r.display_order, s.id, r.created_at
              FROM roles r
              JOIN sessions s ON s.role_id = r.id
              WHERE r.task_id = ?1
-             ORDER BY r.created_at"
+             ORDER BY r.display_order, r.created_at"
         ).map_err(|e| format!("Failed to prepare role query: {}", e))?;
 
         let rows = role_stmt.query_map(params![&task_id], |row| {
@@ -42,10 +42,14 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 identity: row.get(2)?,
-                model: row.get(3)?,
-                provider: row.get(4)?,
-                session_id: row.get(5)?,
-                created_at: row.get(6)?,
+                archetype_id: row.get(3)?,
+                system_prompt_snapshot: row.get(4)?,
+                model: row.get(5)?,
+                provider: row.get(6)?,
+                handoff_enabled: row.get(7)?,
+                display_order: row.get(8)?,
+                session_id: row.get(9)?,
+                created_at: row.get(10)?,
             })
         }).map_err(|e| format!("Failed to query roles: {}", e))?;
 

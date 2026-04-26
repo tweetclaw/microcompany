@@ -12,11 +12,36 @@ export interface TaskCreateRequest {
   roles: RoleConfig[];
 }
 
+export interface RoleArchetype {
+  id: string;
+  label: string;
+  summary: string;
+  description: string;
+  responsibilities: string[];
+  boundaries: string[];
+  deliverables: string[];
+  handoffGuidance: string;
+  recommendedNextArchetypes: string[];
+  promptFragments: {
+    roleSystem: string;
+    teamGuidance: string;
+    taskGuidance: string;
+  };
+  source: {
+    repository: string;
+    path: string;
+  };
+}
+
 export interface RoleConfig {
   name: string;
   identity: string;
+  archetype_id?: string | null;
+  system_prompt_override?: string | null;
   model: string;
   provider: string;
+  handoff_enabled: boolean;
+  display_order: number;
 }
 
 export interface TaskUpdateRequest {
@@ -39,8 +64,12 @@ export interface TaskRole {
   id: string;
   name: string;
   identity: string;
+  archetype_id: string | null;
+  system_prompt_snapshot: string | null;
   model: string;
   provider: string;
+  handoff_enabled: boolean;
+  display_order: number;
   session_id: string;
   created_at: string;
 }

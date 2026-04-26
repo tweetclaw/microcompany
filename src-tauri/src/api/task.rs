@@ -19,8 +19,12 @@ pub struct TaskUpdateRequest {
 pub struct RoleConfig {
     pub name: String,
     pub identity: String,
+    pub archetype_id: Option<String>,
+    pub system_prompt_override: Option<String>,
     pub model: String,
     pub provider: String,
+    pub handoff_enabled: bool,
+    pub display_order: i32,
 }
 
 #[derive(Serialize)]
@@ -39,8 +43,12 @@ pub struct TaskRole {
     pub id: String,
     pub name: String,
     pub identity: String,
+    pub archetype_id: Option<String>,
+    pub system_prompt_snapshot: Option<String>,
     pub model: String,
     pub provider: String,
+    pub handoff_enabled: bool,
+    pub display_order: i32,
     pub session_id: String,
     pub created_at: String,
 }

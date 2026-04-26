@@ -42,6 +42,7 @@ pub async fn create_normal_session(
         provider_config.api_key.clone(),
         model.clone(),
         provider_config.base_url.clone(),
+        None,
     ) {
         Ok(_) => {
             conn.execute(

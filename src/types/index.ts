@@ -103,7 +103,7 @@ export interface AppState {
 }
 
 // Re-export Task types from API (unified type system)
-export type { Task, TaskRole, TaskSummary, TaskCreateRequest, RoleConfig } from './api';
+export type { Task, TaskRole, TaskSummary, TaskCreateRequest, RoleArchetype, RoleConfig, TaskUpdateRequest } from './api';
 
 // Re-export settings types
 export type { ProviderConfig } from './settings';

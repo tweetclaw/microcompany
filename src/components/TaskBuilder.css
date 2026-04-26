@@ -154,10 +154,23 @@
   box-shadow: var(--shadow-sm);
 }
 
+.task-role-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .task-role-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.task-role-order {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
 .task-role-meta {
@@ -165,10 +178,29 @@
   color: var(--text-tertiary);
 }
 
-.task-role-status {
+.task-role-archetype {
   font-size: 12px;
-  color: var(--text-disabled);
-  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.task-role-flag {
+  font-size: 12px;
+  color: var(--btn-primary-text);
+  background: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-border);
+  padding: 4px 8px;
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+.task-role-override {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
 }
 
 .task-add-role-button {
@@ -239,3 +271,23 @@
   cursor: not-allowed;
 }
 
+@media (max-width: 768px) {
+  .task-role-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-builder-overlay,
+  .task-builder-modal,
+  .task-builder-close,
+  .task-role-card,
+  .task-add-role-button,
+  .task-builder-cancel,
+  .task-builder-start,
+  .task-name-input {
+    animation: none;
+    transition: none;
+  }
+}

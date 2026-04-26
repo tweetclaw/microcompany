@@ -5,6 +5,7 @@ import type {
   TaskUpdateRequest,
   TaskSummary,
   DeleteTaskResult,
+  RoleArchetype,
   Session,
   SessionSummary,
   DeleteSessionResult,
@@ -36,6 +37,10 @@ export async function updateTask(taskId: string, updates: TaskUpdateRequest): Pr
 
 export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
   return invoke('delete_task', { taskId });
+}
+
+export async function listRoleArchetypes(): Promise<RoleArchetype[]> {
+  return invoke('list_role_archetypes');
 }
 
 // Session Management APIs

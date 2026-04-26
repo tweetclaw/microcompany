@@ -4,6 +4,23 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::claurst::ClaurstSession;
 
+fn load_task_session_prompt_snapshot(session_id: &str) -> Result<Option<String>, String> {
+    let pool = crate::database::get_pool()
+        .map_err(|e| format!("Failed to get database pool: {}", e))?;
+    let conn = pool.get()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    conn.query_row(
+        "SELECT r.system_prompt_snapshot
+         FROM sessions s
+         JOIN roles r ON r.id = s.role_id
+         WHERE s.id = ?1",
+        rusqlite::params![session_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to load task session prompt snapshot: {}", e))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub working_directory: Option<String>,
@@ -110,6 +127,7 @@ pub async fn init_session(
         selected_provider.api_key.clone(),
         selected_provider.model.clone(),
         selected_provider.base_url.clone(),
+        None,
     ).map_err(|e| format!("Failed to create session: {}", e))?;
 
     *state.session.lock().await = Some(session);
@@ -159,6 +177,7 @@ pub async fn init_task_session(
         provider_config.api_key.clone(),
         model,
         provider_config.base_url.clone(),
+        load_task_session_prompt_snapshot(&session_id)?,
     ).map_err(|e| format!("Failed to create Claurst session: {}", e))?;
 
     *state.session.lock().await = Some(session);

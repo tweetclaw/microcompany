@@ -4,6 +4,7 @@ mod storage;
 mod config;
 mod database;
 mod api;
+mod archetypes;
 
 use commands::session::AppState;
 use std::sync::Arc;
@@ -167,6 +168,11 @@ async fn vacuum_database(app_handle: tauri::AppHandle) -> Result<api::VacuumResu
     api::vacuum_database(app_dir).await
 }
 
+#[tauri::command]
+async fn list_role_archetypes() -> Result<Vec<archetypes::RoleArchetype>, String> {
+    archetypes::list_role_archetypes()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -212,8 +218,10 @@ pub fn run() {
       list_backups,
       restore_backup,
       vacuum_database,
+      list_role_archetypes,
     ])
     .setup(|app| {
+      archetypes::sync_archetype_resources(app.handle())?;
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

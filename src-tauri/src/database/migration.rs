@@ -12,6 +12,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "initial_schema",
         sql: include_str!("../../migrations/001_initial_schema.sql"),
     },
+    Migration {
+        version: 2,
+        name: "role_archetype_and_prompt_fields",
+        sql: include_str!("../../migrations/002_role_archetype_and_prompt_fields.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {

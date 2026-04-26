@@ -77,6 +77,7 @@ impl ClaurstSession {
         api_key: String,
         model: String,
         base_url: Option<String>,
+        system_prompt: Option<String>,
     ) -> anyhow::Result<Self> {
         // 1. 创建 ClientConfig
         let api_base = base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string());
@@ -103,6 +104,7 @@ impl ClaurstSession {
         // 4. 创建 QueryConfig
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
+        query_config.system_prompt = system_prompt;
 
         // 5. 注册工具
         let tools: Vec<Box<dyn Tool>> = vec![
