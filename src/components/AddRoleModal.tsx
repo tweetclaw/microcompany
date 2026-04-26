@@ -1,14 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { listRoleArchetypes } from '../api';
 import { RoleArchetype, RoleConfig } from '../types';
 import { ProviderConfig } from '../types/settings';
 import './AddRoleModal.css';
+
+const CUSTOM_ARCHETYPE_ID = 'custom';
 
 interface AddRoleModalProps {
   workingDirectory: string;
   availableProviders: ProviderConfig[];
   onRoleCreated: (role: RoleConfig) => void;
   onCancel: () => void;
+}
+
+function getArchetypeIdentity(archetype: RoleArchetype | null): string {
+  if (!archetype) {
+    return '';
+  }
+
+  return archetype.label;
 }
 
 function AddRoleModal({
@@ -19,8 +29,9 @@ function AddRoleModal({
   const [roleName, setRoleName] = useState('');
   const [selectedArchetypeId, setSelectedArchetypeId] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');
-  const [systemPromptOverride, setSystemPromptOverride] = useState('');
-  const [handoffEnabled, setHandoffEnabled] = useState(false);
+  const [systemPromptAppend, setSystemPromptAppend] = useState('');
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('');
+  const [handoffEnabled, setHandoffEnabled] = useState(true);
   const [archetypes, setArchetypes] = useState<RoleArchetype[]>([]);
   const [isLoadingArchetypes, setIsLoadingArchetypes] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +40,7 @@ function AddRoleModal({
     (p) => p.enabled && p.model.trim() && (p.id === 'ollama' || p.apiKey.trim())
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     let cancelled = false;
 
     const loadArchetypes = async () => {
@@ -62,16 +73,7 @@ function AddRoleModal({
     () => archetypes.find((archetype) => archetype.id === selectedArchetypeId) ?? null,
     [archetypes, selectedArchetypeId]
   );
-
-  useEffect(() => {
-    if (!selectedArchetype) {
-      return;
-    }
-
-    if (!roleName.trim()) {
-      setRoleName(selectedArchetype.label);
-    }
-  }, [selectedArchetype, roleName]);
+  const isCustomArchetype = selectedArchetypeId === CUSTOM_ARCHETYPE_ID;
 
   const handleCreate = async () => {
     setError('');
@@ -81,13 +83,18 @@ function AddRoleModal({
       return;
     }
 
-    if (!selectedArchetype) {
+    if (!selectedArchetypeId) {
       setError('Please select an archetype');
       return;
     }
 
     if (!selectedProvider) {
       setError('Please select a model');
+      return;
+    }
+
+    if (isCustomArchetype && !customSystemPrompt.trim()) {
+      setError('Custom system prompt is required for the custom archetype');
       return;
     }
 
@@ -99,9 +106,10 @@ function AddRoleModal({
 
     const role: RoleConfig = {
       name: roleName.trim(),
-      identity: selectedArchetype.label,
-      archetype_id: selectedArchetype.id,
-      system_prompt_override: systemPromptOverride.trim() || null,
+      identity: isCustomArchetype ? 'Custom' : getArchetypeIdentity(selectedArchetype),
+      archetype_id: selectedArchetypeId || null,
+      system_prompt_append: isCustomArchetype ? null : systemPromptAppend.trim() || null,
+      custom_system_prompt: isCustomArchetype ? customSystemPrompt.trim() : null,
       model: provider.model,
       provider: provider.id,
       handoff_enabled: handoffEnabled,
@@ -139,11 +147,12 @@ function AddRoleModal({
                     {archetype.label}
                   </option>
                 ))}
+                <option value={CUSTOM_ARCHETYPE_ID}>Custom</option>
               </select>
             )}
           </div>
 
-          {selectedArchetype && (
+          {selectedArchetype && !isCustomArchetype && (
             <div className="archetype-preview" aria-live="polite">
               <div className="archetype-preview-header">
                 <div>
@@ -181,6 +190,21 @@ function AddRoleModal({
             </div>
           )}
 
+          {isCustomArchetype && (
+            <div className="archetype-preview archetype-preview-custom" aria-live="polite">
+              <div className="archetype-preview-header">
+                <div>
+                  <h4>Custom Archetype</h4>
+                  <p>Use your own complete system prompt for this role.</p>
+                </div>
+                <span className="archetype-preview-tag">custom</span>
+              </div>
+              <p className="archetype-preview-description">
+                The app will not attach any built-in role prompt. The prompt you enter below becomes the full system prompt for this role.
+              </p>
+            </div>
+          )}
+
           <div className="form-field">
             <label>Role Name</label>
             <input
@@ -189,6 +213,7 @@ function AddRoleModal({
               onChange={(e) => setRoleName(e.target.value)}
               placeholder="e.g., Alice"
             />
+            <p className="form-helper-text">Role names are always user-authored and are not filled from the selected archetype.</p>
           </div>
 
           <div className="form-field">
@@ -212,14 +237,25 @@ function AddRoleModal({
             )}
           </div>
 
-          <div className="form-field">
-            <label>System Prompt Override</label>
-            <textarea
-              value={systemPromptOverride}
-              onChange={(e) => setSystemPromptOverride(e.target.value)}
-              placeholder="Optional extra system instructions for this role"
-            />
-          </div>
+          {!isCustomArchetype ? (
+            <div className="form-field">
+              <label>Additional System Instructions</label>
+              <textarea
+                value={systemPromptAppend}
+                onChange={(e) => setSystemPromptAppend(e.target.value)}
+                placeholder="Optional extra instructions appended after the built-in archetype prompt"
+              />
+            </div>
+          ) : (
+            <div className="form-field">
+              <label>Custom System Prompt</label>
+              <textarea
+                value={customSystemPrompt}
+                onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                placeholder="Write the complete system prompt for this custom role"
+              />
+            </div>
+          )}
 
           <label className="form-checkbox">
             <input
@@ -229,6 +265,9 @@ function AddRoleModal({
             />
             <span>Allow this role to propose handoffs</span>
           </label>
+          <p className="form-helper-text form-checkbox-helper">
+            Enabled by default. Turn this off only for roles that should not suggest handing work to another role.
+          </p>
 
           {error && <div className="error-message">{error}</div>}
         </div>

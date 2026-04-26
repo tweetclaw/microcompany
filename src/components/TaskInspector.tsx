@@ -11,6 +11,14 @@ interface TaskInspectorProps {
   hasLatestReply: boolean;
 }
 
+function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
+  if (archetypeId === 'custom') {
+    return 'Custom archetype';
+  }
+
+  return identity;
+}
+
 export default function TaskInspector({
   task,
   currentRoleId,
@@ -37,7 +45,7 @@ export default function TaskInspector({
                 <span className="role-name">{role.name}</span>
               </div>
               <div className="role-card-details">
-                <div className="role-identity">{role.identity}</div>
+                <div className="role-identity">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
                 <div className="role-model">{role.model}</div>
               </div>
             </div>

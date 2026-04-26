@@ -10,6 +10,14 @@ interface ForwardLatestReplyModalProps {
   onCancel: () => void;
 }
 
+function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
+  if (archetypeId === 'custom') {
+    return 'Custom archetype';
+  }
+
+  return identity;
+}
+
 function ForwardLatestReplyModal({
   task,
   currentRoleId,
@@ -56,7 +64,7 @@ function ForwardLatestReplyModal({
           <div className="form-field">
             <label>From</label>
             <div className="forward-from">
-              {currentRole?.name} ({currentRole?.identity})
+              {currentRole?.name} ({currentRole ? getRoleArchetypeLabel(currentRole.identity, currentRole.archetype_id) : ''})
             </div>
           </div>
 
@@ -91,7 +99,7 @@ function ForwardLatestReplyModal({
                 <option value="">Select target role</option>
                 {otherRoles.map((role) => (
                   <option key={role.id} value={role.id}>
-                    {role.name} ({role.identity})
+                    {role.name} ({getRoleArchetypeLabel(role.identity, role.archetype_id)})
                   </option>
                 ))}
               </select>

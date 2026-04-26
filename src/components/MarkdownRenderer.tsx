@@ -1,12 +1,14 @@
+import { Suspense, lazy } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CodeBlock } from './CodeBlock';
 import './MarkdownRenderer.css';
 
 interface MarkdownRendererProps {
   content: string;
   isStreaming?: boolean;
 }
+
+const CodeBlock = lazy(() => import('./CodeBlock').then((module) => ({ default: module.CodeBlock })));
 
 function isIncompleteCodeBlock(content: string): boolean {
   const codeBlockMatches = content.match(/```/g);
@@ -29,7 +31,15 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
             const code = String(children).replace(/\n$/, '');
 
             return match ? (
-              <CodeBlock language={match[1]} code={code} />
+              <Suspense
+                fallback={
+                  <pre className="inline-code">
+                    <code>{code}</code>
+                  </pre>
+                }
+              >
+                <CodeBlock language={match[1]} code={code} />
+              </Suspense>
             ) : (
               <code className="inline-code" {...props}>
                 {children}

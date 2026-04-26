@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Message } from '../types';
-import { MarkdownRenderer } from './MarkdownRenderer';
 import './MessageItem.css';
 
 interface MessageItemProps {
   message: Message;
 }
+
+const MarkdownRenderer = lazy(() => import('./MarkdownRenderer').then((module) => ({ default: module.MarkdownRenderer })));
 
 function MessageItem({ message }: MessageItemProps) {
   const isUser = message.role === 'user';
@@ -19,10 +20,12 @@ function MessageItem({ message }: MessageItemProps) {
         {isUser ? (
           <div className="message-text">{message.content}</div>
         ) : (
-          <MarkdownRenderer
-            content={message.content}
-            isStreaming={message.isStreaming}
-          />
+          <Suspense fallback={<div className="message-text">{message.content}</div>}>
+            <MarkdownRenderer
+              content={message.content}
+              isStreaming={message.isStreaming}
+            />
+          </Suspense>
         )}
       </div>
     </div>

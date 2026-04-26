@@ -4,6 +4,8 @@ use crate::database::get_pool;
 use uuid::Uuid;
 use chrono::Utc;
 
+const CUSTOM_ARCHETYPE_ID: &str = "custom";
+
 pub async fn create_task(
     task_request: TaskCreateRequest,
 ) -> Result<Task, String> {
@@ -34,14 +36,16 @@ pub async fn create_task(
             )?;
 
             tx.execute(
-                "INSERT INTO roles (id, task_id, name, identity, archetype_id, system_prompt_snapshot, model, provider, handoff_enabled, display_order)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                "INSERT INTO roles (id, task_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, system_prompt_snapshot, model, provider, handoff_enabled, display_order)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     &role_id,
                     &task_id,
                     &role.name,
                     &role.identity,
                     &role.archetype_id,
+                    &role.system_prompt_append,
+                    &role.custom_system_prompt,
                     &system_prompt_snapshot,
                     &role.model,
                     &role.provider,
@@ -122,6 +126,17 @@ fn build_system_prompt_snapshot(
     task_name: &str,
     task_description: &str,
 ) -> Result<Option<String>, String> {
+    if role.archetype_id.as_deref() == Some(CUSTOM_ARCHETYPE_ID) {
+        let custom_prompt = role
+            .custom_system_prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Custom archetype requires a full system prompt".to_string())?;
+
+        return Ok(Some(custom_prompt.to_string()));
+    }
+
     let archetype = match &role.archetype_id {
         Some(archetype_id) => crate::archetypes::get_role_archetype(archetype_id)?,
         None => None,
@@ -133,7 +148,8 @@ fn build_system_prompt_snapshot(
         &role.identity,
         task_name,
         task_description,
-        role.system_prompt_override.as_deref(),
+        role.system_prompt_append.as_deref(),
+        role.handoff_enabled,
     )))
 }
 

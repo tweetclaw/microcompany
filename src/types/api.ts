@@ -37,7 +37,8 @@ export interface RoleConfig {
   name: string;
   identity: string;
   archetype_id?: string | null;
-  system_prompt_override?: string | null;
+  system_prompt_append?: string | null;
+  custom_system_prompt?: string | null;
   model: string;
   provider: string;
   handoff_enabled: boolean;

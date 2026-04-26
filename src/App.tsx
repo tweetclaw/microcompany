@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
-import NormalModeLayout from './components/NormalModeLayout';
-import TaskModeLayout from './components/TaskModeLayout';
-import TaskBuilder from './components/TaskBuilder';
-import ForwardLatestReplyModal from './components/ForwardLatestReplyModal';
-import SearchModal from './components/SearchModal';
 import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
-import { Settings } from './components/Settings';
 import { Message, Task, TaskCreateRequest, TaskSummary, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { getSession, createTask } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
+
+const NormalModeLayout = lazy(() => import('./components/NormalModeLayout'));
+const TaskModeLayout = lazy(() => import('./components/TaskModeLayout'));
+const TaskBuilder = lazy(() => import('./components/TaskBuilder'));
+const ForwardLatestReplyModal = lazy(() => import('./components/ForwardLatestReplyModal'));
+const SearchModal = lazy(() => import('./components/SearchModal'));
+const Settings = lazy(() => import('./components/Settings').then((module) => ({ default: module.Settings })));
 
 function App() {
   const [workingDirectory, setWorkingDirectory] = useState<string | null>(null);
@@ -616,12 +617,14 @@ function App() {
         </div>
       )}
       {isCreatingTask ? (
-        <TaskBuilder
-          workingDirectory={workingDirectory}
-          availableProviders={availableProviders}
-          onTaskCreated={handleTaskCreated}
-          onCancel={handleCancelTaskCreation}
-        />
+        <Suspense fallback={null}>
+          <TaskBuilder
+            workingDirectory={workingDirectory}
+            availableProviders={availableProviders}
+            onTaskCreated={handleTaskCreated}
+            onCancel={handleCancelTaskCreation}
+          />
+        </Suspense>
       ) : (
         <div className="app-body">
           <MainNavigation
@@ -631,91 +634,97 @@ function App() {
             onSearchClick={() => setIsSearchOpen(true)}
           />
           {navigationMode === 'normal' ? (
-            <NormalModeLayout
-              workingDirectory={workingDirectory}
-              currentSessionId={currentSessionId}
-              currentSessionTitle={currentSessionTitle}
-              currentProviderName={currentProviderName}
-              currentModelName={currentModelName}
-              availableProviders={availableProviders}
-              selectedProviderValue={selectedProviderValue}
-              messages={messages}
-              onMessagesChange={setMessages}
-              sessionListRefreshKey={sessionListRefreshKey}
-              onSessionSelected={handleSessionSelected}
-              onSessionDeleted={handleSessionDeleted}
-              onNewChatWithModel={handleNewChatWithModel}
-              onNewTask={handleNewTask}
-              hasActiveSession={hasActiveSession}
-              isDraftConversation={isDraftConversation}
-              onEnsureSession={ensureActiveSession}
-              onSettingsClick={() => setIsSettingsOpen(true)}
-              isSessionListCollapsed={isSessionListCollapsed}
-              isInspectorCollapsed={isInspectorCollapsed}
-              isTerminalCollapsed={isTerminalCollapsed}
-            />
+            <Suspense fallback={null}>
+              <NormalModeLayout
+                workingDirectory={workingDirectory}
+                currentSessionId={currentSessionId}
+                currentSessionTitle={currentSessionTitle}
+                currentProviderName={currentProviderName}
+                currentModelName={currentModelName}
+                availableProviders={availableProviders}
+                selectedProviderValue={selectedProviderValue}
+                messages={messages}
+                onMessagesChange={setMessages}
+                sessionListRefreshKey={sessionListRefreshKey}
+                onSessionSelected={handleSessionSelected}
+                onSessionDeleted={handleSessionDeleted}
+                onNewChatWithModel={handleNewChatWithModel}
+                onNewTask={handleNewTask}
+                hasActiveSession={hasActiveSession}
+                isDraftConversation={isDraftConversation}
+                onEnsureSession={ensureActiveSession}
+                onSettingsClick={() => setIsSettingsOpen(true)}
+                isSessionListCollapsed={isSessionListCollapsed}
+                isInspectorCollapsed={isInspectorCollapsed}
+                isTerminalCollapsed={isTerminalCollapsed}
+              />
+            </Suspense>
           ) : (
-            <TaskModeLayout
-              workingDirectory={workingDirectory}
-              currentSessionId={currentSessionId}
-              currentSessionTitle={currentSessionTitle}
-              currentProviderName={currentProviderName}
-              currentModelName={currentModelName}
-              availableProviders={availableProviders}
-              selectedProviderValue={selectedProviderValue}
-              messages={messages}
-              onMessagesChange={setMessages}
-              sessionListRefreshKey={sessionListRefreshKey}
-              onSessionSelected={handleSessionSelected}
-              onSessionDeleted={handleSessionDeleted}
-              onNewChatWithModel={handleNewChatWithModel}
-              onNewTask={handleNewTask}
-              hasActiveSession={hasActiveSession}
-              isDraftConversation={isDraftConversation}
-              onEnsureSession={ensureActiveSession}
-              currentTask={currentTask}
-              currentTaskRoleId={currentTaskRoleId}
-              onTaskRoleSelected={handleTaskRoleSelected}
-              onForwardLatestReply={handleForwardLatestReply}
-              onTaskSelected={handleTaskSelected}
-              onTaskDeleted={handleTaskDeleted}
-              taskListRefreshKey={taskListRefreshKey}
-              onSettingsClick={() => setIsSettingsOpen(true)}
-              isSessionListCollapsed={isSessionListCollapsed}
-              isInspectorCollapsed={isInspectorCollapsed}
-              isTerminalCollapsed={isTerminalCollapsed}
-              runState={runState}
-            />
+            <Suspense fallback={null}>
+              <TaskModeLayout
+                workingDirectory={workingDirectory}
+                currentSessionId={currentSessionId}
+                currentSessionTitle={currentSessionTitle}
+                currentProviderName={currentProviderName}
+                currentModelName={currentModelName}
+                availableProviders={availableProviders}
+                selectedProviderValue={selectedProviderValue}
+                messages={messages}
+                onMessagesChange={setMessages}
+                sessionListRefreshKey={sessionListRefreshKey}
+                onSessionSelected={handleSessionSelected}
+                onSessionDeleted={handleSessionDeleted}
+                onNewChatWithModel={handleNewChatWithModel}
+                onNewTask={handleNewTask}
+                hasActiveSession={hasActiveSession}
+                isDraftConversation={isDraftConversation}
+                onEnsureSession={ensureActiveSession}
+                currentTask={currentTask}
+                currentTaskRoleId={currentTaskRoleId}
+                onTaskRoleSelected={handleTaskRoleSelected}
+                onForwardLatestReply={handleForwardLatestReply}
+                onTaskSelected={handleTaskSelected}
+                onTaskDeleted={handleTaskDeleted}
+                taskListRefreshKey={taskListRefreshKey}
+                onSettingsClick={() => setIsSettingsOpen(true)}
+                isSessionListCollapsed={isSessionListCollapsed}
+                isInspectorCollapsed={isInspectorCollapsed}
+                isTerminalCollapsed={isTerminalCollapsed}
+                runState={runState}
+              />
+            </Suspense>
           )}
         </div>
       )}
-      <Settings
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        config={settingsConfig}
-        availableProviders={providerCatalog}
-        onSaveConfig={saveSettingsConfig}
-        themePreference={themePreference}
-        onThemeChange={(theme) => {
-          setThemePreference(theme);
-          saveThemePreference(theme);
-          applyTheme(theme);
-        }}
-      />
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onResultClick={handleSearchResultClick}
-      />
-      {showForwardModal && currentTask && currentTaskRoleId && (
-        <ForwardLatestReplyModal
-          task={currentTask}
-          currentRoleId={currentTaskRoleId}
-          messages={messages}
-          onForward={handleForwardConfirm}
-          onCancel={() => setShowForwardModal(false)}
+      <Suspense fallback={null}>
+        <Settings
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          config={settingsConfig}
+          availableProviders={providerCatalog}
+          onSaveConfig={saveSettingsConfig}
+          themePreference={themePreference}
+          onThemeChange={(theme) => {
+            setThemePreference(theme);
+            saveThemePreference(theme);
+            applyTheme(theme);
+          }}
         />
-      )}
+        <SearchModal
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          onResultClick={handleSearchResultClick}
+        />
+        {showForwardModal && currentTask && currentTaskRoleId && (
+          <ForwardLatestReplyModal
+            task={currentTask}
+            currentRoleId={currentTaskRoleId}
+            messages={messages}
+            onForward={handleForwardConfirm}
+            onCancel={() => setShowForwardModal(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

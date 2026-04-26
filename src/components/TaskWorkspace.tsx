@@ -14,6 +14,14 @@ interface TaskWorkspaceProps {
   children: React.ReactNode;
 }
 
+function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
+  if (archetypeId === 'custom') {
+    return 'Custom archetype';
+  }
+
+  return identity;
+}
+
 function TaskWorkspace({
   task,
   currentRoleId,
@@ -48,7 +56,7 @@ function TaskWorkspace({
                 </div>
                 <div className="task-role-info">
                   <div className="task-role-item-name">{role.name}</div>
-                  <div className="task-role-item-identity">{role.identity}</div>
+                  <div className="task-role-item-identity">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
                 </div>
               </div>
             ))}
@@ -59,7 +67,7 @@ function TaskWorkspace({
           {currentRole && (
             <div className="task-current-role-header">
               <div className="task-current-role-info">
-                Current Role: {currentRole.name} ({currentRole.identity})
+                Current Role: {currentRole.name} ({getRoleArchetypeLabel(currentRole.identity, currentRole.archetype_id)})
               </div>
               <button
                 className="task-forward-button"

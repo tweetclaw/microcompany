@@ -54,9 +54,48 @@
 }
 
 .code-block code {
+  display: block;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.code-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+.code-line-number {
+  min-width: 2.5rem;
+  padding-right: 1rem;
+  color: var(--text-tertiary, #7a7f8a);
+  text-align: right;
+  user-select: none;
+}
+
+.code-line-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.token-keyword {
+  color: #c586c0;
+}
+
+.token-string {
+  color: #ce9178;
+}
+
+.token-number {
+  color: #b5cea8;
+}
+
+.token-comment {
+  color: #6a9955;
+}
+
+.token-operator {
+  color: #d4d4d4;
 }
 
 /* 滚动条样式 */

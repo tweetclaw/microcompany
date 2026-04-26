@@ -17,6 +17,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "role_archetype_and_prompt_fields",
         sql: include_str!("../../migrations/002_role_archetype_and_prompt_fields.sql"),
     },
+    Migration {
+        version: 3,
+        name: "role_prompt_input_fields",
+        sql: include_str!("../../migrations/003_role_prompt_input_fields.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {

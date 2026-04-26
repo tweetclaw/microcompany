@@ -269,14 +269,12 @@
   cursor: pointer;
 }
 
-.error-message {
-  padding: 12px 16px;
-  background: var(--error-bg);
-  border: 1px solid var(--error-border);
-  border-radius: 6px;
-  color: var(--error-start);
-  font-size: 13px;
-  line-height: 1.5;
+.form-checkbox-helper {
+  margin-top: -10px;
+}
+
+.archetype-preview-custom {
+  border-style: dashed;
 }
 
 .modal-footer {

@@ -1,11 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "systemFiles": [
     "product_manager.json",
-    "project_shepherd.json",
-    "frontend_developer.json",
     "software_architect.json",
-    "code_reviewer.json",
-    "technical_writer.json"
+    "frontend_developer.json",
+    "backend_developer.json",
+    "software_engineer.json",
+    "quality_assurance.json",
+    "code_reviewer.json"
   ]
 }

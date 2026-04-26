@@ -64,6 +64,14 @@ function chunkRoles<T>(items: T[], size: number) {
   return rows;
 }
 
+function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
+  if (archetypeId === 'custom') {
+    return 'Custom archetype';
+  }
+
+  return identity;
+}
+
 export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const initial = useMemo(() => loadLayoutState(), []);
   const seatRows = useMemo(
@@ -172,7 +180,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                             </div>
                             <div className="task-seat-body">
                               <div className="task-seat-name">{role.name}</div>
-                              <div className="task-seat-meta">{role.identity}</div>
+                              <div className="task-seat-meta">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
                               <div className="task-seat-model">{role.model}</div>
                             </div>
                           </button>

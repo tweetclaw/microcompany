@@ -109,9 +109,14 @@ function TaskBuilder({
                       {role.handoff_enabled && (
                         <div className="task-role-flag">Handoff suggestions enabled</div>
                       )}
-                      {role.system_prompt_override && (
+                      {role.system_prompt_append && (
                         <div className="task-role-override">
-                          {role.system_prompt_override}
+                          {role.system_prompt_append}
+                        </div>
+                      )}
+                      {role.custom_system_prompt && (
+                        <div className="task-role-override">
+                          Uses a custom full system prompt
                         </div>
                       )}
                     </div>
