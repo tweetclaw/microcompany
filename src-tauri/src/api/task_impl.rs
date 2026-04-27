@@ -1,5 +1,7 @@
 use crate::api::{Task, TaskCreateRequest, TaskRole};
+use crate::archetypes::{RolePromptContext, TeamRolePromptContext};
 use crate::database::get_pool;
+use crate::storage::ConversationStorage;
 use chrono::Utc;
 use rusqlite::params;
 use sha2::{Digest, Sha256};
@@ -26,11 +28,124 @@ struct PromptSnapshot {
     contract_version: String,
 }
 
+fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromptContext> {
+    let roster = roles
+        .iter()
+        .map(|role| TeamRolePromptContext {
+            name: role.name.clone(),
+            identity: role.identity.clone(),
+            archetype_id: role.archetype_id.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    roles
+        .iter()
+        .enumerate()
+        .map(|(index, role)| {
+            let recommended_handoff_roles = role
+                .archetype_id
+                .as_deref()
+                .and_then(|archetype_id| crate::archetypes::get_role_archetype(archetype_id).ok().flatten())
+                .map(|archetype| {
+                    roster
+                        .iter()
+                        .enumerate()
+                        .filter(|(candidate_index, _)| *candidate_index != index)
+                        .filter(|(_, candidate)| {
+                            candidate
+                                .archetype_id
+                                .as_deref()
+                                .map(|candidate_id| archetype.recommended_next_archetypes.iter().any(|value| value == candidate_id))
+                                .unwrap_or(false)
+                        })
+                        .map(|(_, candidate)| candidate.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            RolePromptContext {
+                roster: roster.clone(),
+                active_role_index: index,
+                recommended_handoff_roles,
+            }
+        })
+        .collect()
+}
+
+fn role_roster_summary(role_context: &RolePromptContext) -> String {
+    role_context
+        .roster
+        .iter()
+        .map(|role| match role.archetype_id.as_deref().filter(|value| !value.is_empty()) {
+            Some(archetype_id) => format!("{}:{}:{}", role.name, role.identity, archetype_id),
+            None => format!("{}:{}", role.name, role.identity),
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn handoff_role_summary(role_context: &RolePromptContext) -> String {
+    if role_context.recommended_handoff_roles.is_empty() {
+        return "none".to_string();
+    }
+
+    role_context
+        .recommended_handoff_roles
+        .iter()
+        .map(|role| role.name.as_str())
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn create_task_session_storage(
+    session_id: &str,
+    working_directory: &str,
+    provider_id: &str,
+    provider_name: &str,
+    model: &str,
+) -> Result<(), String> {
+    let storage = ConversationStorage::new()
+        .map_err(|e| format!("Failed to initialize storage: {}", e))?;
+
+    let file_name = format!("{}.json", session_id.trim_start_matches("session-"));
+    let file_path = dirs::home_dir()
+        .ok_or_else(|| "Failed to get home directory".to_string())?
+        .join(".microcompany")
+        .join("conversations")
+        .join(file_name);
+
+    if file_path.exists() {
+        return Ok(());
+    }
+
+    let created_session_id = storage
+        .create_session(
+            &std::path::PathBuf::from(working_directory),
+            Some(provider_id.to_string()),
+            Some(provider_name.to_string()),
+            Some(model.to_string()),
+            None,
+        )
+        .map_err(|e| format!("Failed to create task session storage: {}", e))?;
+
+    let created_file_path = dirs::home_dir()
+        .ok_or_else(|| "Failed to get home directory".to_string())?
+        .join(".microcompany")
+        .join("conversations")
+        .join(format!("{}.json", created_session_id));
+
+    std::fs::rename(&created_file_path, &file_path)
+        .map_err(|e| format!("Failed to finalize task session storage: {}", e))?;
+
+    Ok(())
+}
+
 pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String> {
     validate_task_request(&task_request)?;
 
     let task_id = format!("task-{}", Uuid::new_v4());
     let mut session_configs = Vec::new();
+    let role_prompt_contexts = build_role_prompt_contexts(&task_request.roles);
 
     log::info!(
         "task_create_begin task_id={} name={} role_count={} pm_first_workflow={}",
@@ -62,18 +177,22 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
         )
         .map_err(|e| format!("Failed to insert task: {}", e))?;
 
-        for role in &task_request.roles {
+        for (index, role) in task_request.roles.iter().enumerate() {
             let role_id = format!("role-{}", Uuid::new_v4());
             let session_id = format!("session-{}", Uuid::new_v4());
+            let role_prompt_context = role_prompt_contexts
+                .get(index)
+                .ok_or_else(|| format!("Missing role prompt context for role {}", role.name))?;
             let prompt_snapshot = build_system_prompt_snapshot(
                 role,
                 &task_request.name,
                 &task_request.description,
                 task_request.pm_first_workflow,
+                Some(role_prompt_context),
             )?;
 
             log::info!(
-                "task_role_prompt_built task_id={} role_id={} role_name={} archetype_id={} provider={} model={} handoff_enabled={} prompt_source_type={} prompt_hash={} prompt_contract_version={}",
+                "task_role_prompt_built task_id={} role_id={} role_name={} archetype_id={} provider={} model={} handoff_enabled={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_index={} role_roster={} handoff_candidates={}",
                 task_id,
                 role_id,
                 role.name,
@@ -83,7 +202,10 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
                 role.handoff_enabled,
                 prompt_snapshot.source_type,
                 prompt_snapshot.hash,
-                prompt_snapshot.contract_version
+                prompt_snapshot.contract_version,
+                role_prompt_context.active_role_index,
+                role_roster_summary(role_prompt_context),
+                handoff_role_summary(role_prompt_context)
             );
 
             tx.execute(
@@ -162,6 +284,14 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
 
         match create_claurst_session_with_retry(&session_id, &role, &prompt_snapshot, &working_directory, 3).await {
             Ok(_) => {
+                create_task_session_storage(
+                    &session_id,
+                    &working_directory,
+                    &role.provider,
+                    &role.name,
+                    &role.model,
+                )?;
+
                 let pool = get_pool()?;
                 let conn = pool
                     .get()
@@ -268,6 +398,7 @@ fn build_system_prompt_snapshot(
     task_name: &str,
     task_description: &str,
     pm_first_workflow: bool,
+    role_context: Option<&RolePromptContext>,
 ) -> Result<PromptSnapshot, String> {
     let prompt_text = if role.archetype_id.as_deref() == Some(CUSTOM_ARCHETYPE_ID) {
         let custom_prompt = role
@@ -285,6 +416,7 @@ fn build_system_prompt_snapshot(
             custom_prompt,
             role.handoff_enabled,
             pm_first_workflow,
+            role_context,
         )
     } else {
         let archetype = match &role.archetype_id {
@@ -300,6 +432,7 @@ fn build_system_prompt_snapshot(
             task_description,
             role.system_prompt_append.as_deref(),
             role.handoff_enabled,
+            role_context,
         );
 
         if pm_first_workflow {

@@ -1,6 +1,20 @@
 use crate::archetypes::RoleArchetype;
 
-pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v2";
+pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v4-no-self-handoff";
+
+#[derive(Debug, Clone)]
+pub struct TeamRolePromptContext {
+    pub name: String,
+    pub identity: String,
+    pub archetype_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RolePromptContext {
+    pub roster: Vec<TeamRolePromptContext>,
+    pub active_role_index: usize,
+    pub recommended_handoff_roles: Vec<TeamRolePromptContext>,
+}
 
 pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
     let mut rules = vec![
@@ -19,6 +33,61 @@ pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
     rules.join("\n")
 }
 
+fn format_role_label(role: &TeamRolePromptContext) -> String {
+    match role.archetype_id.as_deref().filter(|value| !value.is_empty()) {
+        Some(archetype_id) => format!("{}（身份：{}；archetype：{}）", role.name, role.identity, archetype_id),
+        None => format!("{}（身份：{}）", role.name, role.identity),
+    }
+}
+
+fn build_active_role_contract(role_name: &str, role_identity: &str) -> String {
+    format!(
+        "当前激活角色契约：\n- 你现在就是这个任务会话中的 {}（角色名称：{}）。\n- 你必须以这个角色的第一人称视角直接与用户对话、思考和推进工作。\n- 你不能把“{}”当成另一个外部人员，也不能建议用户再去联系“{}”。\n- 在用户明确确认 handoff 之前，你始终是当前正在发言和负责推进的角色。",
+        role_identity,
+        role_name,
+        role_identity,
+        role_identity
+    )
+}
+
+fn build_team_context(role_context: Option<&RolePromptContext>) -> Option<String> {
+    let context = role_context?;
+    if context.roster.is_empty() {
+        return None;
+    }
+
+    let roster = context
+        .roster
+        .iter()
+        .enumerate()
+        .map(|(index, role)| format!("{}. {}", index + 1, format_role_label(role)))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let current_position = format!("你是当前团队中的第 {} / {} 个角色。", context.active_role_index + 1, context.roster.len());
+
+    let handoff_targets = if context.recommended_handoff_roles.is_empty() {
+        "当前任务中没有解析出明确的推荐下游角色；如果你建议 handoff，只能在现有团队成员范围内提出。".to_string()
+    } else {
+        format!(
+            "结合当前任务配置，你优先可以考虑的下游协作/交接角色是：{}。",
+            context
+                .recommended_handoff_roles
+                .iter()
+                .map(format_role_label)
+                .collect::<Vec<_>>()
+                .join("、")
+        )
+    };
+
+    Some(format!(
+        "团队上下文：\n- 你正在一个真实存在的任务团队中工作，而不是单独扮演抽象角色。\n- 当前任务团队成员如下：\n{}\n- {}\n- {}",
+        roster,
+        current_position,
+        handoff_targets
+    ))
+}
+
 pub fn build_role_system_prompt(
     archetype: Option<&RoleArchetype>,
     role_name: &str,
@@ -27,14 +96,20 @@ pub fn build_role_system_prompt(
     task_description: &str,
     system_prompt_append: Option<&str>,
     handoff_enabled: bool,
+    role_context: Option<&RolePromptContext>,
 ) -> String {
     let mut sections = Vec::new();
 
     sections.push(platform_rules_prompt(handoff_enabled));
+    sections.push(build_active_role_contract(role_name, role_identity));
     sections.push(format!(
         "当前任务名称：{}\n当前角色名称：{}\n当前角色身份：{}",
         task_name, role_name, role_identity
     ));
+
+    if let Some(team_context) = build_team_context(role_context) {
+        sections.push(team_context);
+    }
 
     if let Some(archetype) = archetype {
         sections.push(format!(
@@ -109,6 +184,7 @@ pub fn build_custom_role_system_prompt(
     custom_system_prompt: &str,
     handoff_enabled: bool,
     pm_first_workflow: bool,
+    role_context: Option<&RolePromptContext>,
 ) -> String {
     let mut sections = vec![build_role_system_prompt(
         None,
@@ -118,6 +194,7 @@ pub fn build_custom_role_system_prompt(
         task_description,
         None,
         handoff_enabled,
+        role_context,
     )];
 
     if pm_first_workflow {
@@ -140,9 +217,9 @@ pub fn pm_first_workflow_prompt(role_identity: &str) -> String {
         || normalized_identity == "产品经理";
 
     if is_product_manager {
-        "当前任务启用了 PM First Workflow。你必须先阅读 docs/v2/task-template-system-proposal.md，再结合用户当前目标判断该提案是否已经可以进入开发。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。不要直接开始实现。".to_string()
+        "当前任务启用了 PM First Workflow。你现在就是当前正在与用户直接对话的 Product Manager。你必须先阅读 docs/v2/task-template-system-proposal.md，再结合用户当前目标主动完成产品经理职责：澄清目标、范围、约束、优先级与验收边界，并给出下一步协作建议。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。你可以建议 handoff，但不能把 Product Manager 当成另一个外部角色，也不能让用户再去联系 PM；你自己就负责完成当前这轮 PM 工作。硬性约束：如果你输出“下一位应该接手的角色”或“发给下一位角色的消息”，该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理，也不能与当前激活角色是同一身份；如果你发现自己推荐的还是当前角色，必须先改写答案，再输出最终结果。不要直接开始实现。".to_string()
     } else {
-        "当前任务启用了 PM First Workflow。只有在用户已先与 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。".to_string()
+        "当前任务启用了 PM First Workflow。只有在用户已先与当前任务中的 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。".to_string()
     }
 }
 
@@ -152,6 +229,8 @@ mod tests {
         build_custom_role_system_prompt,
         build_role_system_prompt,
         pm_first_workflow_prompt,
+        RolePromptContext,
+        TeamRolePromptContext,
     };
     use crate::archetypes::loader::{PromptFragments, RoleArchetype, SourceMetadata};
 
@@ -178,6 +257,34 @@ mod tests {
         }
     }
 
+    fn sample_role_context() -> RolePromptContext {
+        RolePromptContext {
+            roster: vec![
+                TeamRolePromptContext {
+                    name: "Alice".to_string(),
+                    identity: "Product Manager".to_string(),
+                    archetype_id: Some("product_manager".to_string()),
+                },
+                TeamRolePromptContext {
+                    name: "Bob".to_string(),
+                    identity: "Developer".to_string(),
+                    archetype_id: Some("frontend_developer".to_string()),
+                },
+                TeamRolePromptContext {
+                    name: "Carol".to_string(),
+                    identity: "Reviewer".to_string(),
+                    archetype_id: Some("code_reviewer".to_string()),
+                },
+            ],
+            active_role_index: 1,
+            recommended_handoff_roles: vec![TeamRolePromptContext {
+                name: "Carol".to_string(),
+                identity: "Reviewer".to_string(),
+                archetype_id: Some("code_reviewer".to_string()),
+            }],
+        }
+    }
+
     #[test]
     fn build_role_system_prompt_includes_archetype_and_append_layers() {
         let prompt = build_role_system_prompt(
@@ -188,6 +295,7 @@ mod tests {
             "实现仪表盘页面",
             Some("必须输出明确的交接建议"),
             true,
+            Some(&sample_role_context()),
         );
 
         assert!(prompt.contains("当前任务名称：Build dashboard"));
@@ -207,6 +315,7 @@ mod tests {
             "你必须输出严格的调研报告。",
             true,
             false,
+            Some(&sample_role_context()),
         );
 
         assert!(prompt.contains("你是多角色协作任务中的一个成员。"));
@@ -216,12 +325,36 @@ mod tests {
     }
 
     #[test]
+    fn build_role_system_prompt_includes_active_role_contract_and_team_context() {
+        let prompt = build_role_system_prompt(
+            Some(&sample_archetype()),
+            "Bob",
+            "Developer",
+            "Build dashboard",
+            "实现仪表盘页面",
+            None,
+            true,
+            Some(&sample_role_context()),
+        );
+
+        assert!(prompt.contains("当前激活角色契约："));
+        assert!(prompt.contains("你必须以这个角色的第一人称视角直接与用户对话"));
+        assert!(prompt.contains("团队上下文："));
+        assert!(prompt.contains("1. Alice（身份：Product Manager；archetype：product_manager）"));
+        assert!(prompt.contains("你是当前团队中的第 2 / 3 个角色。"));
+        assert!(prompt.contains("Carol（身份：Reviewer；archetype：code_reviewer）"));
+    }
+
+    #[test]
     fn pm_first_workflow_prompt_changes_for_product_manager() {
         let pm_prompt = pm_first_workflow_prompt("Product Manager");
         let engineer_prompt = pm_first_workflow_prompt("Software Engineer");
 
         assert!(pm_prompt.contains("docs/v2/task-template-system-proposal.md"));
-        assert!(pm_prompt.contains("下一位应该接手的角色"));
-        assert!(engineer_prompt.contains("只有在用户已先与 Product Manager 对齐范围"));
+        assert!(pm_prompt.contains("你现在就是当前正在与用户直接对话的 Product Manager"));
+        assert!(pm_prompt.contains("不能让用户再去联系 PM"));
+        assert!(pm_prompt.contains("该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理"));
+        assert!(pm_prompt.contains("如果你发现自己推荐的还是当前角色，必须先改写答案"));
+        assert!(engineer_prompt.contains("只有在用户已先与当前任务中的 Product Manager 对齐范围"));
     }
 }

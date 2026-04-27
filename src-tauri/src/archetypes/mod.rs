@@ -9,6 +9,8 @@ pub use prompt_builder::{
     build_custom_role_system_prompt,
     build_role_system_prompt,
     pm_first_workflow_prompt,
+    RolePromptContext,
+    TeamRolePromptContext,
     TASK_PROMPT_CONTRACT_VERSION,
 };
 pub use sync::sync_archetype_resources;

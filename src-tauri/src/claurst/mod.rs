@@ -23,13 +23,16 @@ struct TaskTraceContext {
     prompt_source_type: Option<String>,
     prompt_hash: Option<String>,
     prompt_contract_version: Option<String>,
+    role_display_order: Option<i32>,
+    role_roster_summary: String,
+    handoff_candidates_summary: String,
 }
 
 fn load_task_trace_context(session_id: &str) -> Option<TaskTraceContext> {
     let pool = crate::database::get_pool().ok()?;
     let conn = pool.get().ok()?;
     let mut stmt = conn.prepare(
-        "SELECT s.task_id, s.role_id, r.name, r.handoff_enabled, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version
+        "SELECT s.task_id, s.role_id, r.name, r.handoff_enabled, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version, r.display_order
          FROM sessions s
          JOIN roles r ON r.id = s.role_id
          WHERE s.id = ?1"
@@ -46,9 +49,67 @@ fn load_task_trace_context(session_id: &str) -> Option<TaskTraceContext> {
                 prompt_source_type: row.get(4)?,
                 prompt_hash: row.get(5)?,
                 prompt_contract_version: row.get(6)?,
+                role_display_order: row.get(7).ok(),
+                role_roster_summary: String::new(),
+                handoff_candidates_summary: String::new(),
             })
         },
-    ).ok()
+    ).ok().map(|mut trace| {
+        if let Ok(mut roster_stmt) = conn.prepare(
+            "SELECT name, identity, archetype_id
+             FROM roles
+             WHERE task_id = ?1
+             ORDER BY display_order, created_at"
+        ) {
+            if let Ok(rows) = roster_stmt.query_map(rusqlite::params![&trace.task_id], |row| {
+                let name: String = row.get(0)?;
+                let identity: String = row.get(1)?;
+                let archetype_id: Option<String> = row.get(2)?;
+                Ok(match archetype_id.as_deref().filter(|value| !value.is_empty()) {
+                    Some(archetype_id) => format!("{}:{}:{}", name, identity, archetype_id),
+                    None => format!("{}:{}", name, identity),
+                })
+            }) {
+                trace.role_roster_summary = rows.filter_map(|row| row.ok()).collect::<Vec<_>>().join("|");
+            }
+        }
+
+        if let Ok(mut handoff_stmt) = conn.prepare(
+            "SELECT r2.name
+             FROM roles r_current
+             LEFT JOIN roles r2
+               ON r2.task_id = r_current.task_id
+              AND r2.id != r_current.id
+             WHERE r_current.id = ?1
+               AND r2.archetype_id IS NOT NULL
+               AND EXISTS (
+                   SELECT 1
+                   FROM archetypes a,
+                        json_each(
+                            COALESCE(json_extract(a.content, '$.recommendedNextArchetypes'), '[]')
+                        ) AS next_arch
+                   WHERE a.id = r_current.archetype_id
+                     AND next_arch.value = r2.archetype_id
+               )"
+        ) {
+            if let Ok(rows) = handoff_stmt.query_map(rusqlite::params![&trace.role_id], |row| {
+                row.get::<_, String>(0)
+            }) {
+                let names = rows.filter_map(|row| row.ok()).collect::<Vec<_>>();
+                trace.handoff_candidates_summary = if names.is_empty() {
+                    "none".to_string()
+                } else {
+                    names.join("|")
+                };
+            }
+        }
+
+        if trace.handoff_candidates_summary.is_empty() {
+            trace.handoff_candidates_summary = "none".to_string();
+        }
+
+        trace
+    })
 }
 
 fn build_prompt_preview(prompt_snapshot: Option<&str>) -> String {
@@ -140,7 +201,7 @@ impl ClaurstSession {
 
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
-                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={}",
+                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_display_order={} role_roster={} handoff_candidates={} prompt_chars={} prompt_preview={}",
                 session_id,
                 trace.task_id,
                 trace.role_id,
@@ -151,6 +212,9 @@ impl ClaurstSession {
                 trace.prompt_source_type.as_deref().unwrap_or("unknown"),
                 trace.prompt_hash.as_deref().unwrap_or("unknown"),
                 trace.prompt_contract_version.as_deref().unwrap_or("unknown"),
+                trace.role_display_order.map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                trace.role_roster_summary,
+                trace.handoff_candidates_summary,
                 prompt_chars,
                 prompt_preview
             );
