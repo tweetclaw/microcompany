@@ -6,8 +6,8 @@
 
 ---
 
-**Project:** MicroCompany
-**Generated:** 2026-04-26 11:09:24
+**Project:** Microcompany
+**Generated:** 2026-04-26 21:54:26
 **Category:** Productivity Tool
 
 ---
@@ -18,13 +18,13 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#6366F1` | `--color-primary` |
-| Secondary | `#818CF8` | `--color-secondary` |
-| CTA/Accent | `#10B981` | `--color-cta` |
-| Background | `#F5F3FF` | `--color-background` |
-| Text | `#312E81` | `--color-text` |
+| Primary | `#7C3AED` | `--color-primary` |
+| Secondary | `#A78BFA` | `--color-secondary` |
+| CTA/Accent | `#F97316` | `--color-cta` |
+| Background | `#FAF5FF` | `--color-background` |
+| Text | `#4C1D95` | `--color-text` |
 
-**Color Notes:** Calm indigo + success green
+**Color Notes:** Excitement purple + action orange
 
 ### Typography
 
@@ -62,7 +62,7 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #10B981;
+  background: #F97316;
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -79,8 +79,8 @@
 /* Secondary Button */
 .btn-secondary {
   background: transparent;
-  color: #6366F1;
-  border: 2px solid #6366F1;
+  color: #7C3AED;
+  border: 2px solid #7C3AED;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -93,7 +93,7 @@
 
 ```css
 .card {
-  background: #F5F3FF;
+  background: #FAF5FF;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow-md);
@@ -119,9 +119,9 @@
 }
 
 .input:focus {
-  border-color: #6366F1;
+  border-color: #7C3AED;
   outline: none;
-  box-shadow: 0 0 0 3px #6366F120;
+  box-shadow: 0 0 0 3px #7C3AED20;
 }
 ```
 
@@ -147,13 +147,13 @@
 
 ## Style Guidelines
 
-**Style:** Flat Design
+**Style:** Micro-interactions
 
-**Keywords:** 2D, minimalist, bold colors, no shadows, clean lines, simple shapes, typography-focused, modern, icon-heavy
+**Keywords:** Small animations, gesture-based, tactile feedback, subtle animations, contextual interactions, responsive
 
-**Best For:** Web apps, mobile apps, cross-platform, startup MVPs, user-friendly, SaaS, dashboards, corporate
+**Best For:** Mobile apps, touchscreen UIs, productivity tools, user-friendly, consumer apps, interactive components
 
-**Key Effects:** No gradients/shadows, simple hover (color/opacity shift), fast loading, clean transitions (150-200ms ease), minimal icons
+**Key Effects:** Small hover (50-100ms), loading spinners, success/error state anim, gesture-triggered (swipe/pinch), haptic
 
 ### Page Pattern
 

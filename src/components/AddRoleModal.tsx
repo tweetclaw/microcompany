@@ -5,6 +5,14 @@ import { ProviderConfig } from '../types/settings';
 import './AddRoleModal.css';
 
 const CUSTOM_ARCHETYPE_ID = 'custom';
+const FIELD_ERROR_MESSAGES = {
+  roleName: 'Role name is required',
+  archetype: 'Please select an archetype',
+  provider: 'Please select a model',
+  customPrompt: 'Custom system prompt is required for the custom archetype',
+} as const;
+
+type ValidationField = 'roleName' | 'archetype' | 'provider' | 'customPrompt' | null;
 
 interface AddRoleModalProps {
   workingDirectory: string;
@@ -35,6 +43,7 @@ function AddRoleModal({
   const [archetypes, setArchetypes] = useState<RoleArchetype[]>([]);
   const [isLoadingArchetypes, setIsLoadingArchetypes] = useState(true);
   const [error, setError] = useState('');
+  const [validationField, setValidationField] = useState<ValidationField>(null);
 
   const usableProviders = availableProviders.filter(
     (p) => p.enabled && p.model.trim() && (p.id === 'ollama' || p.apiKey.trim())
@@ -54,6 +63,7 @@ function AddRoleModal({
         if (!cancelled) {
           const message = loadError instanceof Error ? loadError.message : 'Failed to load role archetypes';
           setError(message);
+          setValidationField(null);
         }
       } finally {
         if (!cancelled) {
@@ -75,32 +85,43 @@ function AddRoleModal({
   );
   const isCustomArchetype = selectedArchetypeId === CUSTOM_ARCHETYPE_ID;
 
+  const isRoleNameInvalid = validationField === 'roleName';
+  const isArchetypeInvalid = validationField === 'archetype';
+  const isProviderInvalid = validationField === 'provider';
+  const isCustomPromptInvalid = validationField === 'customPrompt';
+
   const handleCreate = async () => {
     setError('');
+    setValidationField(null);
 
     if (!roleName.trim()) {
-      setError('Role name is required');
+      setError(FIELD_ERROR_MESSAGES.roleName);
+      setValidationField('roleName');
       return;
     }
 
     if (!selectedArchetypeId) {
-      setError('Please select an archetype');
+      setError(FIELD_ERROR_MESSAGES.archetype);
+      setValidationField('archetype');
       return;
     }
 
     if (!selectedProvider) {
-      setError('Please select a model');
+      setError(FIELD_ERROR_MESSAGES.provider);
+      setValidationField('provider');
       return;
     }
 
     if (isCustomArchetype && !customSystemPrompt.trim()) {
-      setError('Custom system prompt is required for the custom archetype');
+      setError(FIELD_ERROR_MESSAGES.customPrompt);
+      setValidationField('customPrompt');
       return;
     }
 
     const provider = usableProviders.find((p) => `${p.id}::${p.model}` === selectedProvider);
     if (!provider) {
       setError('Selected provider not found');
+      setValidationField('provider');
       return;
     }
 
@@ -121,25 +142,43 @@ function AddRoleModal({
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="add-role-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="add-role-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-role-modal-title"
+        aria-describedby="add-role-modal-description"
+      >
         <div className="modal-header">
-          <h3>Add Role</h3>
-          <button className="modal-close" onClick={onCancel} aria-label="Close add role modal">
-            ✕
+          <div className="modal-header-copy">
+            <h3 id="add-role-modal-title">Add Role</h3>
+            <p id="add-role-modal-description" className="modal-subtitle">
+              Configure a task role with its archetype, model, and collaboration rules.
+            </p>
+          </div>
+          <button className="modal-close" onClick={onCancel} aria-label="Close modal">
+            ×
           </button>
         </div>
 
         <div className="modal-body">
           <div className="form-field">
-            <label>Role Archetype</label>
+            <label htmlFor="role-archetype-select">Role Archetype</label>
+            <p className="form-helper-text">
+              Choose a built-in archetype for guided prompts, or select Custom to provide the full system prompt yourself.
+            </p>
             {isLoadingArchetypes ? (
               <p className="form-helper-text">Loading role archetypes…</p>
             ) : archetypes.length === 0 ? (
               <p className="no-providers-warning">No role archetypes available.</p>
             ) : (
               <select
+                id="role-archetype-select"
                 value={selectedArchetypeId}
                 onChange={(e) => setSelectedArchetypeId(e.target.value)}
+                className={isArchetypeInvalid ? 'form-control-invalid' : ''}
+                aria-invalid={isArchetypeInvalid}
               >
                 <option value="">Select archetype</option>
                 {archetypes.map((archetype) => (
@@ -206,26 +245,37 @@ function AddRoleModal({
           )}
 
           <div className="form-field">
-            <label>Role Name</label>
+            <label htmlFor="role-name-input">Role Name</label>
+            <p className="form-helper-text">
+              This name appears in task seats, role switching, and message attribution. It is never auto-filled from the archetype.
+            </p>
             <input
+              id="role-name-input"
               type="text"
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
               placeholder="e.g., Alice"
+              className={isRoleNameInvalid ? 'form-control-invalid' : ''}
+              aria-invalid={isRoleNameInvalid}
             />
-            <p className="form-helper-text">Role names are always user-authored and are not filled from the selected archetype.</p>
           </div>
 
           <div className="form-field">
-            <label>Provider & Model</label>
+            <label htmlFor="role-provider-select">Provider & Model</label>
+            <p className="form-helper-text">
+              Only enabled providers with a configured model are shown here.
+            </p>
             {usableProviders.length === 0 ? (
               <p className="no-providers-warning">
-                No usable providers. Please configure at least one provider in settings.
+                No usable providers. Please configure at least one provider in settings before creating this role.
               </p>
             ) : (
               <select
+                id="role-provider-select"
                 value={selectedProvider}
                 onChange={(e) => setSelectedProvider(e.target.value)}
+                className={isProviderInvalid ? 'form-control-invalid' : ''}
+                aria-invalid={isProviderInvalid}
               >
                 <option value="">Select provider</option>
                 {usableProviders.map((provider) => (
@@ -239,8 +289,12 @@ function AddRoleModal({
 
           {!isCustomArchetype ? (
             <div className="form-field">
-              <label>Additional System Instructions</label>
+              <label htmlFor="role-system-prompt-append">Additional System Instructions</label>
+              <p className="form-helper-text">
+                Optional guidance appended after the built-in archetype prompt for this specific role.
+              </p>
               <textarea
+                id="role-system-prompt-append"
                 value={systemPromptAppend}
                 onChange={(e) => setSystemPromptAppend(e.target.value)}
                 placeholder="Optional extra instructions appended after the built-in archetype prompt"
@@ -248,17 +302,24 @@ function AddRoleModal({
             </div>
           ) : (
             <div className="form-field">
-              <label>Custom System Prompt</label>
+              <label htmlFor="role-custom-system-prompt">Custom System Prompt</label>
+              <p className="form-helper-text">
+                Write the full system prompt for this role. No built-in archetype prompt will be added.
+              </p>
               <textarea
+                id="role-custom-system-prompt"
                 value={customSystemPrompt}
                 onChange={(e) => setCustomSystemPrompt(e.target.value)}
                 placeholder="Write the complete system prompt for this custom role"
+                className={isCustomPromptInvalid ? 'form-control-invalid' : ''}
+                aria-invalid={isCustomPromptInvalid}
               />
             </div>
           )}
 
-          <label className="form-checkbox">
+          <label className="form-checkbox" htmlFor="role-handoff-enabled">
             <input
+              id="role-handoff-enabled"
               type="checkbox"
               checked={handoffEnabled}
               onChange={(e) => setHandoffEnabled(e.target.checked)}

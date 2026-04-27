@@ -11,6 +11,7 @@
   justify-content: center;
   z-index: 2000;
   animation: fadeIn 0.2s ease;
+  padding: 20px;
 }
 
 @keyframes fadeIn {
@@ -23,7 +24,7 @@
   border: 1px solid var(--border-default);
   border-radius: 12px;
   max-width: 600px;
-  width: 90%;
+  width: min(100%, 600px);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -47,8 +48,16 @@
   border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
   background: var(--bg-secondary);
+}
+
+.modal-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .modal-header h3 {
@@ -59,22 +68,45 @@
   letter-spacing: -0.01em;
 }
 
+.modal-subtitle {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .modal-close {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  font-size: 18px;
+  font-size: 20px;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 10px;
   transition: all 0.15s ease;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-close:hover {
-  background: var(--error-bg);
-  border-color: var(--error-border);
-  color: var(--error-start);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.modal-close:focus-visible,
+.modal-cancel:focus-visible,
+.modal-create:focus-visible,
+.form-checkbox input:focus-visible,
+.form-field input:focus-visible,
+.form-field select:focus-visible,
+.form-field textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--badge-bg);
 }
 
 .modal-body {
@@ -104,7 +136,7 @@
 .form-field textarea {
   padding: 10px 14px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
@@ -113,12 +145,24 @@
   font-family: inherit;
 }
 
+.form-field input:hover,
+.form-field select:hover,
+.form-field textarea:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+}
+
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--btn-primary-border);
   background: var(--bg-tertiary);
   box-shadow: 0 0 0 3px var(--badge-bg);
+}
+
+.form-control-invalid {
+  border-color: var(--error-border) !important;
+  background: var(--error-bg) !important;
 }
 
 .form-field input::placeholder,
@@ -135,7 +179,7 @@
 
 .form-field textarea {
   resize: vertical;
-  min-height: 100px;
+  min-height: 120px;
   line-height: 1.6;
 }
 
@@ -150,8 +194,8 @@
   padding: 14px 16px;
   background: rgba(251, 191, 36, 0.15);
   border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: 6px;
-  color: #fbbf24;
+  border-radius: 8px;
+  color: var(--text-secondary);
   font-size: 13px;
   margin: 0;
   line-height: 1.5;
@@ -277,6 +321,16 @@
   border-style: dashed;
 }
 
+.error-message {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--error-border);
+  background: var(--error-bg);
+  color: var(--error-start);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .modal-footer {
   padding: 16px 24px;
   border-top: 1px solid var(--border-default);
@@ -289,7 +343,7 @@
 .modal-cancel,
 .modal-create {
   padding: 9px 20px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -329,8 +383,28 @@
 }
 
 @media (max-width: 768px) {
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
   .archetype-preview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .modal-cancel,
+  .modal-create {
+    width: 100%;
   }
 }
 
