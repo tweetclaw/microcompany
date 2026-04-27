@@ -10,7 +10,7 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
 
     let task_row = {
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, icon, created_at, updated_at FROM tasks WHERE id = ?1"
+            "SELECT id, name, description, icon, pm_first_workflow, created_at, updated_at FROM tasks WHERE id = ?1"
         ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
         stmt.query_row(params![&task_id], |row| {
@@ -19,8 +19,9 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
+                row.get::<_, bool>(4)?,
                 row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
             ))
         }).map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => format!("Task not found: {}", task_id),
@@ -30,7 +31,7 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
 
     let roles = {
         let mut role_stmt = conn.prepare(
-            "SELECT r.id, r.name, r.identity, r.archetype_id, r.system_prompt_snapshot, r.model, r.provider, r.handoff_enabled, r.display_order, s.id, r.created_at
+            "SELECT r.id, r.name, r.identity, r.archetype_id, r.system_prompt_snapshot, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version, r.model, r.provider, r.handoff_enabled, r.display_order, s.id, r.created_at
              FROM roles r
              JOIN sessions s ON s.role_id = r.id
              WHERE r.task_id = ?1
@@ -44,12 +45,15 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
                 identity: row.get(2)?,
                 archetype_id: row.get(3)?,
                 system_prompt_snapshot: row.get(4)?,
-                model: row.get(5)?,
-                provider: row.get(6)?,
-                handoff_enabled: row.get(7)?,
-                display_order: row.get(8)?,
-                session_id: row.get(9)?,
-                created_at: row.get(10)?,
+                prompt_source_type: row.get(5)?,
+                prompt_hash: row.get(6)?,
+                prompt_contract_version: row.get(7)?,
+                model: row.get(8)?,
+                provider: row.get(9)?,
+                handoff_enabled: row.get(10)?,
+                display_order: row.get(11)?,
+                session_id: row.get(12)?,
+                created_at: row.get(13)?,
             })
         }).map_err(|e| format!("Failed to query roles: {}", e))?;
 
@@ -62,9 +66,10 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
         name: task_row.1,
         description: task_row.2,
         icon: task_row.3,
+        pm_first_workflow: task_row.4,
         roles,
-        created_at: task_row.4,
-        updated_at: task_row.5,
+        created_at: task_row.5,
+        updated_at: task_row.6,
     })
 }
 
@@ -80,6 +85,7 @@ pub async fn list_tasks() -> Result<Vec<TaskSummary>, String> {
                 t.name,
                 t.description,
                 t.icon,
+                t.pm_first_workflow,
                 COUNT(DISTINCT r.id) as role_count,
                 COUNT(m.id) as total_messages,
                 t.created_at,
@@ -98,10 +104,11 @@ pub async fn list_tasks() -> Result<Vec<TaskSummary>, String> {
                 name: row.get(1)?,
                 description: row.get(2)?,
                 icon: row.get(3)?,
-                role_count: row.get(4)?,
-                total_messages: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pm_first_workflow: row.get(4)?,
+                role_count: row.get(5)?,
+                total_messages: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         }).map_err(|e| format!("Failed to query tasks: {}", e))?;
 

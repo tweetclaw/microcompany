@@ -5,7 +5,12 @@ mod prompt_builder;
 mod sync;
 
 pub use loader::RoleArchetype;
-pub use prompt_builder::build_role_system_prompt;
+pub use prompt_builder::{
+    build_custom_role_system_prompt,
+    build_role_system_prompt,
+    pm_first_workflow_prompt,
+    TASK_PROMPT_CONTRACT_VERSION,
+};
 pub use sync::sync_archetype_resources;
 
 pub fn archetypes_root_dir() -> anyhow::Result<PathBuf> {

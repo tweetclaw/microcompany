@@ -80,19 +80,34 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   );
 
   const isAiWorking = useMemo(() => {
-    const working = props.runState === 'running_thinking' ||
-           props.runState === 'running_tool' ||
-           props.runState === 'running_generating' ||
-           props.runState === 'finalizing';
-    console.log('[TaskModeLayout] runState:', props.runState, 'isAiWorking:', working, 'currentTaskRoleId:', props.currentTaskRoleId);
-    return working;
-  }, [props.runState, props.currentTaskRoleId]);
+    return props.runState === 'running_thinking'
+      || props.runState === 'running_tool'
+      || props.runState === 'running_generating'
+      || props.runState === 'finalizing';
+  }, [props.runState]);
 
   const currentRoleName = useMemo(() => {
     if (!props.currentTask || !props.currentTaskRoleId) return null;
     const role = props.currentTask.roles.find(r => r.id === props.currentTaskRoleId);
     return role?.name || null;
   }, [props.currentTask, props.currentTaskRoleId]);
+
+  const pmRole = useMemo(() => {
+    return props.currentTask?.roles.find((role) => {
+      const identity = role.identity.trim().toLowerCase();
+      return role.archetype_id === 'product_manager'
+        || identity === 'product manager'
+        || identity === 'pm'
+        || identity === '项目经理'
+        || identity === '产品经理';
+    }) ?? null;
+  }, [props.currentTask]);
+
+  const shouldHighlightPmFirst = Boolean(
+    props.currentTask?.pm_first_workflow
+    && pmRole
+    && props.currentTaskRoleId === pmRole.id
+  );
 
   const handleLayoutChanged = (layout: Layout) => {
     const current = loadLayoutState();
@@ -151,9 +166,22 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                   <div>
                     <div className="task-mode-room-label">Task Room</div>
                     <h2>{props.currentTask.name}</h2>
-                    <p>主界面仅展示会议桌座位布局，不加入流程控制和交互逻辑。</p>
+                    <p>
+                      {props.currentTask.pm_first_workflow
+                        ? 'Start with the Product Manager, let them review the proposal doc, then follow their suggested next role and handoff message.'
+                        : 'Select a role at the table and work through the task one specialist at a time.'}
+                    </p>
                   </div>
                 </div>
+
+                {props.currentTask.pm_first_workflow && pmRole && (
+                  <div className={`task-mode-pm-banner ${shouldHighlightPmFirst ? 'active' : ''}`}>
+                    <div className="task-mode-pm-banner-title">PM-first workflow</div>
+                    <p>
+                      Begin with <strong>{pmRole.name}</strong>. Ask them to read <code>docs/v2/task-template-system-proposal.md</code>, define the smallest scope, and tell you exactly which role should work next.
+                    </p>
+                  </div>
+                )}
 
                 <div className="task-mode-seat-grid">
                   {seatRows.map((row, rowIndex) => (
@@ -162,14 +190,14 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                         const isActive = props.currentTaskRoleId === role.id;
                         const isWorking = isAiWorking && isActive;
                         const isDisabled = isAiWorking && !isActive;
+                        const isPmFirst = props.currentTask?.pm_first_workflow && pmRole?.id === role.id;
                         const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
-                        console.log('[TaskModeLayout] Rendering role:', role.name, 'roleId:', role.id, 'isActive:', isActive, 'isWorking:', isWorking, 'isDisabled:', isDisabled);
 
                         return (
                           <button
                             key={role.id}
                             type="button"
-                            className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''} ${isDisabled ? 'disabled' : ''}`}
+                            className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''} ${isDisabled ? 'disabled' : ''} ${isPmFirst ? 'pm-first' : ''}`}
                             onClick={() => props.onTaskRoleSelected(role.id)}
                             disabled={isDisabled}
                             title={disabledReason}
@@ -182,6 +210,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                               <div className="task-seat-name">{role.name}</div>
                               <div className="task-seat-meta">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
                               <div className="task-seat-model">{role.model}</div>
+                              {isPmFirst && <div className="task-seat-badge">Start here</div>}
                             </div>
                           </button>
                         );
@@ -193,7 +222,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                           aria-hidden="true"
                         >
                           <div className="task-seat-empty-dot" />
-                          <div className="task-seat-empty-label">空座位</div>
+                          <div className="task-seat-empty-label">Empty seat</div>
                         </div>
                       ))}
                     </div>
@@ -256,11 +285,10 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         <Panel id="empty" minSize="30%" style={PANEL_FILL_STYLE}>
           <div className="task-mode-empty">
             <div className="task-mode-empty-content">
-              <div className="task-mode-empty-icon">📋</div>
-              <h2>未选择任务</h2>
-              <p>请先创建任务，或从左侧列表中选择一个已有任务。</p>
+              <h2>No task selected</h2>
+              <p>Create a task or pick one from the list to open the room.</p>
               <button className="task-mode-empty-button" onClick={props.onNewTask}>
-                创建新任务
+                Create task
               </button>
             </div>
           </div>

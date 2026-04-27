@@ -11,6 +11,17 @@ interface TaskBuilderProps {
   onCancel: () => void;
 }
 
+const PRODUCT_MANAGER_IDENTITIES = new Set(['product manager', 'pm', '项目经理', '产品经理']);
+const PRODUCT_MANAGER_ARCHETYPE_IDS = new Set(['product_manager']);
+
+function hasProductManagerRole(roles: RoleConfig[]) {
+  return roles.some((role) => {
+    const normalizedIdentity = role.identity.trim().toLowerCase();
+    return PRODUCT_MANAGER_IDENTITIES.has(normalizedIdentity)
+      || (role.archetype_id ? PRODUCT_MANAGER_ARCHETYPE_IDS.has(role.archetype_id) : false);
+  });
+}
+
 function TaskBuilder({
   workingDirectory,
   availableProviders,
@@ -20,11 +31,14 @@ function TaskBuilder({
   const [taskName, setTaskName] = useState('');
   const [roles, setRoles] = useState<RoleConfig[]>([]);
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [pmFirstWorkflow, setPmFirstWorkflow] = useState(true);
 
   const sortedRoles = useMemo(
     () => [...roles].sort((left, right) => left.display_order - right.display_order),
     [roles]
   );
+
+  const hasPmRole = useMemo(() => hasProductManagerRole(sortedRoles), [sortedRoles]);
 
   const handleStartTask = () => {
     if (!taskName.trim()) {
@@ -37,10 +51,17 @@ function TaskBuilder({
       return;
     }
 
+    if (pmFirstWorkflow && !hasPmRole) {
+      alert('PM-first workflow requires a Product Manager role');
+      return;
+    }
+
     const taskRequest: TaskCreateRequest = {
       name: taskName.trim(),
       description: '',
-      icon: '📋',
+      icon: 'task',
+      pm_first_workflow: pmFirstWorkflow,
+      working_directory: workingDirectory,
       roles: sortedRoles.map((role, index) => ({
         ...role,
         display_order: index,
@@ -84,6 +105,28 @@ function TaskBuilder({
                 placeholder="Enter task name"
                 className="task-name-input"
               />
+            </div>
+
+            <div className="task-builder-field">
+              <label>Workflow</label>
+              <div className="task-builder-workflow-card">
+                <label className="task-builder-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={pmFirstWorkflow}
+                    onChange={(e) => setPmFirstWorkflow(e.target.checked)}
+                  />
+                  <span>Start with the Product Manager</span>
+                </label>
+                <p className="task-builder-workflow-help">
+                  When enabled, the Product Manager reads the task-template proposal first, defines the smallest scope, and tells you which role should work next.
+                </p>
+                {pmFirstWorkflow && !hasPmRole && sortedRoles.length > 0 && (
+                  <p className="task-builder-workflow-warning">
+                    Add a Product Manager role before starting this workflow.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="task-builder-field">

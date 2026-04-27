@@ -22,6 +22,16 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "role_prompt_input_fields",
         sql: include_str!("../../migrations/003_role_prompt_input_fields.sql"),
     },
+    Migration {
+        version: 4,
+        name: "task_prompt_provenance",
+        sql: include_str!("../../migrations/004_task_prompt_provenance.sql"),
+    },
+    Migration {
+        version: 5,
+        name: "backfill_task_session_working_directory",
+        sql: include_str!("../../migrations/005_backfill_task_session_working_directory.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {

@@ -1,5 +1,7 @@
 use crate::archetypes::RoleArchetype;
 
+pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v2";
+
 pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
     let mut rules = vec![
         "你是多角色协作任务中的一个成员。",
@@ -99,9 +101,58 @@ pub fn build_role_system_prompt(
     sections.join("\n\n")
 }
 
+pub fn build_custom_role_system_prompt(
+    role_name: &str,
+    role_identity: &str,
+    task_name: &str,
+    task_description: &str,
+    custom_system_prompt: &str,
+    handoff_enabled: bool,
+    pm_first_workflow: bool,
+) -> String {
+    let mut sections = vec![build_role_system_prompt(
+        None,
+        role_name,
+        role_identity,
+        task_name,
+        task_description,
+        None,
+        handoff_enabled,
+    )];
+
+    if pm_first_workflow {
+        sections.push(pm_first_workflow_prompt(role_identity));
+    }
+
+    sections.push(format!(
+        "自定义角色完整系统提示：\n{}",
+        custom_system_prompt.trim()
+    ));
+
+    sections.join("\n\n")
+}
+
+pub fn pm_first_workflow_prompt(role_identity: &str) -> String {
+    let normalized_identity = role_identity.trim().to_lowercase();
+    let is_product_manager = normalized_identity == "product manager"
+        || normalized_identity == "pm"
+        || normalized_identity == "项目经理"
+        || normalized_identity == "产品经理";
+
+    if is_product_manager {
+        "当前任务启用了 PM First Workflow。你必须先阅读 docs/v2/task-template-system-proposal.md，再结合用户当前目标判断该提案是否已经可以进入开发。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。不要直接开始实现。".to_string()
+    } else {
+        "当前任务启用了 PM First Workflow。只有在用户已先与 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::build_role_system_prompt;
+    use super::{
+        build_custom_role_system_prompt,
+        build_role_system_prompt,
+        pm_first_workflow_prompt,
+    };
     use crate::archetypes::loader::{PromptFragments, RoleArchetype, SourceMetadata};
 
     fn sample_archetype() -> RoleArchetype {
@@ -144,5 +195,33 @@ mod tests {
         assert!(prompt.contains("职责范围："));
         assert!(prompt.contains("任务说明：\n实现仪表盘页面"));
         assert!(prompt.contains("额外系统提示追加：\n必须输出明确的交接建议"));
+    }
+
+    #[test]
+    fn build_custom_role_system_prompt_wraps_team_context_and_custom_prompt() {
+        let prompt = build_custom_role_system_prompt(
+            "Alice",
+            "Researcher",
+            "Plan rollout",
+            "先完成调研",
+            "你必须输出严格的调研报告。",
+            true,
+            false,
+        );
+
+        assert!(prompt.contains("你是多角色协作任务中的一个成员。"));
+        assert!(prompt.contains("当前角色名称：Alice"));
+        assert!(prompt.contains("当前角色身份：Researcher"));
+        assert!(prompt.contains("自定义角色完整系统提示：\n你必须输出严格的调研报告。"));
+    }
+
+    #[test]
+    fn pm_first_workflow_prompt_changes_for_product_manager() {
+        let pm_prompt = pm_first_workflow_prompt("Product Manager");
+        let engineer_prompt = pm_first_workflow_prompt("Software Engineer");
+
+        assert!(pm_prompt.contains("docs/v2/task-template-system-proposal.md"));
+        assert!(pm_prompt.contains("下一位应该接手的角色"));
+        assert!(engineer_prompt.contains("只有在用户已先与 Product Manager 对齐范围"));
     }
 }

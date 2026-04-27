@@ -5,7 +5,7 @@ import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
 import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
-import { Message, Task, TaskCreateRequest, TaskSummary, AiRunState } from './types';
+import { Message, Task, TaskCreateRequest, TaskSummary, TaskRole, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { getSession, createTask } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
@@ -18,6 +18,21 @@ const TaskBuilder = lazy(() => import('./components/TaskBuilder'));
 const ForwardLatestReplyModal = lazy(() => import('./components/ForwardLatestReplyModal'));
 const SearchModal = lazy(() => import('./components/SearchModal'));
 const Settings = lazy(() => import('./components/Settings').then((module) => ({ default: module.Settings })));
+
+const PRODUCT_MANAGER_IDENTITIES = new Set(['product manager', 'pm', '项目经理', '产品经理']);
+
+function isProductManagerRole(role: TaskRole) {
+  const normalizedIdentity = role.identity.trim().toLowerCase();
+  return role.archetype_id === 'product_manager' || PRODUCT_MANAGER_IDENTITIES.has(normalizedIdentity);
+}
+
+function getInitialTaskRole(task: Task) {
+  if (task.pm_first_workflow) {
+    return task.roles.find(isProductManagerRole) ?? task.roles[0] ?? null;
+  }
+
+  return task.roles[0] ?? null;
+}
 
 function App() {
   const [workingDirectory, setWorkingDirectory] = useState<string | null>(null);
@@ -355,13 +370,11 @@ function App() {
       setCurrentTask(createdTask);
       setIsCreatingTask(false);
 
-      // 默认选中第一个角色
-      if (createdTask.roles.length > 0) {
-        setCurrentTaskRoleId(createdTask.roles[0].id);
-        // 切换到第一个角色的 session
-        const firstRole = createdTask.roles[0];
-        if (firstRole.session_id) {
-          handleSessionSelected(firstRole.session_id);
+      const initialRole = getInitialTaskRole(createdTask);
+      if (initialRole) {
+        setCurrentTaskRoleId(initialRole.id);
+        if (initialRole.session_id) {
+          handleSessionSelected(initialRole.session_id);
         }
       }
     } catch (error) {
@@ -396,12 +409,11 @@ function App() {
       setNavigationMode('task');
       setTaskListRefreshKey((prev) => prev + 1);
 
-      // 选择第一个角色
-      if (task.roles.length > 0) {
-        setCurrentTaskRoleId(task.roles[0].id);
-        const firstRole = task.roles[0];
-        if (firstRole.session_id) {
-          await handleSessionSelected(firstRole.session_id);
+      const initialRole = getInitialTaskRole(task);
+      if (initialRole) {
+        setCurrentTaskRoleId(initialRole.id);
+        if (initialRole.session_id) {
+          await handleSessionSelected(initialRole.session_id);
         }
       }
     } catch (error) {
@@ -573,6 +585,7 @@ function App() {
             name: '',
             description: '',
             icon: '',
+            pm_first_workflow: false,
             role_count: 0,
             total_messages: 0,
             created_at: '',

@@ -121,20 +121,47 @@
   color: var(--text-disabled);
 }
 
-.task-builder-empty {
-  padding: 40px 24px;
-  text-align: center;
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  border: 2px dashed var(--border-default);
-  font-size: 14px;
-}
-
-.task-roles-list {
+.task-builder-workflow-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.task-builder-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.task-builder-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--btn-primary-bg);
+  cursor: pointer;
+}
+
+.task-builder-workflow-help,
+.task-builder-workflow-warning {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.task-builder-workflow-help {
+  color: var(--text-secondary);
+}
+
+.task-builder-workflow-warning {
+  color: var(--error-start);
 }
 
 .task-role-card {

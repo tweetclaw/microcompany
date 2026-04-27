@@ -9,6 +9,8 @@ export interface TaskCreateRequest {
   name: string;
   description: string;
   icon: string;
+  pm_first_workflow: boolean;
+  working_directory: string;
   roles: RoleConfig[];
 }
 
@@ -56,6 +58,7 @@ export interface Task {
   name: string;
   description: string;
   icon: string;
+  pm_first_workflow: boolean;
   roles: TaskRole[];
   created_at: string;
   updated_at: string;
@@ -67,6 +70,9 @@ export interface TaskRole {
   identity: string;
   archetype_id: string | null;
   system_prompt_snapshot: string | null;
+  prompt_source_type: string | null;
+  prompt_hash: string | null;
+  prompt_contract_version: string | null;
   model: string;
   provider: string;
   handoff_enabled: boolean;
@@ -80,6 +86,7 @@ export interface TaskSummary {
   name: string;
   description: string;
   icon: string;
+  pm_first_workflow: boolean;
   role_count: number;
   total_messages: number;
   created_at: string;

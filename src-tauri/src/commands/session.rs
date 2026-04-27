@@ -4,21 +4,90 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::claurst::ClaurstSession;
 
-fn load_task_session_prompt_snapshot(session_id: &str) -> Result<Option<String>, String> {
+#[derive(Debug, Clone)]
+struct TaskSessionPromptContext {
+    task_id: String,
+    role_id: String,
+    role_name: String,
+    working_directory: Option<String>,
+    prompt_snapshot: Option<String>,
+    prompt_source_type: Option<String>,
+    prompt_hash: Option<String>,
+    prompt_contract_version: Option<String>,
+}
+
+fn load_task_session_prompt_context(session_id: &str) -> Result<Option<TaskSessionPromptContext>, String> {
     let pool = crate::database::get_pool()
         .map_err(|e| format!("Failed to get database pool: {}", e))?;
     let conn = pool.get()
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    conn.query_row(
-        "SELECT r.system_prompt_snapshot
+    let mut stmt = conn.prepare(
+        "SELECT s.task_id, s.role_id, r.name, s.working_directory, r.system_prompt_snapshot, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version
          FROM sessions s
          JOIN roles r ON r.id = s.role_id
-         WHERE s.id = ?1",
+         WHERE s.id = ?1"
+    ).map_err(|e| format!("Failed to prepare task session prompt query: {}", e))?;
+
+    stmt.query_row(
         rusqlite::params![session_id],
-        |row| row.get(0),
+        |row| {
+            Ok(TaskSessionPromptContext {
+                task_id: row.get(0)?,
+                role_id: row.get(1)?,
+                role_name: row.get(2)?,
+                working_directory: row.get(3)?,
+                prompt_snapshot: row.get(4)?,
+                prompt_source_type: row.get(5)?,
+                prompt_hash: row.get(6)?,
+                prompt_contract_version: row.get(7)?,
+            })
+        },
     )
-    .map_err(|e| format!("Failed to load task session prompt snapshot: {}", e))
+    .map(Some)
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(None),
+        _ => Err(format!("Failed to load task session prompt context: {}", e)),
+    })
+}
+
+fn build_prompt_preview(prompt_snapshot: Option<&str>) -> String {
+    const PREVIEW_LIMIT: usize = 120;
+
+    prompt_snapshot
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            let preview: String = value.chars().take(PREVIEW_LIMIT).collect();
+            preview.replace('\n', "\\n")
+        })
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn resolve_task_working_directory(context: Option<&TaskSessionPromptContext>) -> Result<std::path::PathBuf, String> {
+    if let Some(path) = context
+        .and_then(|value| value.working_directory.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(std::path::PathBuf::from(path));
+    }
+
+    let cwd = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let repo_root = cwd
+        .parent()
+        .filter(|_| cwd.file_name().and_then(|name| name.to_str()) == Some("src-tauri"))
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| cwd.clone());
+
+    log::warn!(
+        "task_session_working_directory_missing stored_working_dir=none fallback_working_dir={}",
+        repo_root.display()
+    );
+
+    Ok(repo_root)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,7 +163,6 @@ pub async fn init_session(
             provider.base_url.clone(),
         ).map_err(|e| format!("Failed to create session: {}", e))?;
 
-        // Also create database record for the session
         let pool = crate::database::get_pool()
             .map_err(|e| format!("Failed to get database pool: {}", e))?;
         let conn = pool.get()
@@ -114,12 +182,19 @@ pub async fn init_session(
         return Err(format!("API key not configured for provider '{}'", selected_provider.name));
     }
 
-    // 设置 Brave Search API Key 环境变量（如果配置了）
     if let Some(api_key) = &app_config.brave_search_api_key {
         if !api_key.is_empty() {
             std::env::set_var("BRAVE_SEARCH_API_KEY", api_key);
         }
     }
+
+    log::info!(
+        "session_init_begin session_id={} type=normal provider={} model={} working_dir={}",
+        session_id,
+        selected_provider.id,
+        selected_provider.model,
+        working_dir
+    );
 
     let session = ClaurstSession::new(
         session_id.clone(),
@@ -134,7 +209,6 @@ pub async fn init_session(
     *state.cancel_token.lock().await = None;
     *state.active_request_id.lock().await = None;
 
-    // Update session status to 'ready' in database if this was a new session
     if session_id.starts_with("session-") {
         if let Ok(pool) = crate::database::get_pool() {
             if let Ok(conn) = pool.get() {
@@ -145,6 +219,13 @@ pub async fn init_session(
             }
         }
     }
+
+    log::info!(
+        "session_init_ready session_id={} type=normal provider={} model={}",
+        session_id,
+        selected_provider.id,
+        selected_provider.model
+    );
 
     Ok(session_id)
 }
@@ -167,9 +248,54 @@ pub async fn init_task_session(
         return Err(format!("API key not configured for provider '{}'", provider_config.name));
     }
 
-    // 任务会话使用当前工作目录
-    let working_dir = std::env::current_dir()
-        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+    let prompt_context = load_task_session_prompt_context(&session_id)?;
+    let working_dir = resolve_task_working_directory(prompt_context.as_ref())?;
+    let working_directory = working_dir.display().to_string();
+    let prompt_preview = build_prompt_preview(
+        prompt_context
+            .as_ref()
+            .and_then(|context| context.prompt_snapshot.as_deref())
+    );
+    let prompt_chars = prompt_context
+        .as_ref()
+        .and_then(|context| context.prompt_snapshot.as_ref())
+        .map(|value| value.chars().count())
+        .unwrap_or(0);
+
+    if let Some(context) = prompt_context.as_ref() {
+        log::info!(
+            "task_session_init_prompt_loaded session_id={} task_id={} role_id={} role_name={} provider={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={}",
+            session_id,
+            context.task_id,
+            context.role_id,
+            context.role_name,
+            provider,
+            model,
+            working_directory,
+            context.prompt_source_type.as_deref().unwrap_or("unknown"),
+            context.prompt_hash.as_deref().unwrap_or("unknown"),
+            context.prompt_contract_version.as_deref().unwrap_or("unknown"),
+            prompt_chars,
+            prompt_preview
+        );
+    } else {
+        log::warn!(
+            "task_session_init_prompt_missing session_id={} provider={} model={}",
+            session_id,
+            provider,
+            model
+        );
+    }
+
+    let working_dir = resolve_task_working_directory(prompt_context.as_ref())?;
+
+    log::info!(
+        "task_session_init_begin session_id={} provider={} model={} working_dir={}",
+        session_id,
+        provider,
+        model,
+        working_dir.display()
+    );
 
     let session = ClaurstSession::new(
         session_id.clone(),
@@ -177,12 +303,19 @@ pub async fn init_task_session(
         provider_config.api_key.clone(),
         model,
         provider_config.base_url.clone(),
-        load_task_session_prompt_snapshot(&session_id)?,
+        prompt_context.and_then(|context| context.prompt_snapshot),
     ).map_err(|e| format!("Failed to create Claurst session: {}", e))?;
 
     *state.session.lock().await = Some(session);
     *state.cancel_token.lock().await = None;
     *state.active_request_id.lock().await = None;
+
+    log::info!(
+        "task_session_init_ready session_id={} provider={} model={}",
+        session_id,
+        provider,
+        provider_config.model
+    );
 
     Ok(session_id)
 }

@@ -14,6 +14,56 @@ use tauri::{Emitter, Window};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+#[derive(Debug, Clone)]
+struct TaskTraceContext {
+    task_id: String,
+    role_id: String,
+    role_name: String,
+    handoff_enabled: bool,
+    prompt_source_type: Option<String>,
+    prompt_hash: Option<String>,
+    prompt_contract_version: Option<String>,
+}
+
+fn load_task_trace_context(session_id: &str) -> Option<TaskTraceContext> {
+    let pool = crate::database::get_pool().ok()?;
+    let conn = pool.get().ok()?;
+    let mut stmt = conn.prepare(
+        "SELECT s.task_id, s.role_id, r.name, r.handoff_enabled, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version
+         FROM sessions s
+         JOIN roles r ON r.id = s.role_id
+         WHERE s.id = ?1"
+    ).ok()?;
+
+    stmt.query_row(
+        rusqlite::params![session_id],
+        |row| {
+            Ok(TaskTraceContext {
+                task_id: row.get(0)?,
+                role_id: row.get(1)?,
+                role_name: row.get(2)?,
+                handoff_enabled: row.get(3)?,
+                prompt_source_type: row.get(4)?,
+                prompt_hash: row.get(5)?,
+                prompt_contract_version: row.get(6)?,
+            })
+        },
+    ).ok()
+}
+
+fn build_prompt_preview(prompt_snapshot: Option<&str>) -> String {
+    const PREVIEW_LIMIT: usize = 120;
+
+    prompt_snapshot
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            let preview: String = value.chars().take(PREVIEW_LIMIT).collect();
+            preview.replace('\n', "\\n")
+        })
+        .unwrap_or_else(|| "none".to_string())
+}
+
 /// Generate a title from the first user message
 fn generate_title(first_message: &str) -> String {
     let max_length = 30;
@@ -81,7 +131,39 @@ impl ClaurstSession {
     ) -> anyhow::Result<Self> {
         // 1. 创建 ClientConfig
         let api_base = base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string());
-        log::info!("Initializing Claurst session {} with api_base: {}, model: {}", session_id, api_base, model);
+        let task_trace = load_task_trace_context(&session_id);
+        let prompt_chars = system_prompt
+            .as_ref()
+            .map(|value| value.chars().count())
+            .unwrap_or(0);
+        let prompt_preview = build_prompt_preview(system_prompt.as_deref());
+
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={}",
+                session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                trace.handoff_enabled,
+                model,
+                working_dir.display(),
+                trace.prompt_source_type.as_deref().unwrap_or("unknown"),
+                trace.prompt_hash.as_deref().unwrap_or("unknown"),
+                trace.prompt_contract_version.as_deref().unwrap_or("unknown"),
+                prompt_chars,
+                prompt_preview
+            );
+        } else {
+            log::info!(
+                "claurst_session_init_begin session_id={} model={} working_dir={} prompt_chars={} prompt_preview={}",
+                session_id,
+                model,
+                working_dir.display(),
+                prompt_chars,
+                prompt_preview
+            );
+        }
 
         let client_config = ClientConfig {
             api_key: api_key.clone(),
@@ -143,8 +225,6 @@ impl ClaurstSession {
         // 7. 创建存储层
         let storage = ConversationStorage::new()?;
 
-        // 8. 加载历史消息(如果会话已存在)
-        // 优先从数据库加载（任务会话），fallback 到文件存储（普通会话）
         let messages: Vec<Message> = if let Ok(pool) = crate::database::get_pool() {
             if let Ok(conn) = pool.get() {
                 match conn.prepare("SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY created_at ASC") {
@@ -214,6 +294,24 @@ impl ClaurstSession {
                 .collect()
         };
 
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_session_init_ready session_id={} task_id={} role_id={} role_name={} loaded_messages={} prompt_hash_present={}",
+                session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                messages.len(),
+                trace.prompt_hash.is_some()
+            );
+        } else {
+            log::info!(
+                "claurst_session_init_ready session_id={} loaded_messages={}",
+                session_id,
+                messages.len()
+            );
+        }
+
         Ok(Self {
             session_id,
             working_dir,
@@ -234,9 +332,30 @@ impl ClaurstSession {
         window: Window,
         cancel_token: CancellationToken,
     ) -> anyhow::Result<String> {
+        let task_trace = load_task_trace_context(&self.session_id);
+
         // 1. 添加用户消息
         self.messages.push(Message::user(message.to_string()));
-        log::info!("User message added, total messages: {}", self.messages.len());
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_request_user_message_saved request_id={} session_id={} task_id={} role_id={} role_name={} total_messages={} message_chars={}",
+                request_id,
+                self.session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                self.messages.len(),
+                message.chars().count()
+            );
+        } else {
+            log::info!(
+                "claurst_request_user_message_saved request_id={} session_id={} total_messages={} message_chars={}",
+                request_id,
+                self.session_id,
+                self.messages.len(),
+                message.chars().count()
+            );
+        }
 
         // 保存用户消息到存储
         if let Err(e) = self.storage.save_message(
@@ -299,6 +418,8 @@ impl ClaurstSession {
         let event_window = window.clone();
         let request_id_owned = request_id.to_string();
         let event_request_id = request_id_owned.clone();
+        let event_session_id = self.session_id.clone();
+        let event_task_trace = task_trace.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -314,6 +435,25 @@ impl ClaurstSession {
                         }
                     }
                     QueryEvent::ToolStart { tool_name, .. } => {
+                        if let Some(trace) = event_task_trace.as_ref() {
+                            log::info!(
+                                "claurst_tool_start request_id={} session_id={} task_id={} role_id={} role_name={} tool={}",
+                                event_request_id,
+                                event_session_id,
+                                trace.task_id,
+                                trace.role_id,
+                                trace.role_name,
+                                tool_name
+                            );
+                        } else {
+                            log::info!(
+                                "claurst_tool_start request_id={} session_id={} tool={}",
+                                event_request_id,
+                                event_session_id,
+                                tool_name
+                            );
+                        }
+
                         let now = chrono::Utc::now().timestamp_millis();
                         let description = format!("Executing {}", tool_name);
                         let _ = event_window.emit("ai-status", serde_json::json!({
@@ -331,7 +471,29 @@ impl ClaurstSession {
                     QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
                         let now = chrono::Utc::now().timestamp_millis();
 
-                        // Log tool execution result
+                        if let Some(trace) = event_task_trace.as_ref() {
+                            log::info!(
+                                "claurst_tool_end request_id={} session_id={} task_id={} role_id={} role_name={} tool={} success={} result_chars={}",
+                                event_request_id,
+                                event_session_id,
+                                trace.task_id,
+                                trace.role_id,
+                                trace.role_name,
+                                tool_name,
+                                !is_error,
+                                result.chars().count()
+                            );
+                        } else {
+                            log::info!(
+                                "claurst_tool_end request_id={} session_id={} tool={} success={} result_chars={}",
+                                event_request_id,
+                                event_session_id,
+                                tool_name,
+                                !is_error,
+                                result.chars().count()
+                            );
+                        }
+
                         if is_error {
                             log::error!("Tool '{}' failed with error: {}", tool_name, result);
                         } else {
@@ -385,8 +547,43 @@ impl ClaurstSession {
         });
 
         // 4. 调用 run_query_loop
-        log::info!("Starting query loop with {} messages", self.messages.len());
-        log::info!("API config - model: {}", self.config.model);
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_request_begin request_id={} session_id={} task_id={} role_id={} role_name={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={} history_messages={}",
+                request_id,
+                self.session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                self.config.model,
+                self.working_dir.display(),
+                trace.prompt_source_type.as_deref().unwrap_or("unknown"),
+                trace.prompt_hash.as_deref().unwrap_or("unknown"),
+                trace.prompt_contract_version.as_deref().unwrap_or("unknown"),
+                self.config
+                    .system_prompt
+                    .as_ref()
+                    .map(|value| value.chars().count())
+                    .unwrap_or(0),
+                build_prompt_preview(self.config.system_prompt.as_deref()),
+                self.messages.len()
+            );
+        } else {
+            log::info!(
+                "claurst_request_begin request_id={} session_id={} model={} working_dir={} prompt_chars={} prompt_preview={} history_messages={}",
+                request_id,
+                self.session_id,
+                self.config.model,
+                self.working_dir.display(),
+                self.config
+                    .system_prompt
+                    .as_ref()
+                    .map(|value| value.chars().count())
+                    .unwrap_or(0),
+                build_prompt_preview(self.config.system_prompt.as_deref()),
+                self.messages.len()
+            );
+        }
 
         let outcome = run_query_loop(
             &self.client,
@@ -401,7 +598,24 @@ impl ClaurstSession {
         )
         .await;
 
-        log::info!("Query loop completed with outcome: {:?}", std::mem::discriminant(&outcome));
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_request_outcome request_id={} session_id={} task_id={} role_id={} role_name={} outcome={:?}",
+                request_id,
+                self.session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                std::mem::discriminant(&outcome)
+            );
+        } else {
+            log::info!(
+                "claurst_request_outcome request_id={} session_id={} outcome={:?}",
+                request_id,
+                self.session_id,
+                std::mem::discriminant(&outcome)
+            );
+        }
 
         // 5. 处理结果并发送终态事件
         match outcome {
@@ -453,6 +667,25 @@ impl ClaurstSession {
                     log::warn!("Failed to save assistant message to storage: {}", e);
                 }
 
+                if let Some(trace) = task_trace.as_ref() {
+                    log::info!(
+                        "claurst_request_success request_id={} session_id={} task_id={} role_id={} role_name={} response_chars={}",
+                        request_id_owned,
+                        self.session_id,
+                        trace.task_id,
+                        trace.role_id,
+                        trace.role_name,
+                        text.chars().count()
+                    );
+                } else {
+                    log::info!(
+                        "claurst_request_success request_id={} session_id={} response_chars={}",
+                        request_id_owned,
+                        self.session_id,
+                        text.chars().count()
+                    );
+                }
+
                 // Also save to database
                 if let Ok(pool) = crate::database::get_pool() {
                     if let Ok(conn) = pool.get() {
@@ -477,6 +710,23 @@ impl ClaurstSession {
                 Ok(text)
             }
             QueryOutcome::Cancelled => {
+                if let Some(trace) = task_trace.as_ref() {
+                    log::warn!(
+                        "claurst_request_cancelled request_id={} session_id={} task_id={} role_id={} role_name={}",
+                        request_id_owned,
+                        self.session_id,
+                        trace.task_id,
+                        trace.role_id,
+                        trace.role_name
+                    );
+                } else {
+                    log::warn!(
+                        "claurst_request_cancelled request_id={} session_id={}",
+                        request_id_owned,
+                        self.session_id
+                    );
+                }
+
                 let now = chrono::Utc::now().timestamp_millis();
                 let _ = window.emit("ai-request-end", serde_json::json!({
                     "request_id": request_id_owned.clone(),
@@ -486,7 +736,25 @@ impl ClaurstSession {
                 Err(anyhow::anyhow!("Request cancelled"))
             }
             QueryOutcome::Error(e) => {
-                log::error!("Query loop error: {:?}", e);
+                if let Some(trace) = task_trace.as_ref() {
+                    log::error!(
+                        "claurst_request_error request_id={} session_id={} task_id={} role_id={} role_name={} error={}",
+                        request_id_owned,
+                        self.session_id,
+                        trace.task_id,
+                        trace.role_id,
+                        trace.role_name,
+                        e
+                    );
+                } else {
+                    log::error!(
+                        "claurst_request_error request_id={} session_id={} error={}",
+                        request_id_owned,
+                        self.session_id,
+                        e
+                    );
+                }
+
                 let now = chrono::Utc::now().timestamp_millis();
                 let _ = window.emit("ai-request-end", serde_json::json!({
                     "request_id": request_id_owned.clone(),
@@ -498,6 +766,27 @@ impl ClaurstSession {
             }
             QueryOutcome::BudgetExceeded { cost_usd, limit_usd } => {
                 let message = format!("Budget exceeded: ${:.4} / ${:.4}", cost_usd, limit_usd);
+                if let Some(trace) = task_trace.as_ref() {
+                    log::error!(
+                        "claurst_request_budget_exceeded request_id={} session_id={} task_id={} role_id={} role_name={} cost_usd={:.4} limit_usd={:.4}",
+                        request_id_owned,
+                        self.session_id,
+                        trace.task_id,
+                        trace.role_id,
+                        trace.role_name,
+                        cost_usd,
+                        limit_usd
+                    );
+                } else {
+                    log::error!(
+                        "claurst_request_budget_exceeded request_id={} session_id={} cost_usd={:.4} limit_usd={:.4}",
+                        request_id_owned,
+                        self.session_id,
+                        cost_usd,
+                        limit_usd
+                    );
+                }
+
                 let now = chrono::Utc::now().timestamp_millis();
                 let _ = window.emit("ai-request-end", serde_json::json!({
                     "request_id": request_id_owned.clone(),
@@ -509,6 +798,23 @@ impl ClaurstSession {
             }
             QueryOutcome::MaxTokens { .. } => {
                 let message = "Max tokens reached".to_string();
+                if let Some(trace) = task_trace.as_ref() {
+                    log::error!(
+                        "claurst_request_max_tokens request_id={} session_id={} task_id={} role_id={} role_name={}",
+                        request_id_owned,
+                        self.session_id,
+                        trace.task_id,
+                        trace.role_id,
+                        trace.role_name
+                    );
+                } else {
+                    log::error!(
+                        "claurst_request_max_tokens request_id={} session_id={}",
+                        request_id_owned,
+                        self.session_id
+                    );
+                }
+
                 let now = chrono::Utc::now().timestamp_millis();
                 let _ = window.emit("ai-request-end", serde_json::json!({
                     "request_id": request_id_owned,

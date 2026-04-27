@@ -58,6 +58,46 @@
   color: var(--vscode-descriptionForeground);
 }
 
+.task-mode-pm-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), rgba(56, 189, 248, 0.03));
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
+}
+
+.task-mode-pm-banner.active {
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.14),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+}
+
+.task-mode-pm-banner-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(103, 232, 249);
+}
+
+.task-mode-pm-banner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--vscode-foreground);
+}
+
+.task-mode-pm-banner code {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  color: rgb(186, 230, 253);
+}
+
 .task-mode-table-stage {
   position: relative;
   min-height: 72px;
@@ -161,6 +201,20 @@
     0 10px 24px rgba(15, 23, 42, 0.16);
 }
 
+.task-seat-card.pm-first {
+  border-color: rgba(103, 232, 249, 0.3);
+}
+
+.task-seat-card.pm-first:not(.active):not(.working):not(.disabled) {
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.08), rgba(34, 211, 238, 0.03)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
+    0 6px 16px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
+}
+
 .task-seat-card.working {
   border-color: rgba(251, 146, 60, 0.5);
   background:
@@ -253,6 +307,21 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
+}
+
+.task-seat-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(103, 232, 249, 0.34);
+  background: rgba(34, 211, 238, 0.12);
+  color: rgb(165, 243, 252);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .task-seat-card-empty {
@@ -359,6 +428,17 @@
 
 .task-mode-empty-button:hover {
   background-color: var(--vscode-button-hoverBackground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-seat-card,
+  .task-mode-empty-button {
+    transition: none;
+  }
+
+  .task-seat-card.working {
+    animation: none;
+  }
 }
 
 @media (max-width: 1180px) {
