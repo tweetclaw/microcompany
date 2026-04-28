@@ -37,3 +37,4 @@ dist/
 src-tauri/dev.pid
 dev.pid
 .claude
+check_pm_test3.sh
