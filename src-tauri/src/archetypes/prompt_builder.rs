@@ -1,6 +1,6 @@
 use crate::archetypes::RoleArchetype;
 
-pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v5-roster-only-handoff";
+pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v6-structured-handoff";
 
 #[derive(Debug, Clone)]
 pub struct TeamRolePromptContext {
@@ -125,7 +125,7 @@ fn build_handoff_output_contract(
     };
 
     Some(format!(
-        "交接输出约束：\n- {}\n- 你绝不能把“{}”或任何同身份角色再次推荐为下一位角色。\n- 你绝不能推荐团队 roster 之外的泛化职位（如 PM、产品负责人、负责人、业务方），除非该对象就在当前 roster 中且不是你自己。\n- 如果你判断当前阶段还不应该交接，就明确写“当前暂不交接，继续由我推进下一步”，不要虚构一个外部联系对象。\n- 如果用户要求你给出“发给下一位角色的消息”，那条消息也只能发给当前任务 roster 中的真实其他角色；若当前暂不交接，就明确写“当前无需发送交接消息，因为此阶段仍由我继续推进”。\n- {}",
+        "交接输出约束：\n- {}\n- 你绝不能把“{}”或任何同身份角色再次推荐为下一位角色。\n- 你绝不能推荐团队 roster 之外的泛化职位（如 PM、产品负责人、负责人、业务方），除非该对象就在当前 roster 中且不是你自己。\n- 如果你判断当前阶段还不应该交接，就明确写“当前暂不交接，继续由我推进下一步”，不要虚构一个外部联系对象。\n- 如果用户要求你给出“发给下一位角色的消息”，那条消息也只能发给当前任务 roster 中的真实其他角色；若当前暂不交接，就明确写“当前无需发送交接消息，因为此阶段仍由我继续推进”。\n- 如果你决定提出交接建议，请在正常回答结束后追加一个机器可读的 HANDOFF 块，格式必须严格如下：\n  [HANDOFF]\n  recommended: yes 或 no\n  target_role: 真实团队中的角色名称；如果没有则留空\n  reason: 一句简短原因\n  draft_message: 发给下一位角色的完整交接消息；如果不交接则写当前无需发送交接消息\n  [/HANDOFF]\n- 如果 recommended: no，则 target_role 留空，并让 draft_message 明确说明当前无需发送交接消息。\n- {}",
         allowed_targets_summary,
         normalized_identity,
         recommended_targets_summary,

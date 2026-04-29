@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Task, TaskRole, Message } from '../types';
+import { HandoffSuggestion, Message, Task } from '../types';
 import './ForwardLatestReplyModal.css';
 
 interface ForwardLatestReplyModalProps {
   task: Task;
   currentRoleId: string;
   messages: Message[];
+  suggestion?: HandoffSuggestion | null;
   onForward: (targetRoleId: string, note: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -22,11 +23,12 @@ function ForwardLatestReplyModal({
   task,
   currentRoleId,
   messages,
+  suggestion,
   onForward,
   onCancel,
 }: ForwardLatestReplyModalProps) {
-  const [targetRoleId, setTargetRoleId] = useState('');
-  const [note, setNote] = useState('');
+  const [targetRoleId, setTargetRoleId] = useState(suggestion?.targetRoleId ?? '');
+  const [note, setNote] = useState(suggestion?.draftMessage ?? '');
   const [isForwarding, setIsForwarding] = useState(false);
 
   const currentRole = task.roles.find((r) => r.id === currentRoleId);
@@ -61,6 +63,22 @@ function ForwardLatestReplyModal({
         </div>
 
         <div className="modal-body">
+          {suggestion && (
+            <div className="form-field">
+              <label>AI Handoff Suggestion</label>
+              <div className="forward-preview-full">
+                <div className="preview-section-label">Recommendation</div>
+                <div className="preview-content">
+                  {suggestion.recommended
+                    ? `Recommended target: ${suggestion.targetRoleName ?? 'Not resolved'}`
+                    : 'No handoff recommended right now'}
+                </div>
+                <div className="preview-section-label">Reason</div>
+                <div className="preview-content">{suggestion.reason}</div>
+              </div>
+            </div>
+          )}
+
           <div className="form-field">
             <label>From</label>
             <div className="forward-from">

@@ -7,6 +7,8 @@ use claurst_tools::{
 };
 use claurst_api::{AnthropicClient, client::ClientConfig};
 use crate::storage::{ConversationStorage, StoredMessage};
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -156,6 +158,133 @@ fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
         .to_string()
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct HandoffSuggestion {
+    recommended: bool,
+    target_role_id: Option<String>,
+    target_role_name: Option<String>,
+    reason: String,
+    draft_message: String,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedHandoffBlock {
+    visible_text: String,
+    recommended: bool,
+    target_role_name: Option<String>,
+    reason: String,
+    draft_message: String,
+}
+
+#[derive(Debug, Clone)]
+struct TaskRosterRole {
+    role_id: String,
+    role_name: String,
+}
+
+fn extract_handoff_block(text: &str) -> Option<ParsedHandoffBlock> {
+    let start_tag = "[HANDOFF]";
+    let end_tag = "[/HANDOFF]";
+    let start = text.rfind(start_tag)?;
+    let end = text[start..].find(end_tag)? + start;
+    let block_content = &text[start + start_tag.len()..end];
+    let visible_text = text[..start].trim_end().to_string();
+
+    let mut fields = HashMap::new();
+    for line in block_content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once(':') else {
+            continue;
+        };
+        fields.insert(key.trim().to_lowercase(), value.trim().to_string());
+    }
+
+    let recommended_raw = fields.get("recommended")?.trim().to_lowercase();
+    let recommended = matches!(recommended_raw.as_str(), "yes" | "true" | "是");
+    let target_role_name = fields
+        .get("target_role")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let reason = fields
+        .get("reason")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())?;
+    let draft_message = fields
+        .get("draft_message")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())?;
+
+    Some(ParsedHandoffBlock {
+        visible_text,
+        recommended,
+        target_role_name,
+        reason,
+        draft_message,
+    })
+}
+
+fn load_task_roster(session_id: &str) -> Option<(String, Vec<TaskRosterRole>)> {
+    let pool = crate::database::get_pool().ok()?;
+    let conn = pool.get().ok()?;
+
+    let (task_id, current_role_id): (String, String) = conn.query_row(
+        "SELECT task_id, role_id FROM sessions WHERE id = ?1 AND task_id IS NOT NULL AND role_id IS NOT NULL",
+        rusqlite::params![session_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).ok()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name FROM roles WHERE task_id = ?1 ORDER BY display_order, created_at"
+    ).ok()?;
+
+    let rows = stmt.query_map(rusqlite::params![&task_id], |row| {
+        Ok(TaskRosterRole {
+            role_id: row.get(0)?,
+            role_name: row.get(1)?,
+        })
+    }).ok()?;
+
+    let roles = rows.collect::<Result<Vec<_>, _>>().ok()?;
+    Some((current_role_id, roles))
+}
+
+fn resolve_handoff_suggestion(session_id: &str, parsed: ParsedHandoffBlock) -> Option<HandoffSuggestion> {
+    let (current_role_id, roster) = load_task_roster(session_id)?;
+    let target_lookup = roster
+        .iter()
+        .map(|role| (role.role_name.trim().to_lowercase(), role))
+        .collect::<HashMap<_, _>>();
+    let roster_role_ids = roster.iter().map(|role| role.role_id.clone()).collect::<HashSet<_>>();
+
+    if !parsed.recommended {
+        return Some(HandoffSuggestion {
+            recommended: false,
+            target_role_id: None,
+            target_role_name: None,
+            reason: parsed.reason,
+            draft_message: parsed.draft_message,
+        });
+    }
+
+    let target_name = parsed.target_role_name.as_ref()?.trim().to_lowercase();
+    let target_role = target_lookup.get(&target_name)?;
+    if !roster_role_ids.contains(&target_role.role_id) || target_role.role_id == current_role_id {
+        return None;
+    }
+
+    Some(HandoffSuggestion {
+        recommended: true,
+        target_role_id: Some(target_role.role_id.clone()),
+        target_role_name: Some(target_role.role_name.clone()),
+        reason: parsed.reason,
+        draft_message: parsed.draft_message,
+    })
+}
+
 pub struct ClaurstSession {
     session_id: String,
     working_dir: PathBuf,
@@ -182,6 +311,10 @@ fn infer_phase_from_status(status: &str) -> &'static str {
 }
 
 impl ClaurstSession {
+    pub fn get_session_id(&self) -> &str {
+        &self.session_id
+    }
+
     pub fn new(
         session_id: String,
         working_dir: PathBuf,
@@ -712,6 +845,17 @@ impl ClaurstSession {
                     }
                 }
 
+                let handoff_suggestion = extract_handoff_block(&text)
+                    .and_then(|parsed| {
+                        let visible_text = parsed.visible_text.clone();
+                        resolve_handoff_suggestion(&self.session_id, parsed)
+                            .map(|suggestion| (visible_text, suggestion))
+                    });
+
+                if let Some((visible_text, _)) = handoff_suggestion.as_ref() {
+                    text = visible_text.clone();
+                }
+
                 log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());
                 if !text.is_empty() {
                     log::info!("🔍 [DEBUG] Final text preview (first 200 chars): {}",
@@ -768,6 +912,7 @@ impl ClaurstSession {
                     "request_id": request_id_owned.clone(),
                     "result": "success",
                     "final_text": text,
+                    "handoffSuggestion": handoff_suggestion.as_ref().map(|(_, suggestion)| suggestion),
                     "timestamp": now,
                 }));
 
@@ -895,7 +1040,43 @@ impl ClaurstSession {
         &self.working_dir
     }
 
-    pub fn get_session_id(&self) -> &str {
-        &self.session_id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_handoff_block, resolve_handoff_suggestion, ParsedHandoffBlock};
+
+    #[test]
+    fn extract_handoff_block_strips_machine_readable_suffix() {
+        let input = "第一部分是给用户看的总结。\n\n[HANDOFF]\nrecommended: yes\ntarget_role: Reviewer\nreason: 需要代码评审\ndraft_message: 请从评审角度检查这次实现。\n[/HANDOFF]";
+        let parsed = extract_handoff_block(input).expect("should parse handoff block");
+
+        assert_eq!(parsed.visible_text, "第一部分是给用户看的总结。");
+        assert!(parsed.recommended);
+        assert_eq!(parsed.target_role_name.as_deref(), Some("Reviewer"));
+        assert_eq!(parsed.reason, "需要代码评审");
+        assert_eq!(parsed.draft_message, "请从评审角度检查这次实现。");
+    }
+
+    #[test]
+    fn extract_handoff_block_accepts_non_recommended_result() {
+        let input = "继续推进实现。\n[HANDOFF]\nrecommended: no\ntarget_role:\nreason: 当前暂不交接\ndraft_message: 当前无需发送交接消息，因为此阶段仍由我继续推进。\n[/HANDOFF]";
+        let parsed = extract_handoff_block(input).expect("should parse handoff block");
+
+        assert!(!parsed.recommended);
+        assert_eq!(parsed.target_role_name, None);
+    }
+
+    #[test]
+    fn resolve_handoff_suggestion_rejects_missing_roster_context() {
+        let parsed = ParsedHandoffBlock {
+            visible_text: "summary".to_string(),
+            recommended: true,
+            target_role_name: Some("Reviewer".to_string()),
+            reason: "需要评审".to_string(),
+            draft_message: "请评审。".to_string(),
+        };
+
+        assert!(resolve_handoff_suggestion("missing-session", parsed).is_none());
     }
 }

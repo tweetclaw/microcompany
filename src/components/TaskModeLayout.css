@@ -351,6 +351,165 @@
   color: var(--vscode-descriptionForeground);
 }
 
+.task-team-brief {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(15, 23, 42, 0.18);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
+    0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.task-team-brief-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-team-brief-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(248, 113, 113);
+}
+
+.task-team-brief-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.task-team-brief-header p {
+  margin: 0;
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-team-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-team-brief-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(248, 113, 113, 0.14);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0.03)),
+    rgba(255, 255, 255, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.task-team-brief-card:hover {
+  border-color: rgba(248, 113, 113, 0.24);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+  transform: translateY(-1px);
+}
+
+.task-team-brief-card.active {
+  border-color: rgba(251, 191, 36, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.16),
+    0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.task-team-brief-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-team-brief-role-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--vscode-foreground);
+}
+
+.task-team-brief-role-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-team-brief-active-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  color: rgb(253, 224, 71);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-team-brief-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-team-brief-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(252, 165, 165);
+}
+
+.task-team-brief-section p,
+.task-team-brief-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--vscode-foreground);
+}
+
+.task-team-brief-empty {
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-team-brief-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-team-brief-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: rgb(252, 165, 165);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .task-mode-chat-panel {
   flex: 1;
   min-height: 0;
@@ -432,6 +591,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .task-seat-card,
+  .task-team-brief-card,
   .task-mode-empty-button {
     transition: none;
   }
@@ -444,6 +604,10 @@
 @media (max-width: 1180px) {
   .task-mode-room-shell {
     padding: 24px;
+  }
+
+  .task-team-brief-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .task-mode-table-surface {
@@ -462,6 +626,15 @@
 @media (max-width: 780px) {
   .task-mode-room-shell {
     padding: 20px;
+  }
+
+  .task-team-brief,
+  .task-team-brief-card {
+    padding: 16px;
+  }
+
+  .task-team-brief-header {
+    flex-direction: column;
   }
 
   .task-mode-table-stage {

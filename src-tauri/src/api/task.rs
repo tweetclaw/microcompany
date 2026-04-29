@@ -61,6 +61,27 @@ pub struct TaskRole {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamBrief {
+    pub task_id: String,
+    pub task_name: String,
+    pub roles: Vec<TeamBriefRole>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamBriefRole {
+    pub role_id: String,
+    pub role_name: String,
+    pub identity: String,
+    pub archetype_id: Option<String>,
+    pub archetype_label: Option<String>,
+    pub responsibility_summary: Option<String>,
+    pub handoff_guidance: Option<String>,
+    pub recommended_next_role_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
 pub struct TaskSummary {
     pub id: String,
     pub name: String,

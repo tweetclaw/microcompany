@@ -1,5 +1,6 @@
 use rusqlite::params;
-use crate::api::{Task, TaskRole, TaskSummary, DeleteTaskResult, TaskUpdateRequest};
+use std::collections::HashMap;
+use crate::api::{DeleteTaskResult, Task, TaskRole, TaskSummary, TaskUpdateRequest, TeamBrief, TeamBriefRole};
 use crate::database::get_pool;
 use chrono::Utc;
 
@@ -71,6 +72,104 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
         created_at: task_row.5,
         updated_at: task_row.6,
     })
+}
+
+pub async fn get_team_brief(task_id: String) -> Result<TeamBrief, String> {
+    let task = get_task(task_id).await?;
+    let archetypes = crate::archetypes::list_role_archetypes()?;
+    let archetypes_by_id: HashMap<String, crate::archetypes::RoleArchetype> = archetypes
+        .into_iter()
+        .map(|archetype| (archetype.id.clone(), archetype))
+        .collect();
+
+    let archetype_to_role_ids: HashMap<String, Vec<String>> = task
+        .roles
+        .iter()
+        .filter_map(|role| {
+            role.archetype_id
+                .as_ref()
+                .map(|archetype_id| (archetype_id.clone(), role.id.clone()))
+        })
+        .fold(HashMap::new(), |mut acc, (archetype_id, role_id)| {
+            acc.entry(archetype_id).or_default().push(role_id);
+            acc
+        });
+
+    let roles = task
+        .roles
+        .iter()
+        .map(|role| {
+            let archetype = role
+                .archetype_id
+                .as_ref()
+                .and_then(|archetype_id| archetypes_by_id.get(archetype_id));
+
+            let responsibility_summary = archetype
+                .and_then(build_responsibility_summary);
+
+            let recommended_next_role_ids = archetype
+                .map(|archetype| {
+                    archetype
+                        .recommended_next_archetypes
+                        .iter()
+                        .flat_map(|next_archetype_id| {
+                            archetype_to_role_ids
+                                .get(next_archetype_id)
+                                .into_iter()
+                                .flat_map(|role_ids| role_ids.iter())
+                        })
+                        .filter(|candidate_role_id| *candidate_role_id != &role.id)
+                        .cloned()
+                        .fold(Vec::new(), |mut acc, role_id| {
+                            if !acc.contains(&role_id) {
+                                acc.push(role_id);
+                            }
+                            acc
+                        })
+                })
+                .unwrap_or_default();
+
+            TeamBriefRole {
+                role_id: role.id.clone(),
+                role_name: role.name.clone(),
+                identity: role.identity.clone(),
+                archetype_id: role.archetype_id.clone(),
+                archetype_label: archetype.map(|value| value.label.clone()),
+                responsibility_summary,
+                handoff_guidance: archetype
+                    .map(|value| value.handoff_guidance.trim().to_string())
+                    .filter(|value| !value.is_empty()),
+                recommended_next_role_ids,
+            }
+        })
+        .collect();
+
+    Ok(TeamBrief {
+        task_id: task.id,
+        task_name: task.name,
+        roles,
+    })
+}
+
+fn build_responsibility_summary(archetype: &crate::archetypes::RoleArchetype) -> Option<String> {
+    let summary = archetype.summary.trim();
+    if !summary.is_empty() {
+        return Some(summary.to_string());
+    }
+
+    let responsibilities = archetype
+        .responsibilities
+        .iter()
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+        .take(3)
+        .collect::<Vec<_>>();
+
+    if responsibilities.is_empty() {
+        None
+    } else {
+        Some(responsibilities.join("；"))
+    }
 }
 
 pub async fn list_tasks() -> Result<Vec<TaskSummary>, String> {

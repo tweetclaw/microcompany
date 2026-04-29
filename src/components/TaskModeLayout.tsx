@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from 'react';
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import TaskListPanel from './TaskListPanel';
 import ChatInterface from './ChatInterface';
-import { Message, Task, TaskSummary, ProviderConfig, AiRunState } from '../types';
+import { AiRequestEndEvent, Message, Task, TaskSummary, ProviderConfig, AiRunState, TeamBrief } from '../types';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import './TaskModeLayout.css';
 import './ResizeHandle.css';
@@ -32,9 +32,11 @@ interface TaskModeLayoutProps {
   isDraftConversation: boolean;
   onEnsureSession: () => Promise<string | null>;
   currentTask: Task | null;
+  currentTeamBrief: TeamBrief | null;
   currentTaskRoleId: string | null;
   onTaskRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
+  onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
   onTaskSelected: (taskSummary: TaskSummary) => void;
   onTaskDeleted?: (taskId: string) => void;
   taskListRefreshKey: number;
@@ -70,6 +72,17 @@ function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
   }
 
   return identity;
+}
+
+function getRecommendedRoleNames(teamBrief: TeamBrief | null, roleId: string) {
+  const briefRole = teamBrief?.roles.find((item) => item.roleId === roleId);
+  if (!briefRole || briefRole.recommendedNextRoleIds.length === 0) {
+    return [];
+  }
+
+  return briefRole.recommendedNextRoleIds
+    .map((nextRoleId) => teamBrief?.roles.find((item) => item.roleId === nextRoleId)?.roleName)
+    .filter((name): name is string => Boolean(name));
 }
 
 export default function TaskModeLayout(props: TaskModeLayoutProps) {
@@ -228,6 +241,63 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                     </div>
                   ))}
                 </div>
+
+                {props.currentTeamBrief && (
+                  <section className="task-team-brief" aria-label="Team Brief">
+                    <div className="task-team-brief-header">
+                      <div>
+                        <div className="task-team-brief-label">Team Brief</div>
+                        <h3>Who is on this task team</h3>
+                      </div>
+                      <p>
+                        Shared context for every seat: who owns what, and who each role can reasonably hand off to next.
+                      </p>
+                    </div>
+                    <div className="task-team-brief-grid">
+                      {props.currentTeamBrief.roles.map((role) => {
+                        const recommendedRoleNames = getRecommendedRoleNames(props.currentTeamBrief, role.roleId);
+                        return (
+                          <article
+                            key={role.roleId}
+                            className={`task-team-brief-card ${props.currentTaskRoleId === role.roleId ? 'active' : ''}`}
+                          >
+                            <div className="task-team-brief-card-top">
+                              <div>
+                                <div className="task-team-brief-role-name">{role.roleName}</div>
+                                <div className="task-team-brief-role-meta">
+                                  {role.archetypeLabel || getRoleArchetypeLabel(role.identity, role.archetypeId ?? null)}
+                                </div>
+                              </div>
+                              {props.currentTaskRoleId === role.roleId && (
+                                <div className="task-team-brief-active-badge">Current seat</div>
+                              )}
+                            </div>
+                            <div className="task-team-brief-section">
+                              <div className="task-team-brief-section-label">Main responsibility</div>
+                              <p>{role.responsibilitySummary || 'No archetype summary available yet.'}</p>
+                            </div>
+                            <div className="task-team-brief-section">
+                              <div className="task-team-brief-section-label">Suggested handoff</div>
+                              <p>{role.handoffGuidance || 'No handoff guidance available yet.'}</p>
+                            </div>
+                            <div className="task-team-brief-section">
+                              <div className="task-team-brief-section-label">Next teammates</div>
+                              {recommendedRoleNames.length > 0 ? (
+                                <div className="task-team-brief-chip-row">
+                                  {recommendedRoleNames.map((name) => (
+                                    <span key={`${role.roleId}-${name}`} className="task-team-brief-chip">{name}</span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="task-team-brief-empty">No recommended next role on this roster.</p>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
               </div>
             </div>
           </Panel>
@@ -268,6 +338,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       isDraftConversation={props.isDraftConversation}
                       onEnsureSession={props.onEnsureSession}
                       onSettingsClick={props.onSettingsClick}
+                      onHandoffSuggestion={props.onHandoffSuggestion}
                       hideSidebar={true}
                       hideInspector={true}
                       hideNewButtons={true}

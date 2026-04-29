@@ -17,9 +17,19 @@ mod statistics_impl;
 pub mod backup;
 mod backup_impl;
 
-pub use task::{TaskCreateRequest, TaskUpdateRequest, RoleConfig, Task, TaskRole, TaskSummary, DeleteTaskResult};
+pub use task::{
+    DeleteTaskResult,
+    RoleConfig,
+    Task,
+    TaskCreateRequest,
+    TaskRole,
+    TaskSummary,
+    TaskUpdateRequest,
+    TeamBrief,
+    TeamBriefRole,
+};
 pub use task_impl::create_task;
-pub use task_queries::{get_task, list_tasks, update_task, delete_task};
+pub use task_queries::{delete_task, get_task, get_team_brief, list_tasks, update_task};
 
 pub use message::{Message, MessageCreateRequest};
 pub use message_impl::{get_messages, save_message, update_message_content};

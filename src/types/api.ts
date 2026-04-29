@@ -81,6 +81,31 @@ export interface TaskRole {
   created_at: string;
 }
 
+export interface TeamBrief {
+  taskId: string;
+  taskName: string;
+  roles: TeamBriefRole[];
+}
+
+export interface TeamBriefRole {
+  roleId: string;
+  roleName: string;
+  identity: string;
+  archetypeId?: string | null;
+  archetypeLabel?: string | null;
+  responsibilitySummary?: string | null;
+  handoffGuidance?: string | null;
+  recommendedNextRoleIds: string[];
+}
+
+export interface HandoffSuggestion {
+  recommended: boolean;
+  targetRoleId?: string | null;
+  targetRoleName?: string | null;
+  reason: string;
+  draftMessage: string;
+}
+
 export interface TaskSummary {
   id: string;
   name: string;

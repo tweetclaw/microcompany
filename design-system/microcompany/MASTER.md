@@ -7,8 +7,8 @@
 ---
 
 **Project:** Microcompany
-**Generated:** 2026-04-27 13:29:27
-**Category:** Productivity Tool
+**Generated:** 2026-04-29 12:11:30
+**Category:** Sports Team/Club
 
 ---
 
@@ -18,25 +18,19 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#0891B2` | `--color-primary` |
-| Secondary | `#22D3EE` | `--color-secondary` |
-| CTA/Accent | `#059669` | `--color-cta` |
-| Background | `#ECFEFF` | `--color-background` |
-| Text | `#164E63` | `--color-text` |
+| Primary | `#DC2626` | `--color-primary` |
+| Secondary | `#EF4444` | `--color-secondary` |
+| CTA/Accent | `#FBBF24` | `--color-cta` |
+| Background | `#FEF2F2` | `--color-background` |
+| Text | `#7F1D1D` | `--color-text` |
 
-**Color Notes:** Calm cyan + health green
+**Color Notes:** Team red + championship gold
 
 ### Typography
 
-- **Heading Font:** Atkinson Hyperlegible
-- **Body Font:** Atkinson Hyperlegible
-- **Mood:** accessible, readable, inclusive, WCAG, dyslexia-friendly, clear
-- **Google Fonts:** [Atkinson Hyperlegible + Atkinson Hyperlegible](https://fonts.google.com/share?selection.family=Atkinson+Hyperlegible:wght@400;700)
-
-**CSS Import:**
-```css
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap');
-```
+- **Heading Font:** Inter
+- **Body Font:** Inter
+- **Mood:** Bold + Impactful typography
 
 ### Spacing Variables
 
@@ -68,7 +62,7 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #059669;
+  background: #FBBF24;
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -85,8 +79,8 @@
 /* Secondary Button */
 .btn-secondary {
   background: transparent;
-  color: #0891B2;
-  border: 2px solid #0891B2;
+  color: #DC2626;
+  border: 2px solid #DC2626;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -99,7 +93,7 @@
 
 ```css
 .card {
-  background: #ECFEFF;
+  background: #FEF2F2;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow-md);
@@ -125,9 +119,9 @@
 }
 
 .input:focus {
-  border-color: #0891B2;
+  border-color: #DC2626;
   outline: none;
-  box-shadow: 0 0 0 3px #0891B220;
+  box-shadow: 0 0 0 3px #DC262620;
 }
 ```
 
@@ -153,28 +147,28 @@
 
 ## Style Guidelines
 
-**Style:** Micro-interactions
+**Style:** Vibrant & Block-based
 
-**Keywords:** Small animations, gesture-based, tactile feedback, subtle animations, contextual interactions, responsive
+**Keywords:** Bold, energetic, playful, block layout, geometric shapes, high color contrast, duotone, modern, energetic
 
-**Best For:** Mobile apps, touchscreen UIs, productivity tools, user-friendly, consumer apps, interactive components
+**Best For:** Startups, creative agencies, gaming, social media, youth-focused, entertainment, consumer
 
-**Key Effects:** Small hover (50-100ms), loading spinners, success/error state anim, gesture-triggered (swipe/pinch), haptic
+**Key Effects:** Large sections (48px+ gaps), animated patterns, bold hover (color shift), scroll-snap, large type (32px+), 200-300ms
 
 ### Page Pattern
 
-**Pattern Name:** App Store Style Landing
+**Pattern Name:** Enterprise Gateway
 
-- **Conversion Strategy:** Show real screenshots. Include ratings (4.5+ stars). QR code for mobile. Platform-specific CTAs.
-- **CTA Placement:** Download buttons prominent (App Store + Play Store) throughout
-- **Section Order:** 1. Hero with device mockup, 2. Screenshots carousel, 3. Features with icons, 4. Reviews/ratings, 5. Download CTAs
+- **Conversion Strategy:**  logo carousel,  tab switching for industries, Path selection (I am a...). Mega menu navigation. Trust signals prominent.
+- **CTA Placement:** Contact Sales (Primary) + Login (Secondary)
+- **Section Order:** 1. Hero (Video/Mission), 2. Solutions by Industry, 3. Solutions by Role, 4. Client Logos, 5. Contact Sales
 
 ---
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Complex onboarding
-- ❌ Slow performance
+- ❌ Static content
+- ❌ Poor fan engagement
 
 ### Additional Forbidden Patterns
 

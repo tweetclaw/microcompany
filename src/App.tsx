@@ -5,9 +5,9 @@ import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
 import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
-import { Message, Task, TaskCreateRequest, TaskSummary, TaskRole, AiRunState } from './types';
+import { AiRequestEndEvent, HandoffSuggestion, Message, Task, TaskCreateRequest, TaskSummary, TaskRole, TeamBrief, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
-import { getSession, createTask } from './api';
+import { getSession, createTask, getTask, getTeamBrief } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
@@ -32,6 +32,15 @@ function getInitialTaskRole(task: Task) {
   }
 
   return task.roles[0] ?? null;
+}
+
+async function loadTaskContext(taskId: string) {
+  const [task, teamBrief] = await Promise.all([
+    getTask(taskId),
+    getTeamBrief(taskId),
+  ]);
+
+  return { task, teamBrief };
 }
 
 function App() {
@@ -60,6 +69,7 @@ function App() {
 
   // Task 状态
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [currentTeamBrief, setCurrentTeamBrief] = useState<TeamBrief | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [currentTaskRoleId, setCurrentTaskRoleId] = useState<string | null>(null);
   const [taskListRefreshKey, setTaskListRefreshKey] = useState(0);
@@ -355,19 +365,23 @@ function App() {
     if (!workingDirectory) return;
     setIsCreatingTask(true);
     setCurrentTask(null);
+    setCurrentTeamBrief(null);
     setCurrentTaskRoleId(null);
   };
 
   const handleCancelTaskCreation = () => {
     setIsCreatingTask(false);
     setCurrentTask(null);
+    setCurrentTeamBrief(null);
   };
 
   const handleTaskCreated = async (taskRequest: TaskCreateRequest) => {
     try {
       const createdTask = await createTask(taskRequest);
+      const teamBrief = await getTeamBrief(createdTask.id);
 
       setCurrentTask(createdTask);
+      setCurrentTeamBrief(teamBrief);
       setIsCreatingTask(false);
 
       const initialRole = getInitialTaskRole(createdTask);
@@ -404,8 +418,9 @@ function App() {
 
   const handleTaskSelected = async (taskSummary: TaskSummary) => {
     try {
-      const task = await invoke<Task>('get_task', { taskId: taskSummary.id });
+      const { task, teamBrief } = await loadTaskContext(taskSummary.id);
       setCurrentTask(task);
+      setCurrentTeamBrief(teamBrief);
       setNavigationMode('task');
       setTaskListRefreshKey((prev) => prev + 1);
 
@@ -423,8 +438,16 @@ function App() {
   };
 
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [pendingHandoffSuggestion, setPendingHandoffSuggestion] = useState<HandoffSuggestion | null>(null);
 
   const handleForwardLatestReply = () => {
+    setPendingHandoffSuggestion(null);
+    setShowForwardModal(true);
+  };
+
+  const handleHandoffSuggestion = (event: AiRequestEndEvent) => {
+    if (!event.handoffSuggestion) return;
+    setPendingHandoffSuggestion(event.handoffSuggestion);
     setShowForwardModal(true);
   };
 
@@ -457,6 +480,7 @@ function App() {
     forwardedContent += `[Forwarded Latest Reply from ${currentRole?.name}]\n${latestAssistantMessage.content}`;
 
     setShowForwardModal(false);
+    setPendingHandoffSuggestion(null);
 
     try {
       if (targetRoleId !== currentTaskRoleId) {
@@ -485,6 +509,7 @@ function App() {
   const handleExitTask = async () => {
     // 任务状态已由后端自动持久化，无需手动保存
     setCurrentTask(null);
+    setCurrentTeamBrief(null);
     setCurrentTaskRoleId(null);
   };
 
@@ -500,6 +525,7 @@ function App() {
 
       // 清空 task 相关状态
       setCurrentTask(null);
+      setCurrentTeamBrief(null);
       setCurrentTaskRoleId(null);
       setCurrentSessionId(null);
       setCurrentSessionTitle(null);
@@ -693,9 +719,11 @@ function App() {
                 isDraftConversation={isDraftConversation}
                 onEnsureSession={ensureActiveSession}
                 currentTask={currentTask}
+                currentTeamBrief={currentTeamBrief}
                 currentTaskRoleId={currentTaskRoleId}
                 onTaskRoleSelected={handleTaskRoleSelected}
                 onForwardLatestReply={handleForwardLatestReply}
+                onHandoffSuggestion={handleHandoffSuggestion}
                 onTaskSelected={handleTaskSelected}
                 onTaskDeleted={handleTaskDeleted}
                 taskListRefreshKey={taskListRefreshKey}
@@ -733,8 +761,12 @@ function App() {
             task={currentTask}
             currentRoleId={currentTaskRoleId}
             messages={messages}
+            suggestion={pendingHandoffSuggestion}
             onForward={handleForwardConfirm}
-            onCancel={() => setShowForwardModal(false)}
+            onCancel={() => {
+              setShowForwardModal(false);
+              setPendingHandoffSuggestion(null);
+            }}
           />
         )}
       </Suspense>

@@ -49,6 +49,7 @@ interface ChatInterfaceProps {
   onSettingsClick: () => void;
   onCancelRequest?: () => Promise<void>;
   onMessageCompleted?: () => void;
+  onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
   hideSidebar?: boolean;
   hideInspector?: boolean;
   hideNewButtons?: boolean;
@@ -89,6 +90,7 @@ function ChatInterface({
   onEnsureSession,
   onSettingsClick,
   onMessageCompleted,
+  onHandoffSuggestion,
   hideSidebar = false,
   hideInspector = false,
   externalInspectorCollapsed,
@@ -359,6 +361,9 @@ function ChatInterface({
         finalizeStreamingMessage(payload.request_id, payload.final_text);
 
         if (payload.result === 'success') {
+          if (payload.handoffSuggestion && onHandoffSuggestion) {
+            onHandoffSuggestion(payload);
+          }
           setRunState('completed');
           resetRunIfTerminal();
           // Refresh session list to update title

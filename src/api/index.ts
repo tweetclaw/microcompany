@@ -5,6 +5,7 @@ import type {
   TaskUpdateRequest,
   TaskSummary,
   DeleteTaskResult,
+  TeamBrief,
   RoleArchetype,
   Session,
   SessionSummary,
@@ -25,6 +26,10 @@ export async function createTask(task: TaskCreateRequest): Promise<Task> {
 
 export async function getTask(taskId: string): Promise<Task> {
   return invoke('get_task', { taskId });
+}
+
+export async function getTeamBrief(taskId: string): Promise<TeamBrief> {
+  return invoke('get_team_brief', { taskId });
 }
 
 export async function listTasks(): Promise<TaskSummary[]> {

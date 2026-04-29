@@ -1,4 +1,6 @@
 // Message types
+import type { HandoffSuggestion, RoleArchetype, RoleConfig, Task, TaskCreateRequest, TaskRole, TaskSummary, TaskUpdateRequest, TeamBrief } from './api';
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -39,6 +41,7 @@ export interface AiRequestEndEvent {
   result: AiRequestResult;
   error_message?: string;
   final_text?: string;
+  handoffSuggestion?: HandoffSuggestion;
   timestamp: number;
 }
 
@@ -103,7 +106,7 @@ export interface AppState {
 }
 
 // Re-export Task types from API (unified type system)
-export type { Task, TaskRole, TaskSummary, TaskCreateRequest, RoleArchetype, RoleConfig, TaskUpdateRequest } from './api';
+export type { Task, TaskRole, TaskSummary, TaskCreateRequest, RoleArchetype, RoleConfig, TaskUpdateRequest, HandoffSuggestion, TeamBrief } from './api';
 
 // Re-export settings types
 export type { ProviderConfig } from './settings';

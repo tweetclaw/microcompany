@@ -52,6 +52,11 @@ async fn get_task(task_id: String) -> Result<api::Task, String> {
 }
 
 #[tauri::command]
+async fn get_team_brief(task_id: String) -> Result<api::TeamBrief, String> {
+    api::get_team_brief(task_id).await
+}
+
+#[tauri::command]
 async fn list_tasks() -> Result<Vec<api::TaskSummary>, String> {
     api::list_tasks().await
 }
@@ -201,6 +206,7 @@ pub fn run() {
       initialize_database,
       create_task,
       get_task,
+      get_team_brief,
       list_tasks,
       update_task,
       delete_task,
