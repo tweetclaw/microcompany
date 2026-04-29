@@ -1,152 +1,122 @@
-# Team Templates 功能开发任务团队测试手册
+# 用 MicroCompany App 真实推进 Team Templates 开发的测试手册
 
-**文档版本**: v2.0  
+**文档版本**: v1.0  
 **创建日期**: 2026-04-29  
 **项目**: MicroCompany  
-**文档性质**: 测试 MicroCompany App 团队协作开发能力的测试手册
+**文档性质**: App 内真实协作测试手册
 
 ---
 
-## 1. 文档目的
+## 1. 这份手册是干什么的
 
-本文档不是普通的功能验收清单。
+这份手册不是测试某个按钮有没有显示出来。
 
-本文档的用途是：
+这份手册的目标是：
 
-> **把 `docs/v2/team-templates-next-phase-implementation-plan.md` 当作一项真实开发任务，交给 MicroCompany App 里的多角色团队去理解、拆分、分发、推进，并通过这个真实推进过程来测试我们的 App。**
+> **直接把 `docs/v2/team-templates-next-phase-implementation-plan.md` 当作真实开发需求，放进我们的 app，让 app 里的团队角色自己去理解、拆解、分发、推进 Team Templates 功能。**
 
-也就是说，这次测试的对象不是某个单独按钮，也不是某个静态页面，而是：
+也就是说，从现在开始：
 
-- 我们的 App 是否真的能建立一个 task 团队
-- 这个团队是否真的能围绕一份真实开发文档协作
-- 项目经理是否能先理解需求并分发工作
-- 后端、前端、QA 是否能接力推进同一个功能
-- Team Brief、PM-first、handoff confirmation 是否真的能支撑“用团队开发软件”
+- 不是你在脑中假设一个团队
+- 而是你真的在 MicroCompany 里建立一个 task 团队
+- 然后把这份实施计划交给项目经理
+- 让项目经理开始理解需求、收敛范围、安排下一位角色
+- 再让前端、后端、QA 依次接力
+- 你通过这个真实推进过程，来测试我们的 app 是否真的具备“多角色协作开发软件”的能力
 
-这次测试的核心任务只有一个：
-
-> **让我们的 App 来推进 `docs/v2/team-templates-next-phase-implementation-plan.md` 里面定义的 Team Templates 功能开发。**
-
----
-
-## 2. 本次测试到底在测什么
-
-本轮测试测的是 App 的“团队化开发能力”，不是单一功能点是否显示正常。
-
-你要验证 5 件事：
-
-### 2.1 项目经理能不能正确理解主文档
-
-也就是：
-- 能不能读懂 `docs/v2/team-templates-next-phase-implementation-plan.md`
-- 能不能收敛 MVP 范围
-- 能不能拆成可执行的开发模块
-- 能不能指定下一位最合适的角色
-
-### 2.2 团队角色能不能接力推进同一项真实开发工作
-
-也就是：
-- Backend 是否能基于 PM 的拆分收敛数据结构和接口边界
-- Frontend 是否能基于前面产出收敛创建流程和模板预览
-- QA 是否能基于前面产出收敛测试路径
-
-### 2.3 Team Brief 是否真的帮助团队协作
-
-也就是：
-- 用户是否能看懂这个 task 团队里有谁
-- 每个 seat 负责什么
-- 当前应该由谁工作
-- 下一步合理 handoff 给谁
-
-### 2.4 Handoff 是否像真实团队分工而不是随机切换
-
-也就是：
-- AI 推荐的下一个角色是否合理
-- 用户是否保留最终确认权
-- 后一个角色是否真的接住上一个角色的结果
-
-### 2.5 整个体验是否真的像“用团队在开发软件”
-
-最终你要主观判断：
-
-> **你是在“带一个团队推进 Team Templates 功能”，还是只是在“分别问几个 AI 问题”。**
+这才是本手册的核心。
 
 ---
 
-## 3. 本次测试对象
+## 2. 本次测试到底在验证什么
+
+本轮测试验证的不是 Team Templates 功能本身是否已经完成，而是验证下面这件更根本的事：
+
+> **我们的 app 能不能作为一个多角色协作开发环境，真的去推进 `docs/v2/team-templates-next-phase-implementation-plan.md` 这项工作。**
+
+你要测的是 5 件事：
+
+1. 你能不能把这份文档成功交给 app 内的项目经理理解
+2. 项目经理能不能基于文档收敛需求、拆分工作、指定下一位角色
+3. 不同角色能不能接住上一个角色的上下文，持续推进同一项真实工作
+4. handoff 是否像团队分工，而不是随机切换
+5. 最终这套流程是否真的像“一支软件团队在开发 Team Templates”
+
+---
+
+## 3. 测试对象是什么
+
+本次测试对象不是泛泛的“模板功能”。
 
 本次测试对象非常明确：
 
-### 3.1 主需求文档
-- `docs/v2/team-templates-next-phase-implementation-plan.md`
+- **主需求文档**：`docs/v2/team-templates-next-phase-implementation-plan.md`
+- **开发对象**：Team Templates 下一阶段实现
+- **测试方式**：让 app 内团队围绕这份文档真实协作
 
-### 3.2 团队开发目标
-- Team Templates 下一阶段实现
+所以你每一步都要记住：
 
-### 3.3 测试方式
-- 在 App 中创建一个多角色 task
-- 让项目经理先阅读并解释主文档
-- 让项目经理分发给下一位角色
-- 让 Backend、Frontend、QA 依次接力
-- 通过整条接力链路测试 App 是否真能支撑真实开发
-
-所以本手册测试的不是“是否能讨论 Team Templates”，而是：
-
-> **是否能让 App 里的团队真的开始开发 Team Templates。**
+> 你不是在“让 AI 聊聊天”，你是在“把一份真实实现计划交给团队，然后观察团队是否真的能干活”。
 
 ---
 
-## 4. 测试前提
+## 4. 测试前准备
 
-开始前请确认以下条件：
+开始前请确认：
 
-- App 可以正常进入 Task 模式
-- 当前版本支持多角色 task
-- Task Room 中可以显示 Team Brief
-- handoff confirmation 可以正常工作
-- 你可以创建包含多个角色的 task
+- app 可以正常进入 Task 模式
+- 当前版本已经有多角色 task room
+- Team Brief 可显示
+- handoff confirmation 可工作
+- 你可以创建一个包含多个角色的 task
 
-建议本轮至少建立以下 4 个角色：
+建议本次测试至少建立以下 4 个角色：
 
 1. Product Manager
 2. Backend Engineer / Architect
 3. Frontend Engineer
 4. QA Reviewer
 
-如果你们当前 archetype 名称不同，也可以使用语义接近的角色。
+如果你们已有更贴近现有 archetype 的命名，可以用现有名字，只要语义对应即可。
 
 ---
 
 ## 5. 测试总原则
 
-这轮测试必须像真实团队协作，而不是一次性让一个角色回答全部问题。
+本轮测试必须按“真实团队协作”方式进行，而不是一次性让单个角色回答完所有内容。
+
+你要遵守 3 个原则：
 
 ### 5.1 第一轮必须从项目经理开始
 
-因为 `docs/v2/team-templates-next-phase-implementation-plan.md` 是实施计划文档，不应该一开始就直接让工程角色开工。
+因为这是一份实施计划文档，不应该一上来就让工程角色直接开工。
 
-### 5.2 每一轮只推进一个清晰目标
+### 5.2 每一轮只推进一个明确目标
 
 例如：
-- 第一轮：PM 理解主文档并拆解任务
-- 第二轮：Backend 定义最小数据模型和接口
-- 第三轮：Frontend 定义最小创建流程和模板预览
-- 第四轮：QA 定义测试路径
+- 第一轮只让 PM 理解并拆任务
+- 第二轮只让后端收敛数据结构和接口
+- 第三轮只让前端收敛创建流程与模板预览
+- 第四轮只让 QA 输出验收路径
 
-### 5.3 尽量通过 handoff 进入下一个角色
+### 5.3 每一轮都尽量通过 handoff 进入下一个角色
 
-优先让系统走真实的建议与确认链路，这样最能测试：
-- roster 是否真实
+不要手动跳得太随意。
+
+如果 AI 给出了合理 handoff 建议，就优先按建议走；如果建议不理想，再人工修改目标角色。
+
+这样才能测出：
+- roster 感知是否真实
 - handoff 建议是否合理
-- 用户确认是否有效
+- 用户确认流程是否有效
 
 ---
 
-## 6. 如何在 App 里建立这次测试任务
+## 6. 如何建立这个测试 task
 
 ## 6.1 建议任务名称
 
-建议新建一个 task，名称使用：
+建议你在 app 中创建一个新 task，名称用：
 
 **Implement Team Templates MVP from the next-phase implementation plan**
 
@@ -154,64 +124,32 @@
 
 **基于下一阶段实施计划推进 Team Templates MVP 开发**
 
-## 6.2 建议任务说明
+## 6.2 建议任务说明 / 首次上下文
 
-如果创建 task 时支持输入说明，建议填入：
+如果创建 task 时支持输入说明，建议填入类似内容：
 
 ```text
 This task is for real implementation planning and development of Team Templates in MicroCompany. The team must use docs/v2/team-templates-next-phase-implementation-plan.md as the primary source of truth, then clarify scope, split responsibilities, and produce actionable implementation work across PM, backend, frontend, and QA.
 ```
 
-中文版本：
+中文也可以：
 
 ```text
 这个 task 用于真实推进 MicroCompany 的 Team Templates 开发。团队必须以 docs/v2/team-templates-next-phase-implementation-plan.md 作为主要需求来源，先澄清范围，再拆分职责，并由 PM、后端、前端、QA 逐步产出可执行实施内容。
 ```
 
-## 6.3 建议角色配置
-
-最小推荐团队：
-
-### 1) Product Manager
-职责：
-- 读取主文档
-- 收敛 MVP 范围
-- 拆分开发模块
-- 说明依赖顺序
-- 指定下一个角色
-
-### 2) Backend Engineer / Architect
-职责：
-- 收敛模板数据结构
-- 明确 template / draft / task 边界
-- 定义最小后端命令或 API
-- 说明前端必须等待哪些后端边界先明确
-
-### 3) Frontend Engineer
-职责：
-- 设计模板创建入口
-- 设计模板列表与模板预览
-- 设计 template -> draft 确认流程
-- 设计 provider/model 补全校验
-
-### 4) QA Reviewer
-职责：
-- 输出 MVP 测试清单
-- 覆盖主流程与边界条件
-- 验证模板创建后的 task 是否仍能进入 Team Brief 与 handoff 运行时流程
-
 ---
 
-## 7. 第一步：你应该如何向项目经理介绍这份文档
+## 7. 第一步：你应该如何把文档介绍给项目经理
 
-这是本手册最重要的一步。
+这是本手册最关键的一步。
 
-你不要只说“看一下这个文档”。
+你不要只说一句“你看看这个文档”。
 
-你要明确告诉项目经理：
-- 这是一份真实开发任务的主实施文档
-- 你要他做的不是总结文档，而是把它转成团队可执行工作
-- 他必须给出 MVP 范围、开发模块、依赖顺序、下一位负责人
+你应该明确告诉项目经理：
+- 这是一份当前主开发任务的实施计划
+- 你希望他做的不是总结文档，而是把它转成团队可执行工作
+- 他必须确定 MVP 范围、主要模块、依赖顺序、下一位负责人
 
 ## 7.1 给项目经理的推荐第一条消息
 
@@ -241,51 +179,55 @@ Please treat docs/v2/team-templates-next-phase-implementation-plan.md as the pri
 - 能说清先做什么、后做什么
 - 能指定一个最合理的下一角色
 
-## 7.3 通过标准
+## 7.3 第一步通过标准
 
 如果项目经理输出后，你感觉：
 
-- 他真的理解了文档
-- 他真的把文档变成了开发工作
+- 这个人真的理解了文档
+- 真的把文档变成了开发工作
 - 下一步知道该交给谁
 
-那么第一步就算通过。
+那说明 app 已经通过了最关键的第一关。
 
 ---
 
-## 8. 第二步：让项目经理分发任务
+## 8. 第二步：让项目经理分发给正确的人
 
-通常情况下，项目经理读完主文档后，最合理的下一位是：
+项目经理读完文档后，通常最合理的下一位应该是：
 
 - **Backend Engineer / Architect**
 
-原因是 Team Templates 的最小闭环往往先依赖：
-- 数据结构
+原因是这份 plan 的最小闭环通常先从：
+- 模板数据结构
 - 系统模板读取
 - template -> draft 边界
 - task / template 解耦
 
+这些后端边界先收清楚，前端 UI 才不会乱。
+
 ## 8.1 如果 PM 推荐 Backend
 
-优先走 handoff 确认流程，进入 Backend。
+你就按 handoff 流程确认，进入 Backend。
 
 ## 8.2 如果 PM 推荐 Frontend
 
-也不一定错，但你要看他的理由。
+也不是一定错，但你要判断理由是否充分。
 
-只有在他明确说明“先通过前端流程收敛产品边界，再反推后端结构”时，这个建议才比较合理。
+只有当 PM 说的是“先用前端交互收敛范围，再反推数据结构”时，这个建议才合理。
+
+否则，一般 Backend 更像第一位工程接手者。
 
 ---
 
-## 9. 第三步：你应该如何向 Backend 介绍任务
+## 9. 第三步：你应该如何向 Backend 介绍这个任务
 
-到 Backend 之后，不要让他泛泛而谈。
+到 Backend 之后，不要让他泛泛谈架构。
 
-你要明确要求他：
-- 以 PM 刚才的结论为前提
+你应该明确要求他：
+- 以 PM 刚才的拆分为前提
 - 以 `docs/v2/team-templates-next-phase-implementation-plan.md` 为主文档
-- 只聚焦后端 MVP
-- 给出最小可实现方案
+- 只聚焦后端边界
+- 给出最小实现方案
 
 ## 9.1 给 Backend 的推荐消息
 
@@ -311,15 +253,17 @@ Backend 的回答最好能明确：
 - 哪些接口应先做
 - 哪些复杂能力现在不做
 
-## 9.3 通过标准
+## 9.3 这一步为什么重要
 
-如果 Backend 能清楚给出最小边界，而不是上来就把系统做复杂，这一步就通过。
+如果 Backend 说不清这几个边界，说明 app 虽然能聊天，但还没形成真实软件开发协作能力。
 
 ---
 
 ## 10. 第四步：让 Backend 把工作交给 Frontend
 
 当 Backend 收敛完数据模型和接口边界后，下一位通常应该是 Frontend。
+
+因为这时前端需要把这些边界落成可操作的创建流程。
 
 ## 10.1 给 Frontend 的推荐消息
 
@@ -343,17 +287,15 @@ Frontend 的回答应该：
 - 能说明哪些部分复用当前 Task Builder
 - 能说明 Team Brief 的展示经验如何复用到模板预览
 
-## 10.3 通过标准
-
-如果 Frontend 的方案是 MVP 级别、可落地、与现有流程衔接自然，这一步就通过。
+如果 Frontend 开始发散到模板市场、复杂模板管理，就说明角色偏题了。
 
 ---
 
 ## 11. 第五步：让 Frontend 把工作交给 QA
 
-当前面三位角色已经完成一轮收敛后，应该交给 QA / Reviewer。
+当 PM、Backend、Frontend 都已经把主方案收敛一轮后，就应该交给 QA / Reviewer。
 
-QA 的任务不是重新设计，而是把已有产出转成可验证路径。
+QA 的任务不是重复设计，而是把前面的产出变成可验证路径。
 
 ## 11.1 给 QA 的推荐消息
 
@@ -381,15 +323,11 @@ QA 输出最好能覆盖：
 - Team Brief 正常
 - handoff 正常
 
-## 11.3 通过标准
-
-如果 QA 的内容已经像真实测试计划，而不是空泛 checklist，这一步就通过。
-
 ---
 
-## 12. 推荐的一条真实协作顺序
+## 12. 一条推荐的真实协作顺序
 
-建议按下面顺序走完整轮测试：
+如果你想按最像真实开发团队的方式测，建议按这条顺序走：
 
 1. PM 读取主文档并收敛 MVP 范围
 2. PM handoff 给 Backend
@@ -399,7 +337,7 @@ QA 输出最好能覆盖：
 6. Frontend handoff 给 QA
 7. QA 输出验收路径与边界测试重点
 
-这是最推荐的主线。
+这是本轮最推荐的主线。
 
 ---
 
@@ -407,62 +345,67 @@ QA 输出最好能覆盖：
 
 你每一轮都要同时观察两层东西。
 
-## 13.1 表层：当前角色输出是否合理
+## 13.1 表层：角色输出是否合理
 
 例如：
-- PM 有没有把文档转成任务
-- Backend 有没有说清数据边界
-- Frontend 有没有说清交互流程
-- QA 有没有给出真实测试路径
+- PM 有没有收敛范围
+- Backend 有没有说清边界
+- Frontend 有没有说清流程
+- QA 有没有给出测试路径
 
-## 13.2 深层：App 是否真的像团队协作系统
+## 13.2 深层：app 是否真的像团队协作系统
 
 例如：
 - 当前角色是否知道自己是谁
 - Team Brief 是否帮助理解团队分工
 - handoff 是否像真实分工
 - 后一个角色是否真的接住了前一个角色的结果
-- 你是否感觉在带一支团队推进 Team Templates，而不是分别问了四次 AI
+- 你是否感觉在“带一支团队做事”，而不是“分别问了四次 AI”
 
 ---
 
 ## 14. 失败信号
 
-如果出现下面这些情况，说明 App 还没有通过这轮真实协作测试。
+如果出现下面这些情况，说明 app 还没有通过这轮真实协作测试。
 
-### 14.1 PM 失败信号
+## 14.1 PM 失败信号
+
 - 看不懂文档在说什么
 - 把范围扩展到大量非 MVP 内容
 - 说不清先做什么后做什么
 - 推荐下一个角色明显不合理
 
-### 14.2 Backend 失败信号
+## 14.2 Backend 失败信号
+
 - 说不清 template / draft / task 的区别
-- 把模板和运行时 task 混在一起
+- 上来就把运行时和模板耦合在一起
 - 忽略系统模板和用户模板差异
 - 输出过重，像在做平台重构
 
-### 14.3 Frontend 失败信号
+## 14.3 Frontend 失败信号
+
 - 跳过创建前确认
 - 没有模板预览
-- 流程和当前 Task Builder 脱节
+- 流程设计和当前 Task Builder 完全脱节
 - 开始设计复杂模板管理后台
 
-### 14.4 QA 失败信号
+## 14.4 QA 失败信号
+
 - 只写很空的 checklist
 - 没覆盖配置缺失、template -> draft、保存模板这些关键路径
-- 没有验证模板创建后是否还能进入 Team Brief + handoff
+- 没有验证模板创建后是否还能进入 Team Brief + handoff 运行时
 
-### 14.5 系统性失败信号
+## 14.5 系统性失败信号
+
 - handoff 推荐像随机的
 - 下一个角色接不上前面的上下文
-- 感觉不到团队协作，只是在轮流聊天
+- 你感觉不到团队协作，只是在轮流聊天
 
 ---
 
 ## 15. 推荐记录方式
 
-建议边测边记录下面这些信息。
+建议你边测边记录下面这些内容：
 
 ### 15.1 每轮记录
 - 当前角色
@@ -482,7 +425,7 @@ QA 输出最好能覆盖：
 
 ## 16. 最小执行版脚本
 
-如果你想立刻开始，可以直接按下面脚本执行。
+如果你不想看完整说明，只想立刻开始，可以直接按下面脚本执行。
 
 ### Step 1：创建 task
 任务名：
@@ -520,6 +463,6 @@ Use the PM, backend, and frontend outputs plus docs/v2/team-templates-next-phase
 
 ## 17. 一句话总结
 
-这轮测试的核心不是“看 AI 会不会答题”，而是：
+这轮测试的核心不是“看 AI 能不能答题”，而是：
 
-> **把 `docs/v2/team-templates-next-phase-implementation-plan.md` 当成一项真实研发任务，交给 MicroCompany App 里的项目经理、后端、前端、QA 依次推进，并通过这条真实协作链路来验证我们的 App 是否真的具备“用团队来开发软件”的能力。**
+> **把 `docs/v2/team-templates-next-phase-implementation-plan.md` 当成一项真实研发任务，交给 MicroCompany 里的项目经理、后端、前端、QA 依次推进，并通过这条真实协作链路来验证我们的 app 是否真的具备“用团队来开发软件”的能力。**
