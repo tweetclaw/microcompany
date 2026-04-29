@@ -183,6 +183,27 @@ struct TaskRosterRole {
     role_name: String,
 }
 
+fn save_message_to_file_storage(
+    storage: &ConversationStorage,
+    session_id: &str,
+    message: StoredMessage,
+    task_session: bool,
+    role_label: &str,
+) {
+    if task_session {
+        log::info!(
+            "Skipping file storage save for task session {} message on session {}",
+            role_label,
+            session_id
+        );
+        return;
+    }
+
+    if let Err(error) = storage.save_message(session_id, message) {
+        log::warn!("Failed to save {} message to storage: {}", role_label, error);
+    }
+}
+
 fn extract_handoff_block(text: &str) -> Option<ParsedHandoffBlock> {
     let start_tag = "[HANDOFF]";
     let end_tag = "[/HANDOFF]";
@@ -530,6 +551,7 @@ impl ClaurstSession {
         cancel_token: CancellationToken,
     ) -> anyhow::Result<String> {
         let task_trace = load_task_trace_context(&self.session_id);
+        let task_session = task_trace.is_some();
 
         // 1. 添加用户消息
         self.messages.push(Message::user(message.to_string()));
@@ -555,17 +577,17 @@ impl ClaurstSession {
         }
 
         // 保存用户消息到存储
-        if let Err(e) = self.storage.save_message(
+        save_message_to_file_storage(
+            &self.storage,
             &self.session_id,
             StoredMessage {
                 role: "user".to_string(),
                 content: message.to_string(),
                 timestamp: chrono::Utc::now().timestamp(),
             },
-        ) {
-            log::warn!("Failed to save user message to storage: {}", e);
-            // Non-fatal: continue even if storage fails
-        }
+            task_session,
+            "user",
+        );
 
         // Also save to database
         if let Ok(pool) = crate::database::get_pool() {
@@ -864,16 +886,17 @@ impl ClaurstSession {
 
                 log::info!("AI response received, length: {} chars", text.len());
 
-                if let Err(e) = self.storage.save_message(
+                save_message_to_file_storage(
+                    &self.storage,
                     &self.session_id,
                     StoredMessage {
                         role: "assistant".to_string(),
                         content: text.clone(),
                         timestamp: chrono::Utc::now().timestamp(),
                     },
-                ) {
-                    log::warn!("Failed to save assistant message to storage: {}", e);
-                }
+                    task_session,
+                    "assistant",
+                );
 
                 if let Some(trace) = task_trace.as_ref() {
                     log::info!(

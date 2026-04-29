@@ -28,6 +28,10 @@ import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import './ChatInterface.css';
 
+function formatVisibleError(error: string) {
+  return error.replace(/^Error:\s*/i, '').trim();
+}
+
 interface ChatInterfaceProps {
   workingDirectory: string | null;
   currentSessionId: string | null;
@@ -612,6 +616,12 @@ function ChatInterface({
                 <div className="chat-main-surface">
                   {hasActiveSession && !isDraftConversation ? (
                     <>
+                      {lastError && (
+                        <div className="chat-error-banner" role="alert" aria-live="assertive">
+                          <div className="chat-error-banner-label">本次请求失败</div>
+                          <div className="chat-error-banner-message">{formatVisibleError(lastError)}</div>
+                        </div>
+                      )}
                       <MessageList messages={messages} isBusy={isBusy} />
                       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                       <InputBox
@@ -627,6 +637,12 @@ function ChatInterface({
                     </>
                   ) : isDraftConversation ? (
                     <>
+                      {lastError && (
+                        <div className="chat-error-banner" role="alert" aria-live="assertive">
+                          <div className="chat-error-banner-label">本次请求失败</div>
+                          <div className="chat-error-banner-message">{formatVisibleError(lastError)}</div>
+                        </div>
+                      )}
                       <div className="draft-conversation-placeholder">
                         <div className="placeholder-content">
                           <div className="placeholder-badge">新对话</div>
