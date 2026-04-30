@@ -32,6 +32,36 @@ function formatVisibleError(error: string) {
   return error.replace(/^Error:\s*/i, '').trim();
 }
 
+function buildVisibleError(error: string) {
+  const normalized = formatVisibleError(error);
+  const sanitized = normalized.replace(/\s*\([^)]*https?:\/\/[^)]*\)\s*/gi, '').trim();
+
+  if (/error sending request for url/i.test(normalized) || /http error:/i.test(normalized)) {
+    return {
+      title: 'AI 通讯失败',
+      message: '当前模型服务暂时不可达，或请求发送失败。请稍后重试。',
+      detail: sanitized || '请求发送失败',
+      canRetry: true,
+    };
+  }
+
+  if (/创建会话失败/i.test(normalized)) {
+    return {
+      title: '创建会话失败',
+      message: '还没有成功建立对话会话，请稍后重试。',
+      detail: sanitized,
+      canRetry: false,
+    };
+  }
+
+  return {
+    title: '本次请求失败',
+    message: sanitized || '发生未知错误，请稍后重试。',
+    detail: null,
+    canRetry: false,
+  };
+}
+
 interface ChatInterfaceProps {
   workingDirectory: string | null;
   currentSessionId: string | null;
@@ -105,6 +135,10 @@ function ChatInterface({
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [processTimeline, setProcessTimeline] = useState<ProcessTimelineItem[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [retryMessageContent, setRetryMessageContent] = useState<string | null>(null);
+  const visibleError = useMemo(() => (
+    lastError ? buildVisibleError(lastError) : null
+  ), [lastError]);
 
   const initialLayout = useMemo(() => loadLayoutState(), []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialLayout.isSidebarCollapsed);
@@ -473,6 +507,7 @@ function ChatInterface({
   }, [workingDirectory]);
 
   const handleSendMessage = async (content: string) => {
+    setRetryMessageContent(content);
     // 先设置运行状态，防止 session 创建时触发的 useEffect 重置状态
     setRunState('running_thinking');
     setLastError(null);
@@ -554,6 +589,11 @@ function ChatInterface({
     }
   };
 
+  const handleRetryLastMessage = async () => {
+    if (!retryMessageContent || isBusy) return;
+    await handleSendMessage(retryMessageContent);
+  };
+
   const handleSidebarToggle = () => {
     if (isCompact) {
       setIsSidebarDrawerOpen((prev) => !prev);
@@ -616,10 +656,25 @@ function ChatInterface({
                 <div className="chat-main-surface">
                   {hasActiveSession && !isDraftConversation ? (
                     <>
-                      {lastError && (
+                      {visibleError && (
                         <div className="chat-error-banner" role="alert" aria-live="assertive">
-                          <div className="chat-error-banner-label">本次请求失败</div>
-                          <div className="chat-error-banner-message">{formatVisibleError(lastError)}</div>
+                          <div className="chat-error-banner-label">{visibleError.title}</div>
+                          <div className="chat-error-banner-message">{visibleError.message}</div>
+                          {visibleError.detail && (
+                            <div className="chat-error-banner-detail">技术详情：{visibleError.detail}</div>
+                          )}
+                          {visibleError.canRetry && retryMessageContent && (
+                            <div className="chat-error-banner-actions">
+                              <button
+                                type="button"
+                                className="chat-error-banner-retry"
+                                onClick={() => { void handleRetryLastMessage(); }}
+                                disabled={isBusy}
+                              >
+                                重试
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                       <MessageList messages={messages} isBusy={isBusy} />
@@ -637,10 +692,25 @@ function ChatInterface({
                     </>
                   ) : isDraftConversation ? (
                     <>
-                      {lastError && (
+                      {visibleError && (
                         <div className="chat-error-banner" role="alert" aria-live="assertive">
-                          <div className="chat-error-banner-label">本次请求失败</div>
-                          <div className="chat-error-banner-message">{formatVisibleError(lastError)}</div>
+                          <div className="chat-error-banner-label">{visibleError.title}</div>
+                          <div className="chat-error-banner-message">{visibleError.message}</div>
+                          {visibleError.detail && (
+                            <div className="chat-error-banner-detail">技术详情：{visibleError.detail}</div>
+                          )}
+                          {visibleError.canRetry && retryMessageContent && (
+                            <div className="chat-error-banner-actions">
+                              <button
+                                type="button"
+                                className="chat-error-banner-retry"
+                                onClick={() => { void handleRetryLastMessage(); }}
+                                disabled={isBusy}
+                              >
+                                重试
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                       <div className="draft-conversation-placeholder">

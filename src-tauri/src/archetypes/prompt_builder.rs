@@ -25,9 +25,9 @@ pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
     ];
 
     if handoff_enabled {
-        rules.push("当你认为下一阶段应由其他角色继续时，可以输出 HANDOFF 块提出建议。");
+        rules.push("当你认为下一阶段应由其他角色继续时，可以输出 HANDOFF 块提出建议。只要你的正文里明确写了“下一位角色”“建议交给谁”“发给下一位角色的消息”或任何等价交接判断，结尾就必须追加合法的 HANDOFF 块，不能只写自然语言建议。否则前端无法弹出用户确认交接框。");
     } else {
-        rules.push("当前角色不负责提出交接建议，除非用户明确要求你这样做。");
+        rules.push("当前角色不负责提出交接建议，除非用户明确要求你这样做。即使正文提到协作对象，也不要输出 HANDOFF 块。");
     }
 
     rules.join("\n")
@@ -265,9 +265,9 @@ pub fn pm_first_workflow_prompt(role_identity: &str) -> String {
         || normalized_identity == "产品经理";
 
     if is_product_manager {
-        "当前任务启用了 PM First Workflow。你现在就是当前正在与用户直接对话的 Product Manager。你必须先阅读 docs/v2/task-template-system-proposal.md，再结合用户当前目标主动完成产品经理职责：澄清目标、范围、约束、优先级与验收边界，并给出下一步协作建议。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。你可以建议 handoff，但不能把 Product Manager 当成另一个外部角色，也不能让用户再去联系 PM；你自己就负责完成当前这轮 PM 工作。硬性约束：如果你输出“下一位应该接手的角色”或“发给下一位角色的消息”，该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理，也不能与当前激活角色是同一身份；如果你发现自己推荐的还是当前角色，必须先改写答案，再输出最终结果。不要直接开始实现。".to_string()
+        "当前任务启用了 PM First Workflow。你现在就是当前正在与用户直接对话的 Product Manager。你必须先阅读 docs/v2/team-templates-next-phase-implementation-plan.md，并把 docs/v2/team-templates-task-team-testing-guide.md 当作当前团队演练手册，再结合用户当前目标主动完成产品经理职责：澄清目标、范围、约束、优先级与验收边界，并给出下一步协作建议。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。你自己就负责完成当前这轮 PM 工作，不能把 Product Manager 当成另一个外部角色，也不能让用户再去联系 PM。硬性约束：如果你输出“下一位应该接手的角色”或“发给下一位角色的消息”，答案末尾必须追加合法的 [HANDOFF] ... [/HANDOFF] 机器可读区块，否则系统无法弹出交接确认框；该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理，也不能与当前激活角色是同一身份；如果你发现自己推荐的还是当前角色，必须先改写答案，再输出最终结果。若当前暂不交接，也要在答案末尾输出 recommended: no 的 HANDOFF 区块。不要直接开始实现。".to_string()
     } else {
-        "当前任务启用了 PM First Workflow。只有在用户已先与当前任务中的 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。".to_string()
+        "当前任务启用了 PM First Workflow。只有在用户已先与当前任务中的 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。若 PM 或你自己已经明确写出下一位角色/交接消息，最终答案也必须按系统约束追加 HANDOFF 区块，不能只写自然语言交接建议。".to_string()
     }
 }
 
@@ -425,12 +425,16 @@ mod tests {
         let pm_prompt = pm_first_workflow_prompt("Product Manager");
         let engineer_prompt = pm_first_workflow_prompt("Software Engineer");
 
-        assert!(pm_prompt.contains("docs/v2/task-template-system-proposal.md"));
+        assert!(pm_prompt.contains("docs/v2/team-templates-next-phase-implementation-plan.md"));
+        assert!(pm_prompt.contains("docs/v2/team-templates-task-team-testing-guide.md"));
         assert!(pm_prompt.contains("你现在就是当前正在与用户直接对话的 Product Manager"));
         assert!(pm_prompt.contains("不能让用户再去联系 PM"));
+        assert!(pm_prompt.contains("答案末尾必须追加合法的 [HANDOFF] ... [/HANDOFF] 机器可读区块"));
+        assert!(pm_prompt.contains("若当前暂不交接，也要在答案末尾输出 recommended: no 的 HANDOFF 区块"));
         assert!(pm_prompt.contains("该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理"));
         assert!(pm_prompt.contains("如果你发现自己推荐的还是当前角色，必须先改写答案"));
         assert!(pm_prompt.contains("不要直接开始实现"));
         assert!(engineer_prompt.contains("只有在用户已先与当前任务中的 Product Manager 对齐范围"));
+        assert!(engineer_prompt.contains("最终答案也必须按系统约束追加 HANDOFF 区块"));
     }
 }
