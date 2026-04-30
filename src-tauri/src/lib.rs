@@ -52,6 +52,11 @@ async fn get_task(task_id: String) -> Result<api::Task, String> {
 }
 
 #[tauri::command]
+async fn restart_task_role_session(task_id: String, role_id: String) -> Result<api::Task, String> {
+    api::restart_task_role_session(task_id, role_id).await
+}
+
+#[tauri::command]
 async fn get_team_brief(task_id: String) -> Result<api::TeamBrief, String> {
     api::get_team_brief(task_id).await
 }
@@ -206,6 +211,7 @@ pub fn run() {
       initialize_database,
       create_task,
       get_task,
+      restart_task_role_session,
       get_team_brief,
       list_tasks,
       update_task,

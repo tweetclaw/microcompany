@@ -28,7 +28,7 @@ pub use task::{
     TeamBrief,
     TeamBriefRole,
 };
-pub use task_impl::create_task;
+pub use task_impl::{create_task, restart_task_role_session};
 pub use task_queries::{delete_task, get_task, get_team_brief, list_tasks, update_task};
 
 pub use message::{Message, MessageCreateRequest};

@@ -7,7 +7,7 @@ import { TitleBar } from './components/TitleBar';
 import Toolbar from './components/Toolbar';
 import { AiRequestEndEvent, HandoffSuggestion, Message, Task, TaskCreateRequest, TaskSummary, TaskRole, TeamBrief, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
-import { getSession, createTask, getTask, getTeamBrief } from './api';
+import { getSession, createTask, getTask, getTeamBrief, restartTaskRoleSession } from './api';
 import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
@@ -416,6 +416,25 @@ function App() {
     }
   };
 
+  const handleTaskRoleRestart = async (roleId: string) => {
+    if (!currentTask || runState !== 'idle') return;
+
+    try {
+      const updatedTask = await restartTaskRoleSession(currentTask.id, roleId);
+      setCurrentTask(updatedTask);
+      setCurrentTaskRoleId(roleId);
+      setSessionListRefreshKey((prev) => prev + 1);
+
+      const updatedRole = updatedTask.roles.find((role) => role.id === roleId);
+      if (updatedRole?.session_id) {
+        await handleSessionSelected(updatedRole.session_id);
+      }
+    } catch (error) {
+      console.error('Failed to restart task role session:', error);
+      alert(`Failed to restart task role session: ${error}`);
+    }
+  };
+
   const handleTaskSelected = async (taskSummary: TaskSummary) => {
     try {
       const { task, teamBrief } = await loadTaskContext(taskSummary.id);
@@ -722,6 +741,7 @@ function App() {
                 currentTeamBrief={currentTeamBrief}
                 currentTaskRoleId={currentTaskRoleId}
                 onTaskRoleSelected={handleTaskRoleSelected}
+                onTaskRoleRestart={handleTaskRoleRestart}
                 onForwardLatestReply={handleForwardLatestReply}
                 onHandoffSuggestion={handleHandoffSuggestion}
                 onTaskSelected={handleTaskSelected}

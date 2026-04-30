@@ -32,9 +32,19 @@ pub async fn get_task(task_id: String) -> Result<Task, String> {
 
     let roles = {
         let mut role_stmt = conn.prepare(
-            "SELECT r.id, r.name, r.identity, r.archetype_id, r.system_prompt_snapshot, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version, r.model, r.provider, r.handoff_enabled, r.display_order, s.id, r.created_at
+            "SELECT r.id, r.name, r.identity, r.archetype_id, r.system_prompt_snapshot, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version, r.model, r.provider, r.handoff_enabled, r.display_order,
+                    COALESCE(
+                        r.active_session_id,
+                        (
+                            SELECT s2.id
+                            FROM sessions s2
+                            WHERE s2.role_id = r.id
+                            ORDER BY s2.created_at DESC, s2.id DESC
+                            LIMIT 1
+                        )
+                    ) AS active_session_id,
+                    r.created_at
              FROM roles r
-             JOIN sessions s ON s.role_id = r.id
              WHERE r.task_id = ?1
              ORDER BY r.display_order, r.created_at"
         ).map_err(|e| format!("Failed to prepare role query: {}", e))?;

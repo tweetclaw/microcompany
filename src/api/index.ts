@@ -28,6 +28,10 @@ export async function getTask(taskId: string): Promise<Task> {
   return invoke('get_task', { taskId });
 }
 
+export async function restartTaskRoleSession(taskId: string, roleId: string): Promise<Task> {
+  return invoke('restart_task_role_session', { taskId, roleId });
+}
+
 export async function getTeamBrief(taskId: string): Promise<TeamBrief> {
   return invoke('get_team_brief', { taskId });
 }

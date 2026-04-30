@@ -3,7 +3,7 @@ use crate::archetypes::{RolePromptContext, TeamRolePromptContext};
 use crate::database::get_pool;
 use crate::storage::ConversationStorage;
 use chrono::Utc;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -209,8 +209,8 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
             );
 
             tx.execute(
-                "INSERT INTO roles (id, task_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, system_prompt_snapshot, prompt_source_type, prompt_hash, prompt_contract_version, model, provider, handoff_enabled, display_order)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                "INSERT INTO roles (id, task_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, system_prompt_snapshot, prompt_source_type, prompt_hash, prompt_contract_version, model, provider, handoff_enabled, display_order, active_session_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                 params![
                     &role_id,
                     &task_id,
@@ -227,6 +227,7 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
                     &role.provider,
                     &role.handoff_enabled,
                     &role.display_order,
+                    &session_id,
                 ],
             )
             .map_err(|e| format!("Failed to insert role: {}", e))?;
@@ -371,6 +372,174 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
     })
+}
+
+fn resolve_restart_working_directory(stored_working_directory: &str) -> Result<String, String> {
+    let trimmed = stored_working_directory.trim();
+    if !trimmed.is_empty() {
+        return Ok(trimmed.to_string());
+    }
+
+    let cwd = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let fallback = cwd
+        .parent()
+        .filter(|_| cwd.file_name().and_then(|name| name.to_str()) == Some("src-tauri"))
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| cwd.clone());
+
+    Ok(fallback.display().to_string())
+}
+
+pub async fn restart_task_role_session(task_id: String, role_id: String) -> Result<Task, String> {
+    let (session_id, role_name, provider, model, working_directory, prompt_snapshot, prompt_source_type, prompt_hash, prompt_contract_version) = {
+        let pool = get_pool()?;
+        let mut conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+        let role_row = tx.query_row(
+            "SELECT r.name, r.provider, r.model, r.system_prompt_snapshot, r.prompt_source_type, r.prompt_hash, r.prompt_contract_version,
+                    COALESCE(
+                        (
+                            SELECT s.working_directory
+                            FROM sessions s
+                            WHERE s.role_id = r.id
+                              AND s.task_id = r.task_id
+                              AND s.working_directory IS NOT NULL
+                              AND TRIM(s.working_directory) != ''
+                            ORDER BY s.created_at DESC, s.id DESC
+                            LIMIT 1
+                        ),
+                        ''
+                    ) AS working_directory
+             FROM roles r
+             WHERE r.id = ?1 AND r.task_id = ?2",
+            params![&role_id, &task_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        ).optional()
+        .map_err(|e| format!("Failed to load role for session restart: {}", e))?
+        .ok_or_else(|| format!("Role not found for task: {}", role_id))?;
+
+        let working_directory = resolve_restart_working_directory(&role_row.7)?;
+        let session_id = format!("session-{}", Uuid::new_v4());
+        let created_at = Utc::now().to_rfc3339();
+
+        tx.execute(
+            "INSERT INTO sessions (id, type, name, model, provider, working_directory, status, task_id, role_id, created_at, updated_at)
+             VALUES (?1, 'task', ?2, ?3, ?4, ?5, 'initializing', ?6, ?7, ?8, ?8)",
+            params![
+                &session_id,
+                &role_row.0,
+                &role_row.2,
+                &role_row.1,
+                &working_directory,
+                &task_id,
+                &role_id,
+                &created_at,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert restarted session: {}", e))?;
+
+        tx.execute(
+            "UPDATE roles SET active_session_id = ?1 WHERE id = ?2",
+            params![&session_id, &role_id],
+        )
+        .map_err(|e| format!("Failed to update active session: {}", e))?;
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit restarted session: {}", e))?;
+
+        (
+            session_id,
+            role_row.0,
+            role_row.1,
+            role_row.2,
+            working_directory,
+            role_row.3,
+            role_row.4,
+            role_row.5,
+            role_row.6,
+        )
+    };
+
+    let role = crate::api::RoleConfig {
+        name: role_name.clone(),
+        identity: String::new(),
+        archetype_id: None,
+        system_prompt_append: None,
+        custom_system_prompt: None,
+        model: model.clone(),
+        provider: provider.clone(),
+        handoff_enabled: false,
+        display_order: 0,
+    };
+
+    let prompt_snapshot = PromptSnapshot {
+        text: prompt_snapshot.unwrap_or_default(),
+        source_type: prompt_source_type.unwrap_or_else(|| "persisted".to_string()),
+        hash: prompt_hash.unwrap_or_default(),
+        contract_version: prompt_contract_version.unwrap_or_default(),
+    };
+
+    if let Err(error) = create_claurst_session_with_retry(&session_id, &role, &prompt_snapshot, &working_directory, 3).await {
+        if let Ok(pool) = get_pool() {
+            if let Ok(conn) = pool.get() {
+                let _ = conn.execute("DELETE FROM sessions WHERE id = ?1", params![&session_id]);
+                let _ = conn.execute(
+                    "UPDATE roles
+                     SET active_session_id = (
+                         SELECT s.id
+                         FROM sessions s
+                         WHERE s.role_id = ?1
+                         ORDER BY s.created_at DESC, s.id DESC
+                         LIMIT 1
+                     )
+                     WHERE id = ?1",
+                    params![&role_id],
+                );
+            }
+        }
+
+        return Err(format!("Failed to create restarted Claurst session for role {}: {}", role_name, error));
+    }
+
+    create_task_session_storage(
+        &session_id,
+        &working_directory,
+        &provider,
+        &role_name,
+        &model,
+    )?;
+
+    let pool = get_pool()?;
+    let conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    conn.execute(
+        "UPDATE sessions SET status = 'ready' WHERE id = ?1",
+        params![&session_id],
+    )
+    .map_err(|e| format!("Failed to update restarted session status: {}", e))?;
+
+    crate::api::get_task(task_id).await
 }
 
 fn validate_task_request(task_request: &TaskCreateRequest) -> Result<(), String> {

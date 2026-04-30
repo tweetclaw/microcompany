@@ -35,6 +35,7 @@ interface TaskModeLayoutProps {
   currentTeamBrief: TeamBrief | null;
   currentTaskRoleId: string | null;
   onTaskRoleSelected: (roleId: string) => void;
+  onTaskRoleRestart: (roleId: string) => void;
   onForwardLatestReply: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
   onTaskSelected: (taskSummary: TaskSummary) => void;
@@ -207,15 +208,42 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                         const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
 
                         return (
-                          <button
+                          <div
                             key={role.id}
-                            type="button"
+                            role="button"
+                            tabIndex={isDisabled ? -1 : 0}
                             className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''} ${isDisabled ? 'disabled' : ''} ${isPmFirst ? 'pm-first' : ''}`}
-                            onClick={() => props.onTaskRoleSelected(role.id)}
-                            disabled={isDisabled}
+                            onClick={() => {
+                              if (!isDisabled) {
+                                props.onTaskRoleSelected(role.id);
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (isDisabled) return;
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                props.onTaskRoleSelected(role.id);
+                              }
+                            }}
                             title={disabledReason}
+                            aria-disabled={isDisabled}
                             aria-label={isDisabled ? `${role.name}，当前有角色处理中，暂时无法切换` : role.name}
                           >
+                            <div className="task-seat-card-actions">
+                              <button
+                                type="button"
+                                className="task-seat-restart-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  props.onTaskRoleRestart(role.id);
+                                }}
+                                disabled={isAiWorking}
+                                aria-label={`为 ${role.name} 新开 session`}
+                                title={isAiWorking ? 'AI 处理中时暂时不能新开 session' : '为该角色新开 session'}
+                              >
+                                新开 session
+                              </button>
+                            </div>
                             <div className="task-seat-avatar" aria-hidden="true">
                               {getSeatInitials(role.name)}
                             </div>
@@ -225,7 +253,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                               <div className="task-seat-model">{role.model}</div>
                               {isPmFirst && <div className="task-seat-badge">Start here</div>}
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                       {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (

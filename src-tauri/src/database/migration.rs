@@ -32,6 +32,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "backfill_task_session_working_directory",
         sql: include_str!("../../migrations/005_backfill_task_session_working_directory.sql"),
     },
+    Migration {
+        version: 6,
+        name: "role_active_session_id",
+        sql: include_str!("../../migrations/006_role_active_session_id.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
