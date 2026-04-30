@@ -465,7 +465,7 @@ function App() {
   };
 
   const handleHandoffSuggestion = (event: AiRequestEndEvent) => {
-    if (!event.handoffSuggestion) return;
+    if (!event.handoffSuggestion?.recommended) return;
     setPendingHandoffSuggestion(event.handoffSuggestion);
     setShowForwardModal(true);
   };

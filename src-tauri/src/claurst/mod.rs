@@ -291,16 +291,19 @@ fn resolve_handoff_suggestion(session_id: &str, parsed: ParsedHandoffBlock) -> O
         });
     }
 
-    let target_name = parsed.target_role_name.as_ref()?.trim().to_lowercase();
-    let target_role = target_lookup.get(&target_name)?;
-    if !roster_role_ids.contains(&target_role.role_id) || target_role.role_id == current_role_id {
-        return None;
-    }
+    let resolved_target = parsed
+        .target_role_name
+        .as_ref()
+        .map(|name| name.trim().to_lowercase())
+        .and_then(|target_name| target_lookup.get(&target_name).copied())
+        .filter(|target_role| {
+            roster_role_ids.contains(&target_role.role_id) && target_role.role_id != current_role_id
+        });
 
     Some(HandoffSuggestion {
         recommended: true,
-        target_role_id: Some(target_role.role_id.clone()),
-        target_role_name: Some(target_role.role_name.clone()),
+        target_role_id: resolved_target.map(|role| role.role_id.clone()),
+        target_role_name: resolved_target.map(|role| role.role_name.clone()),
         reason: parsed.reason,
         draft_message: parsed.draft_message,
     })
@@ -867,16 +870,13 @@ impl ClaurstSession {
                     }
                 }
 
-                let handoff_suggestion = extract_handoff_block(&text)
-                    .and_then(|parsed| {
-                        let visible_text = parsed.visible_text.clone();
-                        resolve_handoff_suggestion(&self.session_id, parsed)
-                            .map(|suggestion| (visible_text, suggestion))
-                    });
-
-                if let Some((visible_text, _)) = handoff_suggestion.as_ref() {
-                    text = visible_text.clone();
+                let parsed_handoff = extract_handoff_block(&text);
+                if let Some(parsed) = parsed_handoff.as_ref() {
+                    text = parsed.visible_text.clone();
                 }
+
+                let handoff_suggestion = parsed_handoff
+                    .and_then(|parsed| resolve_handoff_suggestion(&self.session_id, parsed));
 
                 log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());
                 if !text.is_empty() {
@@ -935,7 +935,7 @@ impl ClaurstSession {
                     "request_id": request_id_owned.clone(),
                     "result": "success",
                     "final_text": text,
-                    "handoffSuggestion": handoff_suggestion.as_ref().map(|(_, suggestion)| suggestion),
+                    "handoffSuggestion": handoff_suggestion.as_ref(),
                     "timestamp": now,
                 }));
 
@@ -1101,5 +1101,15 @@ mod tests {
         };
 
         assert!(resolve_handoff_suggestion("missing-session", parsed).is_none());
+    }
+
+    #[test]
+    fn extract_handoff_block_keeps_visible_text_for_unresolved_target() {
+        let input = "请下一位继续推进。\n\n[HANDOFF]\nrecommended: yes\ntarget_role: Missing Role\nreason: 需要其他角色接手\ndraft_message: 请继续处理剩余工作。\n[/HANDOFF]";
+        let parsed = extract_handoff_block(input).expect("should parse handoff block");
+
+        assert_eq!(parsed.visible_text, "请下一位继续推进。");
+        assert!(parsed.recommended);
+        assert_eq!(parsed.target_role_name.as_deref(), Some("Missing Role"));
     }
 }

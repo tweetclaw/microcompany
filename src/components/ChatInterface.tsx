@@ -207,12 +207,14 @@ function ChatInterface({
 
       const targetMessage = prev[targetIndex];
 
-      // 关键修改：不替换内容，只标记为非流式状态
-      // 前端通过 message-chunk 事件已经累积了完整的文本
-      // 后端的 final_text 可能是不完整的（特别是在使用工具调用时）
+      // 默认保持前端已累积的完整文本，只在需要移除机器可读后缀时用 final_text 覆盖
+      const nextContent = finalText && targetMessage.content.includes('[HANDOFF]')
+        ? finalText.trim() || targetMessage.content
+        : targetMessage.content;
+
       return [
         ...prev.slice(0, targetIndex),
-        { ...targetMessage, isStreaming: false },
+        { ...targetMessage, content: nextContent, isStreaming: false },
         ...prev.slice(targetIndex + 1),
       ];
     });
