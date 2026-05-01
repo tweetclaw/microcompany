@@ -183,6 +183,54 @@ async fn list_role_archetypes() -> Result<Vec<archetypes::RoleArchetype>, String
     archetypes::list_role_archetypes()
 }
 
+#[tauri::command]
+async fn resize_window_for_main_view(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::LogicalSize;
+
+    if let Some(window) = app_handle.get_webview_window("main") {
+        // Get monitor info to calculate 90% screen size for main view
+        if let Ok(monitors) = window.available_monitors() {
+            if let Some(monitor) = monitors.first() {
+                let scale = monitor.scale_factor();
+                let physical_width = monitor.size().width;
+                let physical_height = monitor.size().height;
+
+                // Calculate logical screen size
+                let logical_screen_width = physical_width as f64 / scale;
+                let logical_screen_height = physical_height as f64 / scale;
+
+                // Main view uses 90% of screen size
+                let width = (logical_screen_width * 0.90) as f64;
+                let height = (logical_screen_height * 0.90) as f64;
+
+                println!("[Window Resize] Resizing to main view size: {}x{} logical (90% screen)", width, height);
+
+                // Set size multiple times to fight macOS corruption
+                for i in 0..3 {
+                    if let Err(e) = window.set_size(LogicalSize::new(width, height)) {
+                        return Err(format!("Failed to set size: {}", e));
+                    }
+
+                    if let Err(e) = window.center() {
+                        return Err(format!("Failed to center: {}", e));
+                    }
+
+                    if i < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    }
+                }
+
+                println!("[Window Resize] Window resized to main view successfully");
+                return Ok(());
+            }
+        }
+
+        Err("Failed to get monitor information".to_string())
+    } else {
+        Err("Failed to get window".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -232,6 +280,7 @@ pub fn run() {
       restore_backup,
       vacuum_database,
       list_role_archetypes,
+      resize_window_for_main_view,
     ])
     .setup(|app| {
       archetypes::sync_archetype_resources(app.handle())?;
@@ -246,6 +295,7 @@ pub fn run() {
       // VS Code-style window sizing for macOS Retina displays
       if let Some(window) = app.get_webview_window("main") {
         use tauri::LogicalSize;
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         println!("[Window Setup] Starting VS Code-style window initialization...");
 
@@ -276,55 +326,8 @@ pub fn run() {
           (1080.0, 720.0) // Fallback
         };
 
-        // Clone for async operations and event monitoring
+        // Clone for async operations
         let window_clone = window.clone();
-        let window_for_events = window.clone();
-        let target_width = logical_width;
-        let target_height = logical_height;
-
-        // Add window event listeners to detect and correct unwanted resizing
-        window.on_window_event(move |event| {
-          match event {
-            tauri::WindowEvent::Resized(size) => {
-              if let Ok(is_maximized) = window_for_events.is_maximized() {
-                if let Ok(scale) = window_for_events.scale_factor() {
-                  let expected_physical_width = (target_width * scale) as u32;
-                  let expected_physical_height = (target_height * scale) as u32;
-
-                  // Allow 10 pixel tolerance for window decorations
-                  let width_diff = (size.width as i32 - expected_physical_width as i32).abs();
-                  let height_diff = (size.height as i32 - expected_physical_height as i32).abs();
-
-                  if !is_maximized && (width_diff > 10 || height_diff > 10) {
-                    println!("[Window Event] UNEXPECTED RESIZE: {}x{} (expected: {}x{}, scale: {}, maximized: {})",
-                      size.width, size.height, expected_physical_width, expected_physical_height, scale, is_maximized);
-
-                    // Correct the size back to target
-                    let window_for_correction = window_for_events.clone();
-                    tauri::async_runtime::spawn(async move {
-                      tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                      if let Err(e) = window_for_correction.set_size(LogicalSize::new(target_width, target_height)) {
-                        println!("[Window Event] ERROR: Failed to correct size: {}", e);
-                      } else {
-                        println!("[Window Event] Size corrected back to {}x{}", target_width, target_height);
-                      }
-                    });
-                  } else {
-                    println!("[Window Event] RESIZED: {}x{} (scale: {}, maximized: {})",
-                      size.width, size.height, scale, is_maximized);
-                  }
-                }
-              }
-            }
-            tauri::WindowEvent::Moved(position) => {
-              if let Ok(is_maximized) = window_for_events.is_maximized() {
-                println!("[Window Event] MOVED: ({}, {}) (maximized: {})",
-                  position.x, position.y, is_maximized);
-              }
-            }
-            _ => {}
-          }
-        });
 
         tauri::async_runtime::spawn(async move {
           // Wait for initial window creation

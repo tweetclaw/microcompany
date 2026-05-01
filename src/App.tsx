@@ -259,6 +259,14 @@ function App() {
     setMessages([]);
     setHasActiveSession(false);
     setIsDraftConversation(false);
+
+    // Resize window to main view size (90% screen) when entering main interface
+    try {
+      await invoke('resize_window_for_main_view');
+      console.log('[App] Window resized to main view size');
+    } catch (error) {
+      console.error('[App] Failed to resize window:', error);
+    }
   };
 
   const handleSessionSelected = async (sessionId: string) => {
