@@ -13,14 +13,16 @@
     "windows": [
       {
         "title": "MicroCompany",
-        "width": 1680,
-        "height": 1050,
-        "minWidth": 1280,
-        "minHeight": 800,
+        "width": 900,
+        "height": 600,
+        "minWidth": 800,
+        "minHeight": 600,
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "decorations": false
+        "decorations": true,
+        "visible": false,
+        "skipTaskbar": false
       }
     ],
     "security": {

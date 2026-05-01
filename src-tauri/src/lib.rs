@@ -242,6 +242,79 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      // Fight against macOS window corruption with aggressive re-positioning
+      if let Some(window) = app.get_webview_window("main") {
+        use tauri::LogicalSize;
+
+        println!("[Window Setup] Starting aggressive window control for macOS Retina...");
+
+        let logical_width = 900.0;
+        let logical_height = 600.0;
+
+        // Clone for async operations
+        let window_clone = window.clone();
+
+        tauri::async_runtime::spawn(async move {
+          // Wait for initial window creation
+          tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+          println!("[Window Setup] Setting size and position...");
+
+          // Force set size using logical coordinates
+          if let Err(e) = window_clone.set_size(LogicalSize::new(logical_width, logical_height)) {
+            println!("[Window Setup] ERROR: Failed to set size: {}", e);
+          }
+
+          // Center the window
+          if let Err(e) = window_clone.center() {
+            println!("[Window Setup] ERROR: Failed to center: {}", e);
+          }
+
+          // Log state before show
+          if let Ok(size) = window_clone.outer_size() {
+            println!("[Window Setup] Size before show: {}x{}", size.width, size.height);
+          }
+          if let Ok(position) = window_clone.outer_position() {
+            println!("[Window Setup] Position before show: ({}, {})", position.x, position.y);
+          }
+
+          // Show window
+          tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+          println!("[Window Setup] Showing window...");
+          if let Err(e) = window_clone.show() {
+            println!("[Window Setup] ERROR: Failed to show: {}", e);
+          }
+
+          // CRITICAL: Immediately re-apply size and position after show to fight macOS corruption
+          tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+          println!("[Window Setup] Re-applying size and position after show...");
+
+          if let Err(e) = window_clone.set_size(LogicalSize::new(logical_width, logical_height)) {
+            println!("[Window Setup] ERROR: Failed to re-set size: {}", e);
+          }
+
+          if let Err(e) = window_clone.center() {
+            println!("[Window Setup] ERROR: Failed to re-center: {}", e);
+          }
+
+          // Final state
+          if let Ok(size) = window_clone.outer_size() {
+            println!("[Window Setup] Final size: {}x{}", size.width, size.height);
+          }
+          if let Ok(position) = window_clone.outer_position() {
+            println!("[Window Setup] Final position: ({}, {})", position.x, position.y);
+          }
+
+          // Set focus
+          if let Err(e) = window_clone.set_focus() {
+            println!("[Window Setup] ERROR: Failed to set focus: {}", e);
+          }
+
+          println!("[Window Setup] Window setup complete");
+        });
+      }
+
       Ok(())
     })
     .run(tauri::generate_context!())
