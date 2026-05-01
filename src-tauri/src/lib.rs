@@ -243,17 +243,88 @@ pub fn run() {
         )?;
       }
 
-      // Fight against macOS window corruption with aggressive re-positioning
+      // VS Code-style window sizing for macOS Retina displays
       if let Some(window) = app.get_webview_window("main") {
         use tauri::LogicalSize;
 
-        println!("[Window Setup] Starting aggressive window control for macOS Retina...");
+        println!("[Window Setup] Starting VS Code-style window initialization...");
 
-        let logical_width = 900.0;
-        let logical_height = 600.0;
+        // Get monitor info to calculate 75% screen size (VS Code style)
+        let (logical_width, logical_height) = if let Ok(monitors) = window.available_monitors() {
+          if let Some(monitor) = monitors.first() {
+            let scale = monitor.scale_factor();
+            let physical_width = monitor.size().width;
+            let physical_height = monitor.size().height;
 
-        // Clone for async operations
+            // Calculate logical screen size
+            let logical_screen_width = physical_width as f64 / scale;
+            let logical_screen_height = physical_height as f64 / scale;
+
+            // VS Code uses approximately 75% of screen size on first launch
+            let width = (logical_screen_width * 0.75) as f64;
+            let height = (logical_screen_height * 0.75) as f64;
+
+            println!("[Window Setup] Monitor: {}x{} physical, {}x{} logical (scale: {})",
+              physical_width, physical_height, logical_screen_width, logical_screen_height, scale);
+            println!("[Window Setup] Target size (75% screen): {}x{} logical", width, height);
+
+            (width, height)
+          } else {
+            (1080.0, 720.0) // Fallback
+          }
+        } else {
+          (1080.0, 720.0) // Fallback
+        };
+
+        // Clone for async operations and event monitoring
         let window_clone = window.clone();
+        let window_for_events = window.clone();
+        let target_width = logical_width;
+        let target_height = logical_height;
+
+        // Add window event listeners to detect and correct unwanted resizing
+        window.on_window_event(move |event| {
+          match event {
+            tauri::WindowEvent::Resized(size) => {
+              if let Ok(is_maximized) = window_for_events.is_maximized() {
+                if let Ok(scale) = window_for_events.scale_factor() {
+                  let expected_physical_width = (target_width * scale) as u32;
+                  let expected_physical_height = (target_height * scale) as u32;
+
+                  // Allow 10 pixel tolerance for window decorations
+                  let width_diff = (size.width as i32 - expected_physical_width as i32).abs();
+                  let height_diff = (size.height as i32 - expected_physical_height as i32).abs();
+
+                  if !is_maximized && (width_diff > 10 || height_diff > 10) {
+                    println!("[Window Event] UNEXPECTED RESIZE: {}x{} (expected: {}x{}, scale: {}, maximized: {})",
+                      size.width, size.height, expected_physical_width, expected_physical_height, scale, is_maximized);
+
+                    // Correct the size back to target
+                    let window_for_correction = window_for_events.clone();
+                    tauri::async_runtime::spawn(async move {
+                      tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                      if let Err(e) = window_for_correction.set_size(LogicalSize::new(target_width, target_height)) {
+                        println!("[Window Event] ERROR: Failed to correct size: {}", e);
+                      } else {
+                        println!("[Window Event] Size corrected back to {}x{}", target_width, target_height);
+                      }
+                    });
+                  } else {
+                    println!("[Window Event] RESIZED: {}x{} (scale: {}, maximized: {})",
+                      size.width, size.height, scale, is_maximized);
+                  }
+                }
+              }
+            }
+            tauri::WindowEvent::Moved(position) => {
+              if let Ok(is_maximized) = window_for_events.is_maximized() {
+                println!("[Window Event] MOVED: ({}, {}) (maximized: {})",
+                  position.x, position.y, is_maximized);
+              }
+            }
+            _ => {}
+          }
+        });
 
         tauri::async_runtime::spawn(async move {
           // Wait for initial window creation
@@ -261,7 +332,7 @@ pub fn run() {
 
           println!("[Window Setup] Setting size and position...");
 
-          // Force set size using logical coordinates
+          // Set size using logical coordinates
           if let Err(e) = window_clone.set_size(LogicalSize::new(logical_width, logical_height)) {
             println!("[Window Setup] ERROR: Failed to set size: {}", e);
           }
@@ -286,7 +357,7 @@ pub fn run() {
             println!("[Window Setup] ERROR: Failed to show: {}", e);
           }
 
-          // CRITICAL: Immediately re-apply size and position after show to fight macOS corruption
+          // Re-apply size and position after show to fight macOS corruption
           tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
           println!("[Window Setup] Re-applying size and position after show...");
 
@@ -298,12 +369,21 @@ pub fn run() {
             println!("[Window Setup] ERROR: Failed to re-center: {}", e);
           }
 
-          // Final state
+          // Final state with detailed logging
           if let Ok(size) = window_clone.outer_size() {
-            println!("[Window Setup] Final size: {}x{}", size.width, size.height);
+            println!("[Window Setup] Final outer size: {}x{}", size.width, size.height);
+          }
+          if let Ok(inner_size) = window_clone.inner_size() {
+            println!("[Window Setup] Final inner size: {}x{}", inner_size.width, inner_size.height);
           }
           if let Ok(position) = window_clone.outer_position() {
             println!("[Window Setup] Final position: ({}, {})", position.x, position.y);
+          }
+          if let Ok(scale) = window_clone.scale_factor() {
+            println!("[Window Setup] Scale factor: {}", scale);
+          }
+          if let Ok(is_maximized) = window_clone.is_maximized() {
+            println!("[Window Setup] Is maximized: {}", is_maximized);
           }
 
           // Set focus
@@ -311,7 +391,7 @@ pub fn run() {
             println!("[Window Setup] ERROR: Failed to set focus: {}", e);
           }
 
-          println!("[Window Setup] Window setup complete");
+          println!("[Window Setup] VS Code-style window setup complete");
         });
       }
 
