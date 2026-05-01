@@ -109,6 +109,7 @@ pub struct AppState {
     pub session: Arc<Mutex<Option<ClaurstSession>>>,
     pub cancel_token: Arc<Mutex<Option<tokio_util::sync::CancellationToken>>>,
     pub active_request_id: Arc<Mutex<Option<String>>>,
+    pub cancelling_request_id: Arc<Mutex<Option<String>>>,
 }
 
 #[tauri::command]
@@ -208,6 +209,7 @@ pub async fn init_session(
     *state.session.lock().await = Some(session);
     *state.cancel_token.lock().await = None;
     *state.active_request_id.lock().await = None;
+    *state.cancelling_request_id.lock().await = None;
 
     if session_id.starts_with("session-") {
         if let Ok(pool) = crate::database::get_pool() {
@@ -309,6 +311,7 @@ pub async fn init_task_session(
     *state.session.lock().await = Some(session);
     *state.cancel_token.lock().await = None;
     *state.active_request_id.lock().await = None;
+    *state.cancelling_request_id.lock().await = None;
 
     log::info!(
         "task_session_init_ready session_id={} provider={} model={}",

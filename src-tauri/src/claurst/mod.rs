@@ -312,6 +312,10 @@ fn resolve_handoff_suggestion(session_id: &str, parsed: ParsedHandoffBlock) -> O
 pub struct ClaurstSession {
     session_id: String,
     working_dir: PathBuf,
+    api_key: String,
+    model: String,
+    base_url: Option<String>,
+    system_prompt: Option<String>,
     client: AnthropicClient,
     config: QueryConfig,
     messages: Vec<Message>,
@@ -348,7 +352,10 @@ impl ClaurstSession {
         system_prompt: Option<String>,
     ) -> anyhow::Result<Self> {
         // 1. 创建 ClientConfig
-        let api_base = base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string());
+        let provider_base_url = base_url;
+        let api_base = provider_base_url
+            .clone()
+            .unwrap_or_else(|| "https://api.anthropic.com".to_string());
         let task_trace = load_task_trace_context(&session_id);
         let prompt_chars = system_prompt
             .as_ref()
@@ -536,6 +543,10 @@ impl ClaurstSession {
         Ok(Self {
             session_id,
             working_dir,
+            api_key,
+            model: query_config.model.clone(),
+            base_url: provider_base_url,
+            system_prompt: query_config.system_prompt.clone(),
             client,
             config: query_config,
             messages,
@@ -1061,6 +1072,17 @@ impl ClaurstSession {
 
     pub fn get_working_dir(&self) -> &PathBuf {
         &self.working_dir
+    }
+
+    pub fn recreate(&self) -> anyhow::Result<Self> {
+        Self::new(
+            self.session_id.clone(),
+            self.working_dir.clone(),
+            self.api_key.clone(),
+            self.model.clone(),
+            self.base_url.clone(),
+            self.system_prompt.clone(),
+        )
     }
 
 }

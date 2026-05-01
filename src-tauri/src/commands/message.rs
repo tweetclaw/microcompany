@@ -1,5 +1,6 @@
-use tauri::{State, Window};
+use tauri::{Emitter, State, Window};
 use crate::commands::session::AppState;
+use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone)]
@@ -66,6 +67,7 @@ pub async fn send_message(
     let request_id = uuid::Uuid::new_v4().to_string();
     *state.cancel_token.lock().await = Some(cancel_token.clone());
     *state.active_request_id.lock().await = Some(request_id.clone());
+    *state.cancelling_request_id.lock().await = None;
 
     if let Some(context) = task_context.as_ref() {
         log::info!(
@@ -90,10 +92,93 @@ pub async fn send_message(
         );
     }
 
-    // 发送消息
-    let result = session.send_message(&message, &request_id, window, cancel_token.clone())
+    let result = if state.cancelling_request_id.lock().await.is_some() {
+        log::warn!(
+            "message_send_cancel_already_pending request_id={} session_id={}",
+            request_id,
+            session_id
+        );
+        Err("Request cancelled".to_string())
+    } else {
+        {
+            let send_future = session.send_message(&message, &request_id, window.clone(), cancel_token.clone());
+
+            tokio::select! {
+                result = send_future => {
+                    result.map_err(|e| format!("Failed to send message: {}", e))
+                }
+                _ = async {
+                    loop {
+                        let should_stop = state
+                            .cancelling_request_id
+                            .lock()
+                            .await
+                            .as_ref()
+                            .is_some_and(|pending_id| pending_id == &request_id);
+
+                        if should_stop {
+                            break;
+                        }
+
+                        tokio::time::sleep(Duration::from_millis(150)).await;
+                    }
+                } => {
+                    log::warn!(
+                        "message_send_cancel_detected request_id={} session_id={}",
+                        request_id,
+                        session_id
+                    );
+                    Err("Request cancelled".to_string())
+                }
+            }
+        }
+    };
+
+    let cancellation_pending = state
+        .cancelling_request_id
+        .lock()
         .await
-        .map_err(|e| format!("Failed to send message: {}", e));
+        .as_ref()
+        .is_some_and(|pending_id| pending_id == &request_id);
+
+    let session_stuck = cancellation_pending && result.is_err();
+    if session_stuck {
+        log::warn!(
+            "message_cancelled_with_local_recovery request_id={} session_id={}",
+            request_id,
+            session_id
+        );
+
+        match timeout(Duration::from_secs(5), async {
+            session.recreate()
+        }).await {
+            Ok(Ok(recreated_session)) => {
+                *session = recreated_session;
+            }
+            Ok(Err(error)) => {
+                log::error!(
+                    "message_cancel_recreate_failed request_id={} session_id={} error={}",
+                    request_id,
+                    session_id,
+                    error
+                );
+            }
+            Err(_) => {
+                log::error!(
+                    "message_cancel_recreate_timed_out request_id={} session_id={}",
+                    request_id,
+                    session_id
+                );
+            }
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let _ = window.emit("ai-request-end", serde_json::json!({
+            "request_id": request_id,
+            "result": "cancelled",
+            "timestamp": now,
+        }));
+    }
 
     match &result {
         Ok(response) => {
@@ -141,6 +226,11 @@ pub async fn send_message(
     // 清除取消令牌与活跃请求
     *state.cancel_token.lock().await = None;
     *state.active_request_id.lock().await = None;
+    *state.cancelling_request_id.lock().await = None;
+
+    if session_stuck {
+        return Err("Request cancelled".to_string());
+    }
 
     result
 }
@@ -228,6 +318,7 @@ pub async fn forward_message(
 #[tauri::command]
 pub async fn cancel_message(
     state: State<'_, AppState>,
+    window: Window,
 ) -> Result<(), String> {
     let active_request_id = state.active_request_id.lock().await.clone();
     if active_request_id.is_none() {
@@ -240,6 +331,16 @@ pub async fn cancel_message(
     let cancel_token_guard = state.cancel_token.lock().await;
     if let Some(token) = cancel_token_guard.as_ref() {
         token.cancel();
+        *state.cancelling_request_id.lock().await = Some(request_id.clone());
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let _ = window.emit("ai-status", serde_json::json!({
+            "request_id": request_id.clone(),
+            "phase": "finalizing",
+            "text": "正在取消请求",
+            "timestamp": now,
+        }));
+
         log::info!("message_cancelled request_id={}", request_id);
         Ok(())
     } else {

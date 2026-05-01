@@ -191,6 +191,7 @@ pub fn run() {
       session: Arc::new(Mutex::new(None)),
       cancel_token: Arc::new(Mutex::new(None)),
       active_request_id: Arc::new(Mutex::new(None)),
+      cancelling_request_id: Arc::new(Mutex::new(None)),
     })
     .invoke_handler(tauri::generate_handler![
       commands::init_session,
