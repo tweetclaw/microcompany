@@ -20,6 +20,7 @@
   "handoffGuidance": "当需求边界明确并需要进入方案设计、实现或评审时，提出交接建议。",
   "recommendedNextArchetypes": [
     "software_architect",
+    "backend_developer",
     "frontend_developer"
   ],
   "promptFragments": {

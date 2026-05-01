@@ -45,21 +45,49 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
             let recommended_handoff_roles = role
                 .archetype_id
                 .as_deref()
-                .and_then(|archetype_id| crate::archetypes::get_role_archetype(archetype_id).ok().flatten())
+                .and_then(|archetype_id| {
+                    log::debug!(
+                        "build_role_prompt_contexts: role_index={} role_name={} archetype_id={}",
+                        index,
+                        role.name,
+                        archetype_id
+                    );
+                    crate::archetypes::get_role_archetype(archetype_id).ok().flatten()
+                })
                 .map(|archetype| {
-                    roster
+                    log::debug!(
+                        "build_role_prompt_contexts: archetype loaded, recommended_next_archetypes={:?}",
+                        archetype.recommended_next_archetypes
+                    );
+                    let candidates: Vec<_> = roster
                         .iter()
                         .enumerate()
                         .filter(|(candidate_index, _)| *candidate_index != index)
                         .filter(|(_, candidate)| {
-                            candidate
+                            let matches = candidate
                                 .archetype_id
                                 .as_deref()
-                                .map(|candidate_id| archetype.recommended_next_archetypes.iter().any(|value| value == candidate_id))
-                                .unwrap_or(false)
+                                .map(|candidate_id| {
+                                    let is_match = archetype.recommended_next_archetypes.iter().any(|value| value == candidate_id);
+                                    log::debug!(
+                                        "build_role_prompt_contexts: checking candidate={} candidate_archetype_id={} is_match={}",
+                                        candidate.name,
+                                        candidate_id,
+                                        is_match
+                                    );
+                                    is_match
+                                })
+                                .unwrap_or(false);
+                            matches
                         })
                         .map(|(_, candidate)| candidate.clone())
-                        .collect::<Vec<_>>()
+                        .collect();
+                    log::debug!(
+                        "build_role_prompt_contexts: role_name={} found {} recommended handoff candidates",
+                        role.name,
+                        candidates.len()
+                    );
+                    candidates
                 })
                 .unwrap_or_default();
 
