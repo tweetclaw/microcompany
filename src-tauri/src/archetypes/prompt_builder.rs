@@ -18,16 +18,16 @@ pub struct RolePromptContext {
 
 pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
     let mut rules = vec![
-        "你是多角色协作任务中的一个成员。",
-        "你只能完成当前角色职责范围内的工作。",
-        "你不能自行切换角色。",
-        "handoff 只是建议，必须等待用户确认。",
+        "你是多角色协作任务中的一个成员.",
+        "你只能完成当前角色职责范围内的工作.",
+        "你不能自行切换角色.",
+        "handoff 只是建议,必须等待用户确认.",
     ];
 
     if handoff_enabled {
-        rules.push("当你认为下一阶段应由其他角色继续时，可以输出 HANDOFF 块提出建议。只要你的正文里明确写了“下一位角色”“建议交给谁”“发给下一位角色的消息”或任何等价交接判断，结尾就必须追加合法的 HANDOFF 块，不能只写自然语言建议。否则前端无法弹出用户确认交接框。");
+        rules.push("当你认为下一阶段应由其他角色继续时,可以输出 HANDOFF 块提出建议.只要你的正文里明确写了[下一位角色][建议交给谁][发给下一位角色的消息]或任何等价交接判断,结尾就必须追加合法的 HANDOFF 块,不能只写自然语言建议.否则前端无法弹出用户确认交接框.");
     } else {
-        rules.push("当前角色不负责提出交接建议，除非用户明确要求你这样做。即使正文提到协作对象，也不要输出 HANDOFF 块。");
+        rules.push("当前角色不负责提出交接建议,除非用户明确要求你这样做.即使正文提到协作对象,也不要输出 HANDOFF 块.");
     }
 
     rules.join("\n")
@@ -35,14 +35,14 @@ pub fn platform_rules_prompt(handoff_enabled: bool) -> String {
 
 fn format_role_label(role: &TeamRolePromptContext) -> String {
     match role.archetype_id.as_deref().filter(|value| !value.is_empty()) {
-        Some(archetype_id) => format!("{}（身份：{}；archetype：{}）", role.name, role.identity, archetype_id),
-        None => format!("{}（身份：{}）", role.name, role.identity),
+        Some(archetype_id) => format!("{}(身份:{};archetype:{})", role.name, role.identity, archetype_id),
+        None => format!("{}(身份:{})", role.name, role.identity),
     }
 }
 
 fn build_active_role_contract(role_name: &str, role_identity: &str) -> String {
     format!(
-        "当前激活角色契约：\n- 你现在就是这个任务会话中的 {}（角色名称：{}）。\n- 你必须以这个角色的第一人称视角直接与用户对话、思考和推进工作。\n- 你不能把“{}”当成另一个外部人员，也不能建议用户再去联系“{}”。\n- 在用户明确确认 handoff 之前，你始终是当前正在发言和负责推进的角色。",
+        "当前激活角色契约:\n- 你现在就是这个任务会话中的 {}(角色名称:{}).\n- 你必须以这个角色的第一人称视角直接与用户对话,思考和推进工作.\n- 你不能把[{}]当成另一个外部人员,也不能建议用户再去联系[{}].\n- 在用户明确确认 handoff 之前,你始终是当前正在发言和负责推进的角色.",
         role_identity,
         role_name,
         role_identity,
@@ -64,24 +64,24 @@ fn build_team_context(role_context: Option<&RolePromptContext>) -> Option<String
         .collect::<Vec<_>>()
         .join("\n");
 
-    let current_position = format!("你是当前团队中的第 {} / {} 个角色。", context.active_role_index + 1, context.roster.len());
+    let current_position = format!("你是当前团队中的第 {} / {} 个角色.", context.active_role_index + 1, context.roster.len());
 
     let handoff_targets = if context.recommended_handoff_roles.is_empty() {
-        "当前任务中没有解析出明确的推荐下游角色；如果你建议 handoff，只能在现有团队成员范围内提出。".to_string()
+        "当前任务中没有解析出明确的推荐下游角色;如果你建议 handoff,只能在现有团队成员范围内提出.".to_string()
     } else {
         format!(
-            "结合当前任务配置，你优先可以考虑的下游协作/交接角色是：{}。",
+            "结合当前任务配置,你优先可以考虑的下游协作/交接角色是:{}.",
             context
                 .recommended_handoff_roles
                 .iter()
                 .map(format_role_label)
                 .collect::<Vec<_>>()
-                .join("、")
+                .join(",")
         )
     };
 
     Some(format!(
-        "团队上下文：\n- 你正在一个真实存在的任务团队中工作，而不是单独扮演抽象角色。\n- 当前任务团队成员如下：\n{}\n- {}\n- {}",
+        "团队上下文:\n- 你正在一个真实存在的任务团队中工作,而不是单独扮演抽象角色.\n- 当前任务团队成员如下:\n{}\n- {}\n- {}",
         roster,
         current_position,
         handoff_targets
@@ -110,24 +110,41 @@ fn build_handoff_output_contract(
 
     let normalized_identity = role_identity.trim();
     let allowed_targets_summary = if allowed_targets.is_empty() {
-        "当前任务里没有其他可交接角色。".to_string()
+        "当前任务里没有其他可交接角色.".to_string()
     } else {
-        format!("当前任务里，除你之外可作为“下一位角色”的对象只有：{}。", allowed_targets.join("、"))
+        format!("当前任务里,除你之外可作为\"下一位角色\"的对象只有:{}.", allowed_targets.join(","))
     };
 
     let recommended_targets_summary = if recommended_targets.is_empty() {
-        "如果你建议 handoff，但当前没有解析出明确推荐下游角色，你也只能在上面这些真实团队成员中选择；不能虚构团队外角色，也不能把同身份角色当作外部联系对象。".to_string()
+        "如果你建议 handoff,但当前没有解析出明确推荐下游角色,你也只能在上面这些真实团队成员中选择;不能虚构团队外角色,也不能把同身份角色当作外部联系对象.".to_string()
     } else {
         format!(
-            "如果你建议 handoff，优先从这些真实下游角色中选择：{}。不要跳过它们去推荐一个泛化职位。",
-            recommended_targets.join("、")
+            "如果你建议 handoff,优先从这些真实下游角色中选择:{}.不要跳过它们去推荐一个泛化职位.",
+            recommended_targets.join(",")
         )
     };
 
+    // 提取精确的角色名称列表
+    let exact_role_names = context
+        .roster
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != context.active_role_index)
+        .map(|(_, role)| format!("\"{}\"", role.name))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let role_names_instruction = if exact_role_names.is_empty() {
+        "当前任务中没有其他角色可供交接.".to_string()
+    } else {
+        format!("当前团队的真实角色名称列表:{}.", exact_role_names)
+    };
+
     Some(format!(
-        "交接输出约束：\n- {}\n- 你绝不能把“{}”或任何同身份角色再次推荐为下一位角色。\n- 你绝不能推荐团队 roster 之外的泛化职位（如 PM、产品负责人、负责人、业务方），除非该对象就在当前 roster 中且不是你自己。\n- 如果你判断当前阶段还不应该交接，就明确写“当前暂不交接，继续由我推进下一步”，不要虚构一个外部联系对象。\n- 如果用户要求你给出“发给下一位角色的消息”，那条消息也只能发给当前任务 roster 中的真实其他角色；若当前暂不交接，就明确写“当前无需发送交接消息，因为此阶段仍由我继续推进”。\n- 如果你决定提出交接建议，请在正常回答结束后追加一个机器可读的 HANDOFF 块，格式必须严格如下：\n  [HANDOFF]\n  recommended: yes 或 no\n  target_role: 真实团队中的角色名称；如果没有则留空\n  reason: 一句简短原因\n  draft_message: 发给下一位角色的完整交接消息；如果不交接则写当前无需发送交接消息\n  [/HANDOFF]\n- 如果 recommended: no，则 target_role 留空，并让 draft_message 明确说明当前无需发送交接消息。\n- {}",
+        "交接输出约束:\n- {}\n- 你绝不能把[{}]或任何同身份角色再次推荐为下一位角色.\n- 你绝不能推荐团队 roster 之外的泛化职位(如 PM,产品负责人,负责人,业务方),除非该对象就在当前 roster 中且不是你自己.\n- {}\n- 如果你判断当前阶段还不应该交接,就明确写[当前暂不交接,继续由我推进下一步],不要虚构一个外部联系对象.\n- 如果用户要求你给出[发给下一位角色的消息],那条消息也只能发给当前任务 roster 中的真实其他角色;若当前暂不交接,就明确写[当前无需发送交接消息,因为此阶段仍由我继续推进].\n- {}\n- 如果你决定提出交接建议,请在正常回答结束后追加一个机器可读的 HANDOFF 块,格式必须严格如下:\n  [HANDOFF]\n  recommended: yes 或 no\n  target_role: 必须从上述角色名称列表中精确复制一个角色名称;如果不交接则留空\n  reason: 一句简短原因\n  draft_message: 发给下一位角色的完整交接消息;如果不交接则写当前无需发送交接消息\n  [/HANDOFF]\n- target_role 字段必须从上述列表中精确复制角色名称,不能使用同义词,简称或自己推断的名称.例如,如果列表中是 [Backend Developer],你不能写 [Backend Engineer] 或 [Backend].\n- 如果 recommended: no,则 target_role 留空,并让 draft_message 明确说明当前无需发送交接消息.",
         allowed_targets_summary,
         normalized_identity,
+        role_names_instruction,
         recommended_targets_summary,
     ))
 }
@@ -149,15 +166,23 @@ pub fn build_role_system_prompt(
     sections.push(build_active_role_contract(role_name, role_identity));
 
     let mut task_info = format!(
-        "当前任务名称：{}\n当前角色名称：{}\n当前角色身份：{}",
+        "当前任务名称:{}\n当前角色名称:{}\n当前角色身份:{}",
         task_name, role_name, role_identity
     );
 
     if let Some(working_dir) = working_directory {
-        task_info.push_str(&format!("\n当前工作目录：{}", working_dir));
+        task_info.push_str(&format!("\n当前工作目录:{}", working_dir));
     }
 
     sections.push(task_info);
+
+    // 添加工作目录使用指引
+    if let Some(working_dir) = working_directory {
+        sections.push(format!(
+            "工作目录使用指引:\n- 你当前的工作目录是:[{}]\n- 所有文件操作,代码读取,命令执行都应该基于这个目录\n- 当你需要读取或修改文件时,请使用相对于这个目录的路径\n- 当你需要执行命令时,请确保在这个目录下执行\n- 如果用户询问项目结构或文件位置,请基于这个目录进行回答",
+            working_dir
+        ));
+    }
 
     if let Some(team_context) = build_team_context(role_context) {
         sections.push(team_context);
@@ -169,13 +194,13 @@ pub fn build_role_system_prompt(
 
     if let Some(archetype) = archetype {
         sections.push(format!(
-            "角色原型：{}\n摘要：{}\n描述：{}",
+            "角色原型:{}\n摘要:{}\n描述:{}",
             archetype.label, archetype.summary, archetype.description
         ));
 
         if !archetype.responsibilities.is_empty() {
             sections.push(format!(
-                "职责范围：\n{}",
+                "职责范围:\n{}",
                 archetype
                     .responsibilities
                     .iter()
@@ -187,7 +212,7 @@ pub fn build_role_system_prompt(
 
         if !archetype.boundaries.is_empty() {
             sections.push(format!(
-                "边界约束：\n{}",
+                "边界约束:\n{}",
                 archetype
                     .boundaries
                     .iter()
@@ -199,7 +224,7 @@ pub fn build_role_system_prompt(
 
         if !archetype.deliverables.is_empty() {
             sections.push(format!(
-                "建议产出：\n{}",
+                "建议产出:\n{}",
                 archetype
                     .deliverables
                     .iter()
@@ -210,7 +235,7 @@ pub fn build_role_system_prompt(
         }
 
         sections.push(format!(
-            "角色协作指引：{}\n任务执行指引：{}\n交接建议：{}",
+            "角色协作指引:{}\n任务执行指引:{}\n交接建议:{}",
             archetype.prompt_fragments.team_guidance,
             archetype.prompt_fragments.task_guidance,
             archetype.handoff_guidance
@@ -222,11 +247,11 @@ pub fn build_role_system_prompt(
     }
 
     if !task_description.trim().is_empty() {
-        sections.push(format!("任务说明：\n{}", task_description.trim()));
+        sections.push(format!("任务说明:\n{}", task_description.trim()));
     }
 
     if let Some(append_prompt) = system_prompt_append.map(str::trim).filter(|value| !value.is_empty()) {
-        sections.push(format!("额外系统提示追加：\n{}", append_prompt));
+        sections.push(format!("额外系统提示追加:\n{}", append_prompt));
     }
 
     sections.join("\n\n")
@@ -260,7 +285,7 @@ pub fn build_custom_role_system_prompt(
     }
 
     sections.push(format!(
-        "自定义角色完整系统提示：\n{}",
+        "自定义角色完整系统提示:\n{}",
         custom_system_prompt.trim()
     ));
 
@@ -275,9 +300,9 @@ pub fn pm_first_workflow_prompt(role_identity: &str) -> String {
         || normalized_identity == "产品经理";
 
     if is_product_manager {
-        "当前任务启用了 PM First Workflow。你现在就是当前正在与用户直接对话的 Product Manager。你必须先阅读 docs/v2/team-templates-next-phase-implementation-plan.md，并把 docs/v2/team-templates-task-team-testing-guide.md 当作当前团队演练手册，再结合用户当前目标主动完成产品经理职责：澄清目标、范围、约束、优先级与验收边界，并给出下一步协作建议。你的首要输出必须覆盖：1）是否建议开始开发；2）最小可执行范围；3）下一位应该接手的角色；4）建议用户发给下一位角色的完整消息。你自己就负责完成当前这轮 PM 工作，不能把 Product Manager 当成另一个外部角色，也不能让用户再去联系 PM。硬性约束：如果你输出“下一位应该接手的角色”或“发给下一位角色的消息”，答案末尾必须追加合法的 [HANDOFF] ... [/HANDOFF] 机器可读区块，否则系统无法弹出交接确认框；该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理，也不能与当前激活角色是同一身份；如果你发现自己推荐的还是当前角色，必须先改写答案，再输出最终结果。若当前暂不交接，也要在答案末尾输出 recommended: no 的 HANDOFF 区块。不要直接开始实现。".to_string()
+        "当前任务启用了 PM First Workflow.你现在就是当前正在与用户直接对话的 Product Manager.你必须先阅读 docs/v2/team-templates-next-phase-implementation-plan.md,并把 docs/v2/team-templates-task-team-testing-guide.md 当作当前团队演练手册,再结合用户当前目标主动完成产品经理职责:澄清目标,范围,约束,优先级与验收边界,并给出下一步协作建议.你的首要输出必须覆盖:1)是否建议开始开发;2)最小可执行范围;3)下一位应该接手的角色;4)建议用户发给下一位角色的完整消息.你自己就负责完成当前这轮 PM 工作,不能把 Product Manager 当成另一个外部角色,也不能让用户再去联系 PM.硬性约束:如果你输出[下一位应该接手的角色]或[发给下一位角色的消息],答案末尾必须追加合法的 [HANDOFF] ... [/HANDOFF] 机器可读区块,否则系统无法弹出交接确认框;该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理,也不能与当前激活角色是同一身份;如果你发现自己推荐的还是当前角色,必须先改写答案,再输出最终结果.若当前暂不交接,也要在答案末尾输出 recommended: no 的 HANDOFF 区块.不要直接开始实现.特别注意:你是 Product Manager,所以你绝不能推荐 Product Manager 作为下一位角色;通常情况下,PM 完成需求分析后应该交给 Backend Developer 或 Frontend Developer 等技术角色.".to_string()
     } else {
-        "当前任务启用了 PM First Workflow。只有在用户已先与当前任务中的 Product Manager 对齐范围，并明确把工作交接给你之后，你才进入执行。若上下文中缺少 PM 的决策、范围或交接消息，你应先指出缺失信息，而不是直接开始实现。若 PM 或你自己已经明确写出下一位角色/交接消息，最终答案也必须按系统约束追加 HANDOFF 区块，不能只写自然语言交接建议。".to_string()
+        "当前任务启用了 PM First Workflow.只有在用户已先与当前任务中的 Product Manager 对齐范围,并明确把工作交接给你之后,你才进入执行.若上下文中缺少 PM 的决策,范围或交接消息,你应先指出缺失信息,而不是直接开始实现.若 PM 或你自己已经明确写出下一位角色/交接消息,最终答案也必须按系统约束追加 HANDOFF 区块,不能只写自然语言交接建议.".to_string()
     }
 }
 
@@ -296,17 +321,17 @@ mod tests {
         RoleArchetype {
             id: "frontend_developer".to_string(),
             label: "Frontend Developer".to_string(),
-            summary: "负责前端实现。".to_string(),
-            description: "负责 UI 与交互实现。".to_string(),
+            summary: "负责前端实现.".to_string(),
+            description: "负责 UI 与交互实现.".to_string(),
             responsibilities: vec!["实现界面".to_string(), "维护状态逻辑".to_string()],
             boundaries: vec!["不做产品裁决".to_string()],
             deliverables: vec!["实现方案".to_string()],
-            handoff_guidance: "实现完成后建议交给评审角色。".to_string(),
+            handoff_guidance: "实现完成后建议交给评审角色.".to_string(),
             recommended_next_archetypes: vec!["code_reviewer".to_string()],
             prompt_fragments: PromptFragments {
-                role_system: "你是前端工程角色。".to_string(),
-                team_guidance: "与其他角色协作。".to_string(),
-                task_guidance: "专注前端实现。".to_string(),
+                role_system: "你是前端工程角色.".to_string(),
+                team_guidance: "与其他角色协作.".to_string(),
+                task_guidance: "专注前端实现.".to_string(),
             },
             source: SourceMetadata {
                 repository: "agency-agents".to_string(),
@@ -357,11 +382,11 @@ mod tests {
             None,
         );
 
-        assert!(prompt.contains("当前任务名称：Build dashboard"));
-        assert!(prompt.contains("角色原型：Frontend Developer"));
-        assert!(prompt.contains("职责范围："));
-        assert!(prompt.contains("任务说明：\n实现仪表盘页面"));
-        assert!(prompt.contains("额外系统提示追加：\n必须输出明确的交接建议"));
+        assert!(prompt.contains("当前任务名称:Build dashboard"));
+        assert!(prompt.contains("角色原型:Frontend Developer"));
+        assert!(prompt.contains("职责范围:"));
+        assert!(prompt.contains("任务说明:\n实现仪表盘页面"));
+        assert!(prompt.contains("额外系统提示追加:\n必须输出明确的交接建议"));
     }
 
     #[test]
@@ -371,17 +396,17 @@ mod tests {
             "Researcher",
             "Plan rollout",
             "先完成调研",
-            "你必须输出严格的调研报告。",
+            "你必须输出严格的调研报告.",
             true,
             false,
             Some(&sample_role_context()),
             None,
         );
 
-        assert!(prompt.contains("你是多角色协作任务中的一个成员。"));
-        assert!(prompt.contains("当前角色名称：Alice"));
-        assert!(prompt.contains("当前角色身份：Researcher"));
-        assert!(prompt.contains("自定义角色完整系统提示：\n你必须输出严格的调研报告。"));
+        assert!(prompt.contains("你是多角色协作任务中的一个成员."));
+        assert!(prompt.contains("当前角色名称:Alice"));
+        assert!(prompt.contains("当前角色身份:Researcher"));
+        assert!(prompt.contains("自定义角色完整系统提示:\n你必须输出严格的调研报告."));
     }
 
     #[test]
@@ -398,15 +423,15 @@ mod tests {
             None,
         );
 
-        assert!(prompt.contains("当前激活角色契约："));
+        assert!(prompt.contains("当前激活角色契约:"));
         assert!(prompt.contains("你必须以这个角色的第一人称视角直接与用户对话"));
-        assert!(prompt.contains("团队上下文："));
-        assert!(prompt.contains("交接输出约束："));
-        assert!(prompt.contains("当前任务里，除你之外可作为“下一位角色”的对象只有"));
+        assert!(prompt.contains("团队上下文:"));
+        assert!(prompt.contains("交接输出约束:"));
+        assert!(prompt.contains("当前任务里,除你之外可作为"下一位角色"的对象只有"));
         assert!(prompt.contains("你绝不能推荐团队 roster 之外的泛化职位"));
-        assert!(prompt.contains("1. Alice（身份：Product Manager；archetype：product_manager）"));
-        assert!(prompt.contains("你是当前团队中的第 2 / 3 个角色。"));
-        assert!(prompt.contains("Carol（身份：Reviewer；archetype：code_reviewer）"));
+        assert!(prompt.contains("1. Alice(身份:Product Manager;archetype:product_manager)"));
+        assert!(prompt.contains("你是当前团队中的第 2 / 3 个角色."));
+        assert!(prompt.contains("Carol(身份:Reviewer;archetype:code_reviewer)"));
     }
 
     #[test]
@@ -428,10 +453,10 @@ mod tests {
             None,
         );
 
-        assert!(prompt.contains("交接输出约束："));
-        assert!(prompt.contains("当前任务里，除你之外可作为“下一位角色”的对象只有：Bob（身份：Developer；archetype：frontend_developer）、Carol（身份：Reviewer；archetype：code_reviewer）。"));
-        assert!(prompt.contains("你绝不能把“Product Manager”或任何同身份角色再次推荐为下一位角色。"));
-        assert!(prompt.contains("如果用户要求你给出“发给下一位角色的消息”，那条消息也只能发给当前任务 roster 中的真实其他角色"));
+        assert!(prompt.contains("交接输出约束:"));
+        assert!(prompt.contains("当前任务里,除你之外可作为[下一位角色]的对象只有:Bob(身份:Developer;archetype:frontend_developer),Carol(身份:Reviewer;archetype:code_reviewer)."));
+        assert!(prompt.contains("你绝不能把[Product Manager]或任何同身份角色再次推荐为下一位角色."));
+        assert!(prompt.contains("如果用户要求你给出[发给下一位角色的消息],那条消息也只能发给当前任务 roster 中的真实其他角色"));
     }
 
     #[test]
@@ -444,9 +469,9 @@ mod tests {
         assert!(pm_prompt.contains("你现在就是当前正在与用户直接对话的 Product Manager"));
         assert!(pm_prompt.contains("不能让用户再去联系 PM"));
         assert!(pm_prompt.contains("答案末尾必须追加合法的 [HANDOFF] ... [/HANDOFF] 机器可读区块"));
-        assert!(pm_prompt.contains("若当前暂不交接，也要在答案末尾输出 recommended: no 的 HANDOFF 区块"));
+        assert!(pm_prompt.contains("若当前暂不交接,也要在答案末尾输出 recommended: no 的 HANDOFF 区块"));
         assert!(pm_prompt.contains("该角色绝不能是 Product Manager / PM / 项目经理 / 产品经理"));
-        assert!(pm_prompt.contains("如果你发现自己推荐的还是当前角色，必须先改写答案"));
+        assert!(pm_prompt.contains("如果你发现自己推荐的还是当前角色,必须先改写答案"));
         assert!(pm_prompt.contains("不要直接开始实现"));
         assert!(engineer_prompt.contains("只有在用户已先与当前任务中的 Product Manager 对齐范围"));
         assert!(engineer_prompt.contains("最终答案也必须按系统约束追加 HANDOFF 区块"));

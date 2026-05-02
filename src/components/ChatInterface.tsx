@@ -398,10 +398,54 @@ function ChatInterface({
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        finalizeStreamingMessage(payload.request_id, payload.final_text);
+        // Get the accumulated text from frontend messages
+        let accumulatedText = '';
+        onMessagesChangeRef.current((currentMessages: Message[]) => {
+          const lastAssistantMsg = [...currentMessages]
+            .reverse()
+            .find((msg) => msg.role === 'assistant' && msg.requestId === payload.request_id);
+          if (lastAssistantMsg) {
+            accumulatedText = lastAssistantMsg.content;
+          }
+          return currentMessages;
+        });
+
+        // Use accumulated text if backend's final_text is empty
+        const finalText = payload.final_text || accumulatedText;
+        finalizeStreamingMessage(payload.request_id, finalText);
 
         if (payload.result === 'success') {
-          if (payload.handoffSuggestion && onHandoffSuggestion) {
+          // If backend didn't provide handoff suggestion but we have accumulated text, check for handoff manually
+          if (!payload.handoffSuggestion && finalText && onHandoffSuggestion) {
+            // Extract handoff block from accumulated text
+            const handoffMatch = finalText.match(/\[HANDOFF\]([\s\S]*?)\[\/HANDOFF\]/);
+            if (handoffMatch) {
+              const handoffContent = handoffMatch[1];
+              const lines = handoffContent.split('\n').map(line => line.trim()).filter(line => line);
+              const fields: Record<string, string> = {};
+              for (const line of lines) {
+                const colonIndex = line.indexOf(':');
+                if (colonIndex > 0) {
+                  const key = line.substring(0, colonIndex).trim().toLowerCase();
+                  const value = line.substring(colonIndex + 1).trim();
+                  fields[key] = value;
+                }
+              }
+
+              const recommended = fields['recommended']?.toLowerCase() === 'yes';
+              if (recommended && fields['target_role']) {
+                // Create handoff suggestion from frontend-parsed data
+                const handoffSuggestion = {
+                  recommended: true,
+                  targetRoleId: null,
+                  targetRoleName: fields['target_role'],
+                  reason: fields['reason'] || '',
+                  draftMessage: fields['draft_message'] || '',
+                };
+                onHandoffSuggestion({ ...payload, handoffSuggestion });
+              }
+            }
+          } else if (payload.handoffSuggestion && onHandoffSuggestion) {
             onHandoffSuggestion(payload);
           }
           setRunState('completed');

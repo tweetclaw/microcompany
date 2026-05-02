@@ -212,6 +212,8 @@ fn extract_handoff_block(text: &str) -> Option<ParsedHandoffBlock> {
     let block_content = &text[start + start_tag.len()..end];
     let visible_text = text[..start].trim_end().to_string();
 
+    log::debug!("handoff_block_found block_content_length={}", block_content.len());
+
     let mut fields = HashMap::new();
     for line in block_content.lines() {
         let trimmed = line.trim();
@@ -238,6 +240,14 @@ fn extract_handoff_block(text: &str) -> Option<ParsedHandoffBlock> {
         .get("draft_message")
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())?;
+
+    log::debug!(
+        "handoff_block_parsed recommended={} target_role_name={:?} has_reason={} has_draft_message={}",
+        recommended,
+        target_role_name,
+        !reason.is_empty(),
+        !draft_message.is_empty()
+    );
 
     Some(ParsedHandoffBlock {
         visible_text,
@@ -890,12 +900,25 @@ impl ClaurstSession {
                 }
 
                 let parsed_handoff = extract_handoff_block(&text);
+
+                log::debug!(
+                    "handoff_block_extracted session_id={} found={}",
+                    self.session_id,
+                    parsed_handoff.is_some()
+                );
+
                 if let Some(parsed) = parsed_handoff.as_ref() {
                     text = parsed.visible_text.clone();
                 }
 
                 let handoff_suggestion = parsed_handoff
                     .and_then(|parsed| resolve_handoff_suggestion(&self.session_id, parsed));
+
+                log::debug!(
+                    "handoff_suggestion_resolved session_id={} resolved={}",
+                    self.session_id,
+                    handoff_suggestion.is_some()
+                );
 
                 log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());
                 if !text.is_empty() {
