@@ -27,6 +27,9 @@ package-lock.json
 # Logs
 *.log
 
+# Database files
+app.db
+
 # macOS
 src-tauri/.DS_Store
 .DS_Store

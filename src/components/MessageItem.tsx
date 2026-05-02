@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Message } from '../types';
 import './MessageItem.css';
 
@@ -10,6 +10,17 @@ const MarkdownRenderer = lazy(() => import('./MarkdownRenderer').then((module) =
 
 function MessageItem({ message }: MessageItemProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   return (
     <div className={`message-item ${isUser ? 'message-user' : 'message-assistant'}`}>
@@ -28,6 +39,15 @@ function MessageItem({ message }: MessageItemProps) {
           </Suspense>
         )}
       </div>
+      {!isUser && !message.isStreaming && (
+        <button
+          className="message-copy-button"
+          onClick={handleCopy}
+          title="复制消息内容"
+        >
+          {copied ? '✓' : '📋'}
+        </button>
+      )}
     </div>
   );
 }

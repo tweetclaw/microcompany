@@ -46,17 +46,23 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
                 .archetype_id
                 .as_deref()
                 .and_then(|archetype_id| {
-                    log::debug!(
-                        "build_role_prompt_contexts: role_index={} role_name={} archetype_id={}",
+                    log::info!(
+                        "🔍 build_role_prompt_contexts: role_index={} role_name={} archetype_id={}",
                         index,
                         role.name,
                         archetype_id
                     );
-                    crate::archetypes::get_role_archetype(archetype_id).ok().flatten()
+                    let result = crate::archetypes::get_role_archetype(archetype_id);
+                    match &result {
+                        Ok(Some(arch)) => log::info!("🔍 archetype loaded successfully: {}", archetype_id),
+                        Ok(None) => log::info!("🔍 archetype returned None: {}", archetype_id),
+                        Err(e) => log::info!("🔍 archetype load error: {} - {}", archetype_id, e),
+                    }
+                    result.ok().flatten()
                 })
                 .map(|archetype| {
-                    log::debug!(
-                        "build_role_prompt_contexts: archetype loaded, recommended_next_archetypes={:?}",
+                    log::info!(
+                        "🔍 build_role_prompt_contexts: archetype loaded, recommended_next_archetypes={:?}",
                         archetype.recommended_next_archetypes
                     );
                     let candidates: Vec<_> = roster
@@ -69,8 +75,8 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
                                 .as_deref()
                                 .map(|candidate_id| {
                                     let is_match = archetype.recommended_next_archetypes.iter().any(|value| value == candidate_id);
-                                    log::debug!(
-                                        "build_role_prompt_contexts: checking candidate={} candidate_archetype_id={} is_match={}",
+                                    log::info!(
+                                        "🔍 build_role_prompt_contexts: checking candidate={} candidate_archetype_id={} is_match={}",
                                         candidate.name,
                                         candidate_id,
                                         is_match
@@ -82,8 +88,8 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
                         })
                         .map(|(_, candidate)| candidate.clone())
                         .collect();
-                    log::debug!(
-                        "build_role_prompt_contexts: role_name={} found {} recommended handoff candidates",
+                    log::info!(
+                        "🔍 build_role_prompt_contexts: role_name={} found {} recommended handoff candidates",
                         role.name,
                         candidates.len()
                     );
@@ -91,11 +97,17 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
                 })
                 .unwrap_or_default();
 
-            RolePromptContext {
+            let context = RolePromptContext {
                 roster: roster.clone(),
                 active_role_index: index,
-                recommended_handoff_roles,
-            }
+                recommended_handoff_roles: recommended_handoff_roles.clone(),
+            };
+            log::info!(
+                "🔍 build_role_prompt_contexts: final context for role_name={} has {} recommended_handoff_roles",
+                role.name,
+                context.recommended_handoff_roles.len()
+            );
+            context
         })
         .collect()
 }
@@ -217,6 +229,7 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
                 &task_request.description,
                 task_request.pm_first_workflow,
                 Some(role_prompt_context),
+                &task_request.working_directory,
             )?;
 
             log::info!(
@@ -596,6 +609,7 @@ fn build_system_prompt_snapshot(
     task_description: &str,
     pm_first_workflow: bool,
     role_context: Option<&RolePromptContext>,
+    working_directory: &str,
 ) -> Result<PromptSnapshot, String> {
     let prompt_text = if role.archetype_id.as_deref() == Some(CUSTOM_ARCHETYPE_ID) {
         let custom_prompt = role
@@ -614,6 +628,7 @@ fn build_system_prompt_snapshot(
             role.handoff_enabled,
             pm_first_workflow,
             role_context,
+            Some(working_directory),
         )
     } else {
         let archetype = match &role.archetype_id {
@@ -630,6 +645,7 @@ fn build_system_prompt_snapshot(
             role.system_prompt_append.as_deref(),
             role.handoff_enabled,
             role_context,
+            Some(working_directory),
         );
 
         if pm_first_workflow {

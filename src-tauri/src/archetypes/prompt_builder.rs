@@ -141,15 +141,23 @@ pub fn build_role_system_prompt(
     system_prompt_append: Option<&str>,
     handoff_enabled: bool,
     role_context: Option<&RolePromptContext>,
+    working_directory: Option<&str>,
 ) -> String {
     let mut sections = Vec::new();
 
     sections.push(platform_rules_prompt(handoff_enabled));
     sections.push(build_active_role_contract(role_name, role_identity));
-    sections.push(format!(
+
+    let mut task_info = format!(
         "当前任务名称：{}\n当前角色名称：{}\n当前角色身份：{}",
         task_name, role_name, role_identity
-    ));
+    );
+
+    if let Some(working_dir) = working_directory {
+        task_info.push_str(&format!("\n当前工作目录：{}", working_dir));
+    }
+
+    sections.push(task_info);
 
     if let Some(team_context) = build_team_context(role_context) {
         sections.push(team_context);
@@ -233,6 +241,7 @@ pub fn build_custom_role_system_prompt(
     handoff_enabled: bool,
     pm_first_workflow: bool,
     role_context: Option<&RolePromptContext>,
+    working_directory: Option<&str>,
 ) -> String {
     let mut sections = vec![build_role_system_prompt(
         None,
@@ -243,6 +252,7 @@ pub fn build_custom_role_system_prompt(
         None,
         handoff_enabled,
         role_context,
+        working_directory,
     )];
 
     if pm_first_workflow {
@@ -344,6 +354,7 @@ mod tests {
             Some("必须输出明确的交接建议"),
             true,
             Some(&sample_role_context()),
+            None,
         );
 
         assert!(prompt.contains("当前任务名称：Build dashboard"));
@@ -364,6 +375,7 @@ mod tests {
             true,
             false,
             Some(&sample_role_context()),
+            None,
         );
 
         assert!(prompt.contains("你是多角色协作任务中的一个成员。"));
@@ -383,6 +395,7 @@ mod tests {
             None,
             true,
             Some(&sample_role_context()),
+            None,
         );
 
         assert!(prompt.contains("当前激活角色契约："));
@@ -412,6 +425,7 @@ mod tests {
             None,
             true,
             Some(&role_context),
+            None,
         );
 
         assert!(prompt.contains("交接输出约束："));

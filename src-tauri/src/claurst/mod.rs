@@ -414,7 +414,15 @@ impl ClaurstSession {
         // 4. 创建 QueryConfig
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
-        query_config.system_prompt = system_prompt;
+        query_config.system_prompt = system_prompt.clone();
+
+        if let Some(ref prompt) = system_prompt {
+            log::info!(
+                "🔍 ClaurstSession::new system_prompt length={} first_200_chars={}",
+                prompt.len(),
+                &prompt.chars().take(200).collect::<String>()
+            );
+        }
 
         // 5. 注册工具
         let tools: Vec<Box<dyn Tool>> = vec![
