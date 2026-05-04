@@ -345,11 +345,20 @@ Implement Team Templates MVP from the next-phase implementation plan
 
 **推荐协作顺序**：
 
-1. **PM 读取主文档并收敛 MVP 范围**
+1. **PM 分析团队模板需求并触发 handoff**
    - 发送消息：
    ```
-   Please treat docs/v2/team-templates-next-phase-implementation-plan.md as the primary implementation brief for a real product task. Read it as the source of truth, then do four things: (1) summarize the smallest safe MVP scope, (2) identify the major implementation tracks, (3) explain the dependency order between those tracks, and (4) tell me which teammate should work next first and why.
+   我需要为 Task AI 模式添加"团队模板"功能。
+   
+   请先阅读 docs/v2/team-templates-next-phase-implementation-plan.md 文档，然后分析这个功能的 MVP 范围，包括：
+   - 最小可用功能集
+   - 关键用户流程
+   - 技术实现要点
+   
+   分析完成后，请告诉我应该交给哪个角色来设计技术方案。
    ```
+   
+   **预期结果**：PM 完成需求分析后，会建议交给"开发工程师"或"后端工程师"，触发 handoff observer。
 
 2. **PM handoff 给 Backend**
    - 发送消息：

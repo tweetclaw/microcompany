@@ -681,6 +681,8 @@ impl ClaurstSession {
                         use claurst_api::{streaming::ContentDelta, AnthropicStreamEvent};
                         if let AnthropicStreamEvent::ContentBlockDelta { delta, .. } = stream_event {
                             if let ContentDelta::TextDelta { text } = delta {
+                                log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars",
+                                    event_request_id, text.len());
                                 let _ = event_window.emit("message-chunk", serde_json::json!({
                                     "request_id": event_request_id.clone(),
                                     "chunk": text,

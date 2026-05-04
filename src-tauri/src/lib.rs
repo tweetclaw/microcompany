@@ -296,13 +296,13 @@ pub fn run() {
 
       // VS Code-style window sizing for macOS Retina displays
       if let Some(window) = app.get_webview_window("main") {
-        use tauri::LogicalSize;
+        use tauri::{LogicalSize, LogicalPosition};
         use std::sync::atomic::{AtomicU32, Ordering};
 
         println!("[Window Setup] Starting VS Code-style window initialization...");
 
         // Get monitor info to calculate 75% screen size (VS Code style)
-        let (logical_width, logical_height) = if let Ok(monitors) = window.available_monitors() {
+        let (logical_width, logical_height, screen_width, screen_height) = if let Ok(monitors) = window.available_monitors() {
           if let Some(monitor) = monitors.first() {
             let scale = monitor.scale_factor();
             let physical_width = monitor.size().width;
@@ -320,12 +320,12 @@ pub fn run() {
               physical_width, physical_height, logical_screen_width, logical_screen_height, scale);
             println!("[Window Setup] Target size (75% screen): {}x{} logical", width, height);
 
-            (width, height)
+            (width, height, logical_screen_width, logical_screen_height)
           } else {
-            (1080.0, 720.0) // Fallback
+            (1080.0, 720.0, 1440.0, 900.0) // Fallback
           }
         } else {
-          (1080.0, 720.0) // Fallback
+          (1080.0, 720.0, 1440.0, 900.0) // Fallback
         };
 
         // Clone for async operations
@@ -342,9 +342,12 @@ pub fn run() {
             println!("[Window Setup] ERROR: Failed to set size: {}", e);
           }
 
-          // Center the window
-          if let Err(e) = window_clone.center() {
-            println!("[Window Setup] ERROR: Failed to center: {}", e);
+          // Manually calculate center position to avoid negative coordinates
+          let x = ((screen_width - logical_width) / 2.0).max(0.0);
+          let y = ((screen_height - logical_height) / 2.0).max(0.0);
+          println!("[Window Setup] Calculated center position: ({}, {})", x, y);
+          if let Err(e) = window_clone.set_position(LogicalPosition::new(x, y)) {
+            println!("[Window Setup] ERROR: Failed to set position: {}", e);
           }
 
           // Log state before show
@@ -370,8 +373,11 @@ pub fn run() {
             println!("[Window Setup] ERROR: Failed to re-set size: {}", e);
           }
 
-          if let Err(e) = window_clone.center() {
-            println!("[Window Setup] ERROR: Failed to re-center: {}", e);
+          // Re-apply manual center position
+          let x = ((screen_width - logical_width) / 2.0).max(0.0);
+          let y = ((screen_height - logical_height) / 2.0).max(0.0);
+          if let Err(e) = window_clone.set_position(LogicalPosition::new(x, y)) {
+            println!("[Window Setup] ERROR: Failed to re-set position: {}", e);
           }
 
           // Final state with detailed logging

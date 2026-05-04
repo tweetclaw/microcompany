@@ -5,10 +5,12 @@ use crate::handoff_observer::{extract_handoff_info, HandoffInfo};
 pub async fn extract_handoff_suggestion(
     role_name: String,
     last_message: String,
+    available_roles: Vec<String>,
 ) -> Result<HandoffInfo, String> {
     log::info!("📞 [Handoff Command] 收到交接提取请求");
     log::info!("📞 [Handoff Command] 角色名称: {}", role_name);
     log::info!("📞 [Handoff Command] 消息长度: {} 字符", last_message.len());
+    log::info!("📞 [Handoff Command] 可用角色数量: {}", available_roles.len());
 
     // 1. 加载默认 provider 配置
     log::info!("📞 [Handoff Command] 加载配置...");
@@ -36,6 +38,7 @@ pub async fn extract_handoff_suggestion(
     let result = extract_handoff_info(
         &role_name,
         &last_message,
+        available_roles,
         &active_provider.api_key,
         &active_provider.model,
         active_provider.base_url.as_deref(),

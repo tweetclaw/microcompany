@@ -85,6 +85,7 @@ interface ChatInterfaceProps {
   onCancelRequest?: () => Promise<void>;
   onMessageCompleted?: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
+  availableRoleNames?: string[]; // For Task AI mode handoff observer
   currentRoleName?: string | null;
   hideSidebar?: boolean;
   hideInspector?: boolean;
@@ -127,6 +128,8 @@ function ChatInterface({
   onSettingsClick,
   onMessageCompleted,
   onHandoffSuggestion,
+  availableRoleNames,
+  currentRoleName,
   hideSidebar = false,
   hideInspector = false,
   externalInspectorCollapsed,
@@ -155,6 +158,7 @@ function ChatInterface({
 
   const onMessagesChangeRef = useRef(onMessagesChange);
   const activeRequestIdRef = useRef<string | null>(activeRequestId);
+  const currentRoleNameRef = useRef<string | null>(currentRoleName ?? null);
 
   useEffect(() => {
     onMessagesChangeRef.current = onMessagesChange;
@@ -163,6 +167,10 @@ function ChatInterface({
   useEffect(() => {
     activeRequestIdRef.current = activeRequestId;
   }, [activeRequestId]);
+
+  useEffect(() => {
+    currentRoleNameRef.current = currentRoleName ?? null;
+  }, [currentRoleName]);
 
   useEffect(() => {
     // 如果当前正在运行中（有活跃的请求），不要重置状态
@@ -328,6 +336,8 @@ function ChatInterface({
           return;
         }
 
+        console.log('📥 [ChatInterface] Received message-chunk, request_id:', payload.request_id, 'chunk_len:', payload.chunk.length);
+
         setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
 
         onMessagesChangeRef.current((currentMessages: Message[]) => {
@@ -396,7 +406,7 @@ function ChatInterface({
         });
       });
 
-      unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', (event) => {
+      unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', async (event) => {
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
 
@@ -418,14 +428,16 @@ function ChatInterface({
 
         if (payload.result === 'success') {
           // Try new JSON API observer first (Task mode only)
-          if (onHandoffSuggestion && currentRoleName && finalText) {
+          if (onHandoffSuggestion && currentRoleNameRef.current && finalText) {
             console.log('🎯 [ChatInterface] AI 任务完成，准备调用观察者');
-            console.log('🎯 [ChatInterface] 当前角色:', currentRoleName);
+            console.log('🎯 [ChatInterface] 当前角色:', currentRoleNameRef.current);
             console.log('🎯 [ChatInterface] 消息长度:', finalText.length, '字符');
 
             try {
               console.log('🎯 [ChatInterface] 调用观察者 API...');
-              const handoffInfo = await extractHandoffSuggestion(currentRoleName, finalText);
+              const roles = availableRoleNames || [];
+              console.log('🎯 [ChatInterface] 可用角色:', roles);
+              const handoffInfo = await extractHandoffSuggestion(currentRoleNameRef.current, finalText, roles);
 
               console.log('✅ [ChatInterface] 观察者返回结果:', handoffInfo);
               console.log('✅ [ChatInterface] has_handoff:', handoffInfo.hasHandoff);
