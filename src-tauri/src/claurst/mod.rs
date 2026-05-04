@@ -310,10 +310,13 @@ fn resolve_handoff_suggestion(session_id: &str, parsed: ParsedHandoffBlock) -> O
             roster_role_ids.contains(&target_role.role_id) && target_role.role_id != current_role_id
         });
 
+    // Always return handoff suggestion even if role name doesn't match
+    // Frontend will allow user to manually select the target role
     Some(HandoffSuggestion {
         recommended: true,
         target_role_id: resolved_target.map(|role| role.role_id.clone()),
-        target_role_name: resolved_target.map(|role| role.role_name.clone()),
+        target_role_name: resolved_target.map(|role| role.role_name.clone())
+            .or_else(|| parsed.target_role_name.clone()), // Preserve AI's original suggestion
         reason: parsed.reason,
         draft_message: parsed.draft_message,
     })

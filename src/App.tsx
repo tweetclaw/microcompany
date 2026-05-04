@@ -475,14 +475,12 @@ function App() {
   const handleHandoffSuggestion = (event: AiRequestEndEvent) => {
     if (!event.handoffSuggestion?.recommended) return;
 
-    // Verify that targetRoleId exists when recommended is true
+    // Allow handoff even if targetRoleId is missing - user can manually select the target role
     if (!event.handoffSuggestion.targetRoleId) {
-      console.warn(
-        'Handoff suggestion has recommended=true but missing targetRoleId. ' +
-        'This likely means the AI suggested a role name that does not match any role in the roster.',
+      console.info(
+        'Handoff suggestion without targetRoleId - AI suggested a role name that does not match roster. User will manually select target.',
         event.handoffSuggestion
       );
-      return;
     }
 
     setPendingHandoffSuggestion(event.handoffSuggestion);
