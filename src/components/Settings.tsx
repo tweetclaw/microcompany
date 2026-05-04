@@ -27,7 +27,7 @@ interface SettingsProps {
   onThemeChange: (theme: 'light' | 'dark' | 'ocean') => void;
 }
 
-type SettingsSection = 'providers' | 'search' | 'theme' | 'database';
+type SettingsSection = 'providers' | 'search' | 'theme' | 'database' | 'routing';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const CUSTOM_PROVIDER_TYPE_OPTIONS: ProviderType[] = [
@@ -69,12 +69,18 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
   const [searchApiKey, setSearchApiKey] = useState('');
   const [showProviderApiKey, setShowProviderApiKey] = useState(false);
   const [showSearchApiKey, setShowSearchApiKey] = useState(false);
+  const [routingApiKey, setRoutingApiKey] = useState('');
+  const [routingModel, setRoutingModel] = useState('deepseek-v4-flash');
+  const [showRoutingApiKey, setShowRoutingApiKey] = useState(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const searchApiKeyTimerRef = useRef<number | null>(null);
+  const routingApiKeyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isOpen && config) {
       setSearchApiKey(config.braveSearchApiKey || '');
+      setRoutingApiKey(config.routingConfig?.apiKey || '');
+      setRoutingModel(config.routingConfig?.model || 'deepseek-chat');
     }
   }, [isOpen]);
 
@@ -86,6 +92,7 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
       setError(null);
       setShowProviderApiKey(false);
       setShowSearchApiKey(false);
+      setShowRoutingApiKey(false);
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current);
         autosaveTimerRef.current = null;
@@ -93,6 +100,10 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
       if (searchApiKeyTimerRef.current) {
         window.clearTimeout(searchApiKeyTimerRef.current);
         searchApiKeyTimerRef.current = null;
+      }
+      if (routingApiKeyTimerRef.current) {
+        window.clearTimeout(routingApiKeyTimerRef.current);
+        routingApiKeyTimerRef.current = null;
       }
     }
   }, [isOpen]);
@@ -311,6 +322,12 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
               onClick={() => setActiveSection('search')}
             >
               Search Engine
+            </button>
+            <button
+              className={`settings-nav-item ${activeSection === 'routing' ? 'active' : ''}`}
+              onClick={() => setActiveSection('routing')}
+            >
+              智能路由
             </button>
             <button
               className={`settings-nav-item ${activeSection === 'theme' ? 'active' : ''}`}
@@ -548,6 +565,101 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
                       </button>
                     </div>
                     <div className="field-hint">Changes are saved automatically. Clear the field to disable Brave Search and use free DuckDuckGo search instead.</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'routing' && (
+              <div className="settings-section-card">
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>智能路由配置</h3>
+                    <p className="section-description">配置专用于 AI 角色交接的智能路由系统</p>
+                  </div>
+                </div>
+
+                <div className="placeholder-block enhanced-placeholder-block">
+                  <div className="placeholder-summary-card">
+                    <div>
+                      <div className="placeholder-summary-label">路由提供商</div>
+                      <div className="placeholder-summary-title">DeepSeek</div>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Base URL</label>
+                    <input type="text" value="https://api.deepseek.com" disabled className="input-disabled" />
+                    <div className="field-hint">固定使用 DeepSeek API（OpenAI 兼容接口）</div>
+                  </div>
+                  <div className="form-group">
+                    <label>Model</label>
+                    <select
+                      value={routingModel}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setRoutingModel(newValue);
+
+                        if (routingApiKeyTimerRef.current) {
+                          window.clearTimeout(routingApiKeyTimerRef.current);
+                        }
+
+                        routingApiKeyTimerRef.current = window.setTimeout(() => {
+                          if (config) {
+                            void persistConfig({
+                              ...config,
+                              routingConfig: {
+                                apiKey: routingApiKey,
+                                model: newValue,
+                              },
+                            });
+                          }
+                          routingApiKeyTimerRef.current = null;
+                        }, 1000);
+                      }}
+                    >
+                      <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                      <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>API Key</label>
+                    <div className="input-with-toggle">
+                      <input
+                        type={showRoutingApiKey ? 'text' : 'password'}
+                        value={routingApiKey}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setRoutingApiKey(newValue);
+
+                          if (routingApiKeyTimerRef.current) {
+                            window.clearTimeout(routingApiKeyTimerRef.current);
+                          }
+
+                          routingApiKeyTimerRef.current = window.setTimeout(() => {
+                            if (config) {
+                              void persistConfig({
+                                ...config,
+                                routingConfig: {
+                                  apiKey: newValue,
+                                  model: routingModel,
+                                },
+                              });
+                            }
+                            routingApiKeyTimerRef.current = null;
+                          }, 1000);
+                        }}
+                        placeholder="输入 DeepSeek API Key"
+                      />
+                      <button
+                        type="button"
+                        className="toggle-visibility-btn"
+                        onClick={() => setShowRoutingApiKey(!showRoutingApiKey)}
+                        aria-label={showRoutingApiKey ? 'Hide API key' : 'Show API key'}
+                      >
+                        {showRoutingApiKey ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    </div>
+                    <div className="field-hint">配置后，智能路由将使用此 API 进行角色交接判断。留空则使用 Normal AI 的配置。</div>
                   </div>
                 </div>
               </div>

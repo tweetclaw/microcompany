@@ -15,6 +15,21 @@ pub struct ProviderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingConfig {
+    pub api_key: String,
+    pub model: String,
+}
+
+impl Default for RoutingConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "deepseek-v4-flash".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub active_provider: String,
     pub providers: Vec<ProviderConfig>,
@@ -22,6 +37,8 @@ pub struct AppConfig {
     pub brave_search_api_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing_config: Option<RoutingConfig>,
 }
 
 impl Default for AppConfig {
@@ -40,6 +57,7 @@ impl Default for AppConfig {
             ],
             brave_search_api_key: None,
             theme: None,
+            routing_config: None,
         }
     }
 }
@@ -95,6 +113,7 @@ impl AppConfig {
                         ],
                         brave_search_api_key: None,
                         theme: None,
+                        routing_config: None,
                     };
 
                     // 保存迁移后的配置

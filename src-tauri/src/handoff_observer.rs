@@ -119,26 +119,44 @@ pub async fn extract_handoff_info(
     );
     // 检测是否使用 DeepSeek API
     let is_deepseek = api_base.contains("deepseek");
+    log::info!("🔍 [Handoff Observer] DeepSeek 检测结果: {}", is_deepseek);
+    log::info!("🔍 [Handoff Observer] API Base URL: {}", api_base);
 
-    let mut request_body = json!({
-        "model": model,
-        "max_tokens": 2048,
-        "system": system_prompt,
-        "messages": [
-            {
-                "role": "user",
-                "content": user_content
-            }
-        ]
-    });
-
-    // DeepSeek: 使用 response_format 强制 JSON 输出
-    // Anthropic: 使用 prefill 技术
-    if is_deepseek {
-        request_body["response_format"] = json!({"type": "json_object"});
-        log::info!("🔍 [Handoff Observer] 使用 DeepSeek JSON 模式");
+    // 根据 API 类型构建不同格式的请求体
+    let mut request_body = if is_deepseek {
+        // OpenAI/DeepSeek 格式：system 作为 messages 的第一条
+        json!({
+            "model": model,
+            "max_tokens": 2048,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ],
+            "response_format": {"type": "json_object"}
+        })
     } else {
-        // Anthropic prefill
+        // Anthropic 格式：system 是单独字段
+        json!({
+            "model": model,
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        })
+    };
+
+    // Anthropic: 使用 prefill 技术
+    if !is_deepseek {
         if let Some(messages) = request_body["messages"].as_array_mut() {
             messages.push(json!({
                 "role": "assistant",
@@ -146,6 +164,8 @@ pub async fn extract_handoff_info(
             }));
         }
         log::info!("🔍 [Handoff Observer] 使用 Anthropic prefill 模式");
+    } else {
+        log::info!("🔍 [Handoff Observer] 使用 DeepSeek JSON 模式");
     }
 
     log::info!("🔍 [Handoff Observer] 准备调用 API 提取交接信息...");
@@ -156,11 +176,35 @@ pub async fn extract_handoff_info(
 
     // 使用 reqwest 直接调用 API
     let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{}/v1/messages", api_base))
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
+
+    // 根据 API 类型使用不同的端点和请求头
+    let (endpoint, auth_header_name, auth_header_value) = if is_deepseek {
+        (
+            format!("{}/v1/chat/completions", api_base),
+            "Authorization",
+            format!("Bearer {}", api_key),
+        )
+    } else {
+        (
+            format!("{}/v1/messages", api_base),
+            "x-api-key",
+            api_key.to_string(),
+        )
+    };
+
+    log::info!("🔍 [Handoff Observer] API 端点: {}", endpoint);
+
+    let mut request_builder = client
+        .post(&endpoint)
+        .header(auth_header_name, auth_header_value)
+        .header("content-type", "application/json");
+
+    // Anthropic 需要额外的 version header
+    if !is_deepseek {
+        request_builder = request_builder.header("anthropic-version", "2023-06-01");
+    }
+
+    let response = request_builder
         .json(&request_body)
         .send()
         .await?;
@@ -171,16 +215,25 @@ pub async fn extract_handoff_info(
     log::info!("🔍 [Handoff Observer] 响应 JSON 解析成功");
     log::info!("🔍 [Handoff Observer] 完整响应 JSON: {}", serde_json::to_string_pretty(&response_json).unwrap_or_else(|_| "无法序列化".to_string()));
 
-    // 提取响应文本 - 遍历 content 数组找到 type="text" 的块
-    let response_text = response_json["content"]
-        .as_array()
-        .and_then(|arr| {
-            // 遍历数组，找到 type="text" 的块
-            arr.iter()
-                .find(|block| block["type"].as_str() == Some("text"))
-                .and_then(|block| block["text"].as_str())
-        })
-        .unwrap_or("");
+    // 根据 API 类型提取响应文本
+    let response_text = if is_deepseek {
+        // OpenAI/DeepSeek 格式: choices[0].message.content
+        response_json["choices"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|choice| choice["message"]["content"].as_str())
+            .unwrap_or("")
+    } else {
+        // Anthropic 格式: content[].text
+        response_json["content"]
+            .as_array()
+            .and_then(|arr| {
+                arr.iter()
+                    .find(|block| block["type"].as_str() == Some("text"))
+                    .and_then(|block| block["text"].as_str())
+            })
+            .unwrap_or("")
+    };
 
     log::info!("🔍 [Handoff Observer] 提取的响应文本长度: {} 字符", response_text.len());
     log::info!("🔍 [Handoff Observer] 响应文本前500字符: {}",
@@ -190,12 +243,15 @@ pub async fn extract_handoff_info(
     // DeepSeek: 响应已经是完整 JSON
     // Anthropic: 使用了 prefill "{"，需要手动添加开头的大括号
     let json_text = if is_deepseek {
+        log::info!("🔍 [Handoff Observer] DeepSeek 模式：响应已是完整 JSON，直接使用");
         response_text.to_string()
     } else {
+        log::info!("🔍 [Handoff Observer] Anthropic 模式：添加前缀大括号补全 JSON");
         format!("{{{}", response_text)
     };
 
     log::info!("🔍 [Handoff Observer] 尝试直接解析 JSON...");
+    log::info!("🔍 [Handoff Observer] JSON 文本长度: {} 字符", json_text.len());
     log::info!("🔍 [Handoff Observer] JSON 文本前200字符: {}", json_text.chars().take(200).collect::<String>());
 
     match serde_json::from_str::<HandoffInfoRaw>(&json_text) {

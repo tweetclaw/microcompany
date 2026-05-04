@@ -7,6 +7,11 @@ export interface ProviderConfig {
   enabled: boolean;
 }
 
+export interface RoutingConfig {
+  apiKey: string;
+  model: string;
+}
+
 export type ProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'ollama' | 'custom';
 
 export interface ProviderDraft extends ProviderConfig {
@@ -18,6 +23,7 @@ export interface SettingsData {
   providers: ProviderConfig[];
   braveSearchApiKey?: string;
   theme?: 'light' | 'dark' | 'ocean';
+  routingConfig?: RoutingConfig;
 }
 
 export interface ProviderInfo {
@@ -40,6 +46,12 @@ interface BackendProviderConfig {
   enabled: boolean;
 }
 
+interface BackendRoutingConfig {
+  api_key?: string;
+  apiKey?: string;
+  model?: string;
+}
+
 interface BackendSettingsData {
   active_provider?: string;
   activeProvider?: string;
@@ -47,6 +59,8 @@ interface BackendSettingsData {
   brave_search_api_key?: string;
   braveSearchApiKey?: string;
   theme?: string;
+  routing_config?: BackendRoutingConfig;
+  routingConfig?: BackendRoutingConfig;
 }
 
 interface BackendProviderInfo {
@@ -189,11 +203,18 @@ export function normalizeSettingsData(raw: unknown): SettingsData {
   const braveSearchApiKey = source.braveSearchApiKey ?? source.brave_search_api_key;
   const theme = source.theme as 'light' | 'dark' | 'ocean' | undefined;
 
+  const routingConfigRaw = source.routingConfig ?? source.routing_config;
+  const routingConfig = routingConfigRaw ? {
+    apiKey: routingConfigRaw.apiKey ?? routingConfigRaw.api_key ?? '',
+    model: routingConfigRaw.model ?? 'deepseek-v4-flash',
+  } : undefined;
+
   return {
     activeProvider,
     providers,
     braveSearchApiKey,
     theme,
+    routingConfig,
   };
 }
 
@@ -210,6 +231,10 @@ export function toBackendSettingsData(config: SettingsData) {
     })),
     brave_search_api_key: config.braveSearchApiKey,
     theme: config.theme,
+    routing_config: config.routingConfig ? {
+      api_key: config.routingConfig.apiKey,
+      model: config.routingConfig.model,
+    } : undefined,
   };
 }
 

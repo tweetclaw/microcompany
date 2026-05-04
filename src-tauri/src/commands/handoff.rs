@@ -20,18 +20,61 @@ pub async fn extract_handoff_suggestion(
     })?;
     log::info!("📞 [Handoff Command] 配置加载成功");
 
-    // 2. 获取 active provider
-    log::info!("📞 [Handoff Command] Active provider ID: {}", config.active_provider);
-    let active_provider = config.providers
-        .iter()
-        .find(|p| p.id == config.active_provider)
-        .ok_or_else(|| {
-            log::error!("❌ [Handoff Command] 未找到 active provider");
-            "No active provider found".to_string()
-        })?;
+    // 2. 优先使用 routing_config，如果没有则使用 active_provider
+    let (api_key, model, base_url, config_source) = if let Some(routing) = &config.routing_config {
+        if !routing.api_key.is_empty() {
+            log::info!("✅ [Handoff Command] 使用智能路由专用配置");
+            log::info!("📍 [Handoff Command] 路由模型: {}", routing.model);
+            log::info!("📍 [Handoff Command] 路由 Base URL: https://api.deepseek.com");
+            log::info!("📍 [Handoff Command] API Key 长度: {} 字符", routing.api_key.len());
+            (
+                routing.api_key.clone(),
+                routing.model.clone(),
+                Some("https://api.deepseek.com".to_string()),
+                "routing_config",
+            )
+        } else {
+            log::warn!("⚠️ [Handoff Command] 智能路由配置存在但 API key 为空，回退到 active provider");
+            let active_provider = config.providers
+                .iter()
+                .find(|p| p.id == config.active_provider)
+                .ok_or_else(|| {
+                    log::error!("❌ [Handoff Command] 未找到 active provider");
+                    "No active provider found".to_string()
+                })?;
+            log::info!("📍 [Handoff Command] Active provider ID: {}", config.active_provider);
+            log::info!("📍 [Handoff Command] Provider 名称: {}", active_provider.name);
+            log::info!("📍 [Handoff Command] Provider 模型: {}", active_provider.model);
+            log::info!("📍 [Handoff Command] Provider Base URL: {:?}", active_provider.base_url);
+            (
+                active_provider.api_key.clone(),
+                active_provider.model.clone(),
+                active_provider.base_url.clone(),
+                "active_provider",
+            )
+        }
+    } else {
+        log::info!("ℹ️ [Handoff Command] 智能路由配置不存在，使用 active provider");
+        let active_provider = config.providers
+            .iter()
+            .find(|p| p.id == config.active_provider)
+            .ok_or_else(|| {
+                log::error!("❌ [Handoff Command] 未找到 active provider");
+                "No active provider found".to_string()
+            })?;
+        log::info!("📍 [Handoff Command] Active provider ID: {}", config.active_provider);
+        log::info!("📍 [Handoff Command] Provider 名称: {}", active_provider.name);
+        log::info!("📍 [Handoff Command] Provider 模型: {}", active_provider.model);
+        log::info!("📍 [Handoff Command] Provider Base URL: {:?}", active_provider.base_url);
+        (
+            active_provider.api_key.clone(),
+            active_provider.model.clone(),
+            active_provider.base_url.clone(),
+            "active_provider",
+        )
+    };
 
-    log::info!("📞 [Handoff Command] Provider 名称: {}", active_provider.name);
-    log::info!("📞 [Handoff Command] Provider 模型: {}", active_provider.model);
+    log::info!("🎯 [Handoff Command] 最终使用配置源: {}", config_source);
 
     // 3. 调用提取函数
     log::info!("📞 [Handoff Command] 开始调用观察者提取函数...");
@@ -39,9 +82,9 @@ pub async fn extract_handoff_suggestion(
         &role_name,
         &last_message,
         available_roles,
-        &active_provider.api_key,
-        &active_provider.model,
-        active_provider.base_url.as_deref(),
+        &api_key,
+        &model,
+        base_url.as_deref(),
     )
     .await
     .map_err(|e| {
