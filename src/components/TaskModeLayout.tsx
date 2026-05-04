@@ -368,6 +368,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       onSettingsClick={props.onSettingsClick}
                       onHandoffSuggestion={props.onHandoffSuggestion}
                       availableRoleNames={props.currentTask?.roles.map(r => r.name) || []}
+                      taskRoles={props.currentTask?.roles.map(r => ({ id: r.id, name: r.name })) || []}
                       currentRoleName={currentRoleName}
                       hideSidebar={true}
                       hideInspector={true}

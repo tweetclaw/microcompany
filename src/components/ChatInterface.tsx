@@ -86,6 +86,7 @@ interface ChatInterfaceProps {
   onMessageCompleted?: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
   availableRoleNames?: string[]; // For Task AI mode handoff observer
+  taskRoles?: Array<{ id: string; name: string }>; // Full role objects for ID lookup
   currentRoleName?: string | null;
   hideSidebar?: boolean;
   hideInspector?: boolean;
@@ -448,10 +449,18 @@ function ChatInterface({
                 console.log('✅ [ChatInterface] 任务摘要:', handoffInfo.taskSummary);
                 console.log('✅ [ChatInterface] 关键需求数量:', handoffInfo.keyRequirements.length);
 
+                // Convert role name to role ID
+                const targetRole = props.taskRoles?.find(
+                  r => r.name.toLowerCase() === handoffInfo.suggestedRole.toLowerCase()
+                );
+                const targetRoleId = targetRole?.id || null;
+
+                console.log('✅ [ChatInterface] 角色名称转换: ', handoffInfo.suggestedRole, '->', targetRoleId);
+
                 // Create handoff suggestion from observer data
                 const handoffSuggestion = {
                   recommended: true,
-                  targetRoleId: null,
+                  targetRoleId: targetRoleId,
                   targetRoleName: handoffInfo.suggestedRole,
                   reason: handoffInfo.taskSummary,
                   draftMessage: handoffInfo.keyRequirements.join('\n'),
