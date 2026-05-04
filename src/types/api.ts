@@ -106,6 +106,13 @@ export interface HandoffSuggestion {
   draftMessage: string;
 }
 
+export interface HandoffInfo {
+  hasHandoff: boolean;
+  taskSummary: string;
+  keyRequirements: string[];
+  suggestedRole: string;
+}
+
 export interface TaskSummary {
   id: string;
   name: string;

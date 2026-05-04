@@ -5,6 +5,7 @@ mod config;
 mod database;
 mod api;
 mod archetypes;
+mod handoff_observer;
 
 use commands::session::AppState;
 use std::sync::Arc;
@@ -257,6 +258,7 @@ pub fn run() {
       commands::save_config,
       commands::get_available_providers,
       commands::validate_provider_config,
+      commands::extract_handoff_suggestion,
       initialize_database,
       create_task,
       get_task,

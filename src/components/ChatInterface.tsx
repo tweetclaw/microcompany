@@ -26,6 +26,7 @@ import {
 } from '../types';
 import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
+import { extractHandoffSuggestion } from '../api/handoff';
 import './ChatInterface.css';
 
 function formatVisibleError(error: string) {
@@ -84,6 +85,7 @@ interface ChatInterfaceProps {
   onCancelRequest?: () => Promise<void>;
   onMessageCompleted?: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
+  currentRoleName?: string | null;
   hideSidebar?: boolean;
   hideInspector?: boolean;
   hideNewButtons?: boolean;
@@ -415,11 +417,58 @@ function ChatInterface({
         finalizeStreamingMessage(payload.request_id, finalText);
 
         if (payload.result === 'success') {
-          // If backend didn't provide handoff suggestion but we have accumulated text, check for handoff manually
+          // Try new JSON API observer first (Task mode only)
+          if (onHandoffSuggestion && currentRoleName && finalText) {
+            console.log('🎯 [ChatInterface] AI 任务完成，准备调用观察者');
+            console.log('🎯 [ChatInterface] 当前角色:', currentRoleName);
+            console.log('🎯 [ChatInterface] 消息长度:', finalText.length, '字符');
+
+            try {
+              console.log('🎯 [ChatInterface] 调用观察者 API...');
+              const handoffInfo = await extractHandoffSuggestion(currentRoleName, finalText);
+
+              console.log('✅ [ChatInterface] 观察者返回结果:', handoffInfo);
+              console.log('✅ [ChatInterface] has_handoff:', handoffInfo.hasHandoff);
+
+              if (handoffInfo.hasHandoff) {
+                console.log('✅ [ChatInterface] 检测到交接意图！');
+                console.log('✅ [ChatInterface] 推荐角色:', handoffInfo.suggestedRole);
+                console.log('✅ [ChatInterface] 任务摘要:', handoffInfo.taskSummary);
+                console.log('✅ [ChatInterface] 关键需求数量:', handoffInfo.keyRequirements.length);
+
+                // Create handoff suggestion from observer data
+                const handoffSuggestion = {
+                  recommended: true,
+                  targetRoleId: null,
+                  targetRoleName: handoffInfo.suggestedRole,
+                  reason: handoffInfo.taskSummary,
+                  draftMessage: handoffInfo.keyRequirements.join('\n'),
+                };
+
+                console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调');
+                onHandoffSuggestion({ ...payload, handoffSuggestion });
+                setRunState('completed');
+                resetRunIfTerminal();
+                if (onMessageCompleted) {
+                  onMessageCompleted();
+                }
+                return;
+              } else {
+                console.log('ℹ️ [ChatInterface] 观察者判断：无交接意图');
+              }
+            } catch (error) {
+              console.error('❌ [ChatInterface] 观察者提取失败，回退到标签解析:', error);
+            }
+          }
+
+          // Fallback: If backend didn't provide handoff suggestion but we have accumulated text, check for handoff manually
+          console.log('🔄 [ChatInterface] 检查回退逻辑：标签解析');
           if (!payload.handoffSuggestion && finalText && onHandoffSuggestion) {
+            console.log('🔄 [ChatInterface] 尝试标签解析...');
             // Extract handoff block from accumulated text
             const handoffMatch = finalText.match(/\[HANDOFF\]([\s\S]*?)\[\/HANDOFF\]/);
             if (handoffMatch) {
+              console.log('✅ [ChatInterface] 找到 HANDOFF 标签');
               const handoffContent = handoffMatch[1];
               const lines = handoffContent.split('\n').map(line => line.trim()).filter(line => line);
               const fields: Record<string, string> = {};
@@ -434,6 +483,7 @@ function ChatInterface({
 
               const recommended = fields['recommended']?.toLowerCase() === 'yes';
               if (recommended && fields['target_role']) {
+                console.log('✅ [ChatInterface] 标签解析成功，推荐角色:', fields['target_role']);
                 // Create handoff suggestion from frontend-parsed data
                 const handoffSuggestion = {
                   recommended: true,
@@ -442,10 +492,16 @@ function ChatInterface({
                   reason: fields['reason'] || '',
                   draftMessage: fields['draft_message'] || '',
                 };
+                console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调（标签解析）');
                 onHandoffSuggestion({ ...payload, handoffSuggestion });
+              } else {
+                console.log('ℹ️ [ChatInterface] 标签解析：未推荐交接');
               }
+            } else {
+              console.log('ℹ️ [ChatInterface] 未找到 HANDOFF 标签');
             }
           } else if (payload.handoffSuggestion && onHandoffSuggestion) {
+            console.log('✅ [ChatInterface] 后端直接提供了 handoffSuggestion');
             onHandoffSuggestion(payload);
           }
           setRunState('completed');
