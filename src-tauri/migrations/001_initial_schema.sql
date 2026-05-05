@@ -4,6 +4,7 @@ CREATE TABLE tasks (
     name TEXT NOT NULL,
     description TEXT,
     icon TEXT,
+    status TEXT DEFAULT 'preparing' CHECK(status IN ('preparing', 'ready', 'active', 'completed')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

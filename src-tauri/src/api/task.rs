@@ -88,6 +88,7 @@ pub struct TaskSummary {
     pub description: String,
     pub icon: String,
     pub pm_first_workflow: bool,
+    pub status: String,
     pub role_count: i32,
     pub total_messages: i32,
     pub created_at: String,

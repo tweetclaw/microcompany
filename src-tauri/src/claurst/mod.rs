@@ -649,6 +649,39 @@ impl ClaurstSession {
                         "UPDATE sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
                         rusqlite::params![&title, &created_at, &self.session_id],
                     );
+
+                    // 对于任务会话的第一条消息，合并系统提示词
+                    if task_session {
+                        if let Ok(system_prompt) = conn.query_row(
+                            "SELECT r.system_prompt_snapshot
+                             FROM sessions s
+                             JOIN roles r ON r.id = s.role_id
+                             WHERE s.id = ?1",
+                            rusqlite::params![&self.session_id],
+                            |row| row.get::<_, Option<String>>(0),
+                        ) {
+                            if let Some(prompt) = system_prompt {
+                                // 构造合并消息：系统提示词 + 衔接语句 + 用户问题
+                                let merged_message = format!(
+                                    "{}\n\n---\n\n以上是你的角色定位，现在处理用户问题：\n\n{}",
+                                    prompt,
+                                    message
+                                );
+
+                                // 修改 self.messages 中的最后一条消息（用户消息）
+                                if let Some(last_msg) = self.messages.last_mut() {
+                                    *last_msg = Message::user(merged_message);
+                                }
+
+                                log::info!(
+                                    "task_first_message_merged session_id={} original_length={} merged_length={}",
+                                    self.session_id,
+                                    message.len(),
+                                    prompt.len() + message.len()
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }

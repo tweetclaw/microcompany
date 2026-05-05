@@ -195,6 +195,7 @@ pub async fn list_tasks() -> Result<Vec<TaskSummary>, String> {
                 t.description,
                 t.icon,
                 t.pm_first_workflow,
+                t.status,
                 COUNT(DISTINCT r.id) as role_count,
                 COUNT(m.id) as total_messages,
                 t.created_at,
@@ -214,10 +215,11 @@ pub async fn list_tasks() -> Result<Vec<TaskSummary>, String> {
                 description: row.get(2)?,
                 icon: row.get(3)?,
                 pm_first_workflow: row.get(4)?,
-                role_count: row.get(5)?,
-                total_messages: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                status: row.get(5)?,
+                role_count: row.get(6)?,
+                total_messages: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             })
         }).map_err(|e| format!("Failed to query tasks: {}", e))?;
 

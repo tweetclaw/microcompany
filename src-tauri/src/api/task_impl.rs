@@ -7,7 +7,6 @@ use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-const CUSTOM_ARCHETYPE_ID: &str = "custom";
 const PRODUCT_MANAGER_ARCHETYPE_IDS: &[&str] = &["product_manager"];
 const PRODUCT_MANAGER_IDENTITIES: &[&str] = &["product manager", "pm", "项目经理", "产品经理"];
 
@@ -54,7 +53,7 @@ fn build_role_prompt_contexts(roles: &[crate::api::RoleConfig]) -> Vec<RolePromp
                     );
                     let result = crate::archetypes::get_role_archetype(archetype_id);
                     match &result {
-                        Ok(Some(arch)) => log::info!("🔍 archetype loaded successfully: {}", archetype_id),
+                        Ok(Some(_arch)) => log::info!("🔍 archetype loaded successfully: {}", archetype_id),
                         Ok(None) => log::info!("🔍 archetype returned None: {}", archetype_id),
                         Err(e) => log::info!("🔍 archetype load error: {} - {}", archetype_id, e),
                     }
@@ -206,16 +205,24 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
             .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
         tx.execute(
-            "INSERT INTO tasks (id, name, description, icon, pm_first_workflow) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO tasks (id, name, description, icon, pm_first_workflow, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 &task_id,
                 &task_request.name,
                 &task_request.description,
                 &task_request.icon,
                 task_request.pm_first_workflow,
+                "ready",
             ],
         )
         .map_err(|e| format!("Failed to insert task: {}", e))?;
+
+        log::info!(
+            "task_created task_id={} name={} status=ready role_count={}",
+            task_id,
+            task_request.name,
+            task_request.roles.len()
+        );
 
         for (index, role) in task_request.roles.iter().enumerate() {
             let role_id = format!("role-{}", Uuid::new_v4());
@@ -605,77 +612,30 @@ fn has_product_manager_role(roles: &[crate::api::RoleConfig]) -> bool {
 
 fn build_system_prompt_snapshot(
     role: &crate::api::RoleConfig,
-    task_name: &str,
-    task_description: &str,
-    pm_first_workflow: bool,
+    _task_name: &str,
+    _task_description: &str,
+    _pm_first_workflow: bool,
     role_context: Option<&RolePromptContext>,
     working_directory: &str,
 ) -> Result<PromptSnapshot, String> {
-    let prompt_text = if role.archetype_id.as_deref() == Some(CUSTOM_ARCHETYPE_ID) {
-        let custom_prompt = role
-            .custom_system_prompt
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Custom archetype requires a full system prompt".to_string())?;
+    // 只支持有 archetype_id 的角色
+    let archetype_id = role.archetype_id
+        .as_ref()
+        .ok_or_else(|| format!("角色 '{}' 缺少 archetype_id，无法生成系统提示词", role.name))?;
 
-        crate::archetypes::build_custom_role_system_prompt(
-            &role.name,
-            &role.identity,
-            task_name,
-            task_description,
-            custom_prompt,
-            role.handoff_enabled,
-            pm_first_workflow,
-            role_context,
-            Some(working_directory),
-        )
-    } else {
-        // 使用新的文件资源方案（如果有 archetype_id）
-        if let Some(archetype_id) = &role.archetype_id {
-            let role_definition_path = crate::archetypes::get_role_definition_path(archetype_id);
-            crate::archetypes::build_role_system_prompt_v2(
-                &role.name,
-                &role.identity,
-                Some(&role_definition_path),
-                role_context,
-                Some(working_directory),
-            )
-        } else {
-            // 回退到旧方案（无 archetype_id）
-            let archetype = match &role.archetype_id {
-                Some(archetype_id) => crate::archetypes::get_role_archetype(archetype_id)?,
-                None => None,
-            };
-
-            let mut prompt = crate::archetypes::build_role_system_prompt(
-                archetype.as_ref(),
-                &role.name,
-                &role.identity,
-                task_name,
-                task_description,
-                role.system_prompt_append.as_deref(),
-                role.handoff_enabled,
-                role_context,
-                Some(working_directory),
-            );
-
-            if pm_first_workflow {
-                prompt.push_str("\n\n");
-                prompt.push_str(&crate::archetypes::pm_first_workflow_prompt(&role.identity));
-            }
-
-            prompt
-        }
-    };
+    // 使用文件资源方案生成系统提示词
+    let role_definition_path = crate::archetypes::get_role_definition_path(archetype_id);
+    let prompt_text = crate::archetypes::build_role_system_prompt_v2(
+        &role.name,
+        &role.identity,
+        Some(&role_definition_path),
+        role_context,
+        Some(working_directory),
+    );
 
     Ok(PromptSnapshot {
         hash: hash_prompt(&prompt_text),
-        source_type: if role.archetype_id.as_deref() == Some(CUSTOM_ARCHETYPE_ID) {
-            "custom".to_string()
-        } else {
-            "built_in".to_string()
-        },
+        source_type: "built_in".to_string(),
         contract_version: crate::archetypes::TASK_PROMPT_CONTRACT_VERSION.to_string(),
         text: prompt_text,
     })

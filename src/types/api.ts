@@ -121,6 +121,7 @@ export interface TaskSummary {
   pm_first_workflow: boolean;
   role_count: number;
   total_messages: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
