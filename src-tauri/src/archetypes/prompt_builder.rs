@@ -257,6 +257,73 @@ pub fn build_role_system_prompt(
     sections.join("\n\n")
 }
 
+/// 构建简化的系统提示词（新版本，使用文件资源方案）
+pub fn build_role_system_prompt_v2(
+    role_name: &str,
+    role_identity: &str,
+    role_definition_path: Option<&str>,
+    role_context: Option<&RolePromptContext>,
+    working_directory: Option<&str>,
+) -> String {
+    let mut prompt = String::new();
+
+    // 1. 角色标题
+    prompt.push_str(&format!("# 角色：{}\n\n", role_name));
+
+    // 2. 读取角色定义文件的指令（如果提供了路径）
+    if let Some(path) = role_definition_path {
+        prompt.push_str("## 🔴 首要任务：读取角色定义\n\n");
+        prompt.push_str(&format!("务必使用 Read 工具读取 **`{}`** 文件，理解自己的角色约束\n\n", path));
+        prompt.push_str("***务必先读取再回答问题***\n");
+        prompt.push_str("***务必全程记住自己的角色定位***\n\n");
+    }
+
+    // 3. 团队配置（如果有）
+    if let Some(ctx) = role_context {
+        prompt.push_str(&build_team_composition_v2(role_name, role_identity, ctx));
+    }
+
+    // 4. 工作目录
+    if let Some(dir) = working_directory {
+        prompt.push_str(&format!("\n## 工作目录\n{}\n", dir));
+    }
+
+    prompt
+}
+
+/// 生成团队配置信息（新版本，使用字母编号）
+fn build_team_composition_v2(
+    role_name: &str,
+    _role_identity: &str,
+    ctx: &RolePromptContext,
+) -> String {
+    let mut section = String::from("## 当前团队配置\n\n");
+
+    // 团队成员列表（带字母编号）
+    section.push_str("**团队成员：**\n");
+    for (index, role) in ctx.roster.iter().enumerate() {
+        let letter = (b'a' + index as u8) as char;
+        if role.name == role_name {
+            section.push_str(&format!("{}. {} - {} (你)\n", letter, role.name, role.identity));
+        } else {
+            section.push_str(&format!("{}. {} - {}\n", letter, role.name, role.identity));
+        }
+    }
+    section.push_str("\n");
+
+    // 交接规则
+    section.push_str("**交接规则：**\n");
+    section.push_str("当你认为需要交接给其他团队成员时，在回答末尾添加：\n");
+    section.push_str("<handoff>成员编号</handoff>\n\n");
+    section.push_str("如果不需要交接，添加：\n");
+    section.push_str("<handoff></handoff>\n\n");
+    section.push_str("**重要：**\n");
+    section.push_str("- 使用成员编号（字母），不是角色名称\n");
+    section.push_str("- 在正文中说明交接原因和目标成员的角色\n\n");
+
+    section
+}
+
 pub fn build_custom_role_system_prompt(
     role_name: &str,
     role_identity: &str,

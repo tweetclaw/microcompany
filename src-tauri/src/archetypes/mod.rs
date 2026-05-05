@@ -8,6 +8,7 @@ pub use loader::RoleArchetype;
 pub use prompt_builder::{
     build_custom_role_system_prompt,
     build_role_system_prompt,
+    build_role_system_prompt_v2,
     pm_first_workflow_prompt,
     RolePromptContext,
     TeamRolePromptContext,
@@ -28,4 +29,9 @@ pub fn list_role_archetypes() -> Result<Vec<RoleArchetype>, String> {
 pub fn get_role_archetype(archetype_id: &str) -> Result<Option<RoleArchetype>, String> {
     loader::load_system_archetype_by_id(archetype_id)
         .map_err(|e| format!("Failed to load archetype {}: {}", archetype_id, e))
+}
+
+/// 获取角色定义文件的相对路径
+pub fn get_role_definition_path(archetype_id: &str) -> String {
+    format!("resources/role-definitions/{}.md", archetype_id)
 }

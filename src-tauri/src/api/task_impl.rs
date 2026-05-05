@@ -631,29 +631,42 @@ fn build_system_prompt_snapshot(
             Some(working_directory),
         )
     } else {
-        let archetype = match &role.archetype_id {
-            Some(archetype_id) => crate::archetypes::get_role_archetype(archetype_id)?,
-            None => None,
-        };
+        // 使用新的文件资源方案（如果有 archetype_id）
+        if let Some(archetype_id) = &role.archetype_id {
+            let role_definition_path = crate::archetypes::get_role_definition_path(archetype_id);
+            crate::archetypes::build_role_system_prompt_v2(
+                &role.name,
+                &role.identity,
+                Some(&role_definition_path),
+                role_context,
+                Some(working_directory),
+            )
+        } else {
+            // 回退到旧方案（无 archetype_id）
+            let archetype = match &role.archetype_id {
+                Some(archetype_id) => crate::archetypes::get_role_archetype(archetype_id)?,
+                None => None,
+            };
 
-        let mut prompt = crate::archetypes::build_role_system_prompt(
-            archetype.as_ref(),
-            &role.name,
-            &role.identity,
-            task_name,
-            task_description,
-            role.system_prompt_append.as_deref(),
-            role.handoff_enabled,
-            role_context,
-            Some(working_directory),
-        );
+            let mut prompt = crate::archetypes::build_role_system_prompt(
+                archetype.as_ref(),
+                &role.name,
+                &role.identity,
+                task_name,
+                task_description,
+                role.system_prompt_append.as_deref(),
+                role.handoff_enabled,
+                role_context,
+                Some(working_directory),
+            );
 
-        if pm_first_workflow {
-            prompt.push_str("\n\n");
-            prompt.push_str(&crate::archetypes::pm_first_workflow_prompt(&role.identity));
+            if pm_first_workflow {
+                prompt.push_str("\n\n");
+                prompt.push_str(&crate::archetypes::pm_first_workflow_prompt(&role.identity));
+            }
+
+            prompt
         }
-
-        prompt
     };
 
     Ok(PromptSnapshot {
