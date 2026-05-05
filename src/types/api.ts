@@ -104,14 +104,24 @@ export interface HandoffSuggestion {
   targetRoleName?: string | null;
   reason: string;
   draftMessage: string;
+  fullMessage?: string;  // 新增：前一个 AI 的完整消息
 }
 
 export interface HandoffInfo {
+  hasHandoff: boolean;
+  suggestedRole: string | null;
+  fullMessage: string;
+}
+
+// 旧的 HandoffInfo 结构（智能路由系统使用，已暂停）
+/*
+export interface HandoffInfoOld {
   hasHandoff: boolean;
   taskSummary: string;
   keyRequirements: string[];
   suggestedRole: string;
 }
+*/
 
 export interface TaskSummary {
   id: string;

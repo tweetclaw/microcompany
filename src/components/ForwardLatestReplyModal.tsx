@@ -29,6 +29,7 @@ function ForwardLatestReplyModal({
   const [targetRoleId, setTargetRoleId] = useState(suggestion?.targetRoleId ?? '');
   const [note, setNote] = useState(suggestion?.draftMessage ?? '');
   const [isForwarding, setIsForwarding] = useState(false);
+  const [showFullMessage, setShowFullMessage] = useState(false);
 
   const currentRole = task.roles.find((r) => r.id === currentRoleId);
   const otherRoles = task.roles.filter((r) => r.id !== currentRoleId);
@@ -36,6 +37,8 @@ function ForwardLatestReplyModal({
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((m) => m.role === 'assistant');
+
+  const fullMessage = suggestion?.fullMessage || latestAssistantMessage?.content || '';
 
   const handleForward = async () => {
     if (!targetRoleId) {
@@ -45,7 +48,14 @@ function ForwardLatestReplyModal({
 
     setIsForwarding(true);
     try {
-      await onForward(targetRoleId, note);
+      // 拼接消息：用户输入 + 完整消息
+      const userPart = note.trim()
+        ? `请接手工作，用户的需求是：${note}\n\n`
+        : '请接手工作\n\n';
+
+      const forwardMessage = `${userPart}前一个角色的最后一条信息是：\n---\n${fullMessage}\n---`;
+
+      await onForward(targetRoleId, forwardMessage);
     } finally {
       setIsForwarding(false);
     }
@@ -182,6 +192,51 @@ function ForwardLatestReplyModal({
                 lineHeight: '1.5'
               }}
             />
+          </div>
+
+          {/* 查看完整消息按钮 */}
+          <div style={{ marginTop: '16px' }}>
+            <button
+              onClick={() => setShowFullMessage(!showFullMessage)}
+              disabled={!fullMessage}
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                border: '1px solid var(--border-default)',
+                borderRadius: '6px',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                cursor: fullMessage ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>{showFullMessage ? '▼' : '▶'}</span>
+              <span>{showFullMessage ? '隐藏完整消息' : '查看完整消息'}</span>
+            </button>
+
+            {/* 完整消息展示区域（可折叠） */}
+            {showFullMessage && fullMessage && (
+              <div style={{
+                marginTop: '12px',
+                padding: '16px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                border: '1px solid var(--border-default)',
+                borderRadius: '8px',
+                background: 'var(--bg-secondary)',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {fullMessage}
+              </div>
+            )}
           </div>
         </div>
 

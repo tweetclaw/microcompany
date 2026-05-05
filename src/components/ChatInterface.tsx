@@ -447,12 +447,11 @@ function ChatInterface({
               if (handoffInfo.hasHandoff) {
                 console.log('✅ [ChatInterface] 检测到交接意图！');
                 console.log('✅ [ChatInterface] 推荐角色:', handoffInfo.suggestedRole);
-                console.log('✅ [ChatInterface] 任务摘要:', handoffInfo.taskSummary);
-                console.log('✅ [ChatInterface] 关键需求数量:', handoffInfo.keyRequirements.length);
+                console.log('✅ [ChatInterface] 完整消息长度:', handoffInfo.fullMessage.length);
 
                 // Convert role name to role ID
                 const targetRole = taskRoles?.find(
-                  r => r.name.toLowerCase() === handoffInfo.suggestedRole.toLowerCase()
+                  r => r.name.toLowerCase() === (handoffInfo.suggestedRole || '').toLowerCase()
                 );
                 const targetRoleId = targetRole?.id || null;
 
@@ -462,9 +461,10 @@ function ChatInterface({
                 const handoffSuggestion = {
                   recommended: true,
                   targetRoleId: targetRoleId,
-                  targetRoleName: handoffInfo.suggestedRole,
-                  reason: handoffInfo.taskSummary,
-                  draftMessage: handoffInfo.keyRequirements.join('\n'),
+                  targetRoleName: handoffInfo.suggestedRole || '',
+                  reason: '标签解析交接',
+                  draftMessage: '',
+                  fullMessage: handoffInfo.fullMessage,
                 };
 
                 console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调');

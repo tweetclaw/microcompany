@@ -5,12 +5,26 @@ use anyhow::Result;
 #[serde(rename_all = "camelCase")]
 pub struct HandoffInfo {
     pub has_handoff: bool,
+    pub suggested_role: Option<String>,
+    pub full_message: String,
+}
+
+// ========== 以下为智能路由系统（已暂停使用）==========
+// 保留以便将来恢复
+
+/*
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffInfoOld {
+    pub has_handoff: bool,
     pub task_summary: String,
     pub key_requirements: Vec<String>,
     pub suggested_role: String,
 }
+*/
 
-// 内部使用的结构，AI 返回的是 role_id
+// 内部使用的结构，AI 返回的是 role_id（智能路由系统使用）
+/*
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 struct HandoffInfoRaw {
@@ -349,4 +363,57 @@ pub async fn extract_handoff_info(
         key_requirements: Vec::new(),
         suggested_role: String::new(),
     })
+}
+*/
+
+// ========== 智能路由系统结束 ==========
+
+// ========== 简单标签解析（当前使用）==========
+
+/// 从文本中解析 <handoff> 标签
+/// 返回：Some(成员编号) 或 None
+fn parse_handoff_tag(text: &str) -> Option<String> {
+    // 查找 <handoff> 和 </handoff> 标签
+    let start_tag = "<handoff>";
+    let end_tag = "</handoff>";
+
+    let start_pos = text.find(start_tag)?;
+    let content_start = start_pos + start_tag.len();
+
+    let end_pos = text[content_start..].find(end_tag)?;
+    let content = &text[content_start..content_start + end_pos];
+
+    let trimmed = content.trim();
+
+    if trimmed.is_empty() {
+        log::info!("🔍 [Handoff Parser] 标签为空: <handoff></handoff>");
+        None
+    } else {
+        log::info!("🔍 [Handoff Parser] 解析到目标: {}", trimmed);
+        Some(trimmed.to_string())
+    }
+}
+
+/// 简单标签解析（当前使用）
+pub fn extract_handoff_from_tag(
+    last_message: &str,
+) -> Result<HandoffInfo> {
+    log::info!("🔍 [Handoff Parser] 开始解析标签");
+    log::info!("🔍 [Handoff Parser] 消息长度: {} 字符", last_message.len());
+
+    let target_id = parse_handoff_tag(last_message);
+
+    let result = HandoffInfo {
+        has_handoff: target_id.is_some(),
+        suggested_role: target_id.clone(),
+        full_message: last_message.to_string(),
+    };
+
+    log::info!("✅ [Handoff Parser] 解析完成");
+    log::info!("✅ [Handoff Parser] has_handoff: {}", result.has_handoff);
+    if let Some(ref role) = result.suggested_role {
+        log::info!("✅ [Handoff Parser] suggested_role: {}", role);
+    }
+
+    Ok(result)
 }

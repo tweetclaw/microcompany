@@ -1,8 +1,38 @@
-use crate::config::AppConfig;
-use crate::handoff_observer::{extract_handoff_info, HandoffInfo};
+use crate::handoff_observer::{extract_handoff_from_tag, HandoffInfo};
+
+// 智能路由配置加载（已暂停使用）
+// use crate::config::AppConfig;
 
 #[tauri::command]
 pub async fn extract_handoff_suggestion(
+    role_name: String,
+    last_message: String,
+    _available_roles: Vec<String>,
+) -> Result<HandoffInfo, String> {
+    log::info!("📞 [Handoff Command] 收到交接提取请求");
+    log::info!("📞 [Handoff Command] 角色名称: {}", role_name);
+    log::info!("📞 [Handoff Command] 消息长度: {} 字符", last_message.len());
+
+    // 使用简单标签解析
+    log::info!("📞 [Handoff Command] 开始解析标签...");
+    let result = extract_handoff_from_tag(&last_message)
+        .map_err(|e| {
+            log::error!("❌ [Handoff Command] 标签解析失败: {}", e);
+            e.to_string()
+        })?;
+
+    log::info!("✅ [Handoff Command] 标签解析成功");
+    log::info!("✅ [Handoff Command] 返回结果 - has_handoff: {}", result.has_handoff);
+    if let Some(ref suggested_role) = result.suggested_role {
+        log::info!("✅ [Handoff Command] 返回结果 - suggested_role: {}", suggested_role);
+    }
+
+    Ok(result)
+}
+
+/* ========== 智能路由配置加载（已暂停使用）==========
+#[tauri::command]
+pub async fn extract_handoff_suggestion_with_ai(
     role_name: String,
     last_message: String,
     available_roles: Vec<String>,
@@ -101,3 +131,5 @@ pub async fn extract_handoff_suggestion(
 
     Ok(result)
 }
+========== 智能路由配置加载结束 ==========
+*/
