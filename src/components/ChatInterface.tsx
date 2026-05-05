@@ -130,6 +130,7 @@ function ChatInterface({
   onMessageCompleted,
   onHandoffSuggestion,
   availableRoleNames,
+  taskRoles,
   currentRoleName,
   hideSidebar = false,
   hideInspector = false,
@@ -450,7 +451,7 @@ function ChatInterface({
                 console.log('✅ [ChatInterface] 关键需求数量:', handoffInfo.keyRequirements.length);
 
                 // Convert role name to role ID
-                const targetRole = props.taskRoles?.find(
+                const targetRole = taskRoles?.find(
                   r => r.name.toLowerCase() === handoffInfo.suggestedRole.toLowerCase()
                 );
                 const targetRoleId = targetRole?.id || null;

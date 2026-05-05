@@ -435,6 +435,7 @@ impl ClaurstSession {
                 prompt.len(),
                 &prompt.chars().take(200).collect::<String>()
             );
+            log::info!("📋 [FULL_SYSTEM_PROMPT_START]\n{}\n📋 [FULL_SYSTEM_PROMPT_END]", prompt);
         }
 
         // 5. 注册工具
