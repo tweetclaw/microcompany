@@ -326,6 +326,11 @@ function ChatInterface({
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
         const payload = event.payload;
+        console.log('[ChatInterface] ai-request-start', {
+          requestId: payload.request_id,
+          timestamp: payload.timestamp,
+          currentRoleName,
+        });
         setActiveRequestId(payload.request_id);
         activeRequestIdRef.current = payload.request_id;
         setRunState('running_thinking');
@@ -344,6 +349,14 @@ function ChatInterface({
       unlistenStatus = await listen<AiStatusEvent>('ai-status', (event) => {
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
+
+        console.log('[ChatInterface] ai-status', {
+          requestId: payload.request_id,
+          phase: payload.phase,
+          text: payload.text,
+          timestamp: payload.timestamp,
+          currentRoleName: currentRoleNameRef.current,
+        });
 
         if (payload.phase === 'thinking') {
           setRunState((prev) => (prev === 'finalizing' ? prev : 'running_thinking'));
@@ -446,7 +459,14 @@ function ChatInterface({
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        // Get the accumulated text from frontend messages
+        console.log('[ChatInterface] ai-request-end', {
+          requestId: payload.request_id,
+          result: payload.result,
+          timestamp: payload.timestamp,
+          hasError: Boolean(payload.error_message),
+          finalTextChars: payload.final_text?.length ?? 0,
+          currentRoleName: currentRoleNameRef.current,
+        });
         let accumulatedText = '';
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const lastAssistantMsg = [...currentMessages]
@@ -695,7 +715,18 @@ function ChatInterface({
     onMessagesChange((prev) => [...prev, newMessage]);
 
     try {
+      console.log('[ChatInterface] send_message invoke', {
+        contentChars: content.length,
+        currentSessionId,
+        currentRoleName: currentRoleNameRef.current,
+        activeRequestId: activeRequestIdRef.current,
+      });
       await invoke<string>('send_message', { message: content });
+      console.log('[ChatInterface] send_message invoke resolved', {
+        contentChars: content.length,
+        currentSessionId,
+        currentRoleName: currentRoleNameRef.current,
+      });
     } catch (error) {
       const errorMessage = String(error);
       console.error('send_message failed:', errorMessage);

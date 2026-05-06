@@ -517,60 +517,117 @@ function App() {
     setShowForwardModal(true);
   };
 
-  const handleForwardConfirm = async (targetRoleId: string, note: string) => {
+  const handleForwardConfirm = async (targetRoleId: string, forwardedContent: string) => {
     if (!currentTask) return;
 
     const targetRole = currentTask.roles.find((r) => r.id === targetRoleId);
     if (!targetRole || !targetRole.session_id) {
+      console.error('[Forward] Target role session not found', {
+        targetRoleId,
+        currentTaskRoleId,
+        roleCount: currentTask.roles.length,
+      });
       alert('Target role session not found');
       setShowForwardModal(false);
       return;
     }
 
-    const currentRole = currentTask.roles.find((r) => r.id === currentTaskRoleId);
-
-    const latestAssistantMessage = [...messages]
-      .reverse()
-      .find((m) => m.role === 'assistant');
-
-    if (!latestAssistantMessage) {
-      alert('当前会话中没有AI回复可以转发');
-      setShowForwardModal(false);
+    if (!forwardedContent.trim()) {
+      console.warn('[Forward] Refusing to forward empty content', {
+        targetRoleId,
+        currentTaskRoleId,
+      });
+      alert('没有可转发的内容');
       return;
     }
 
-    let forwardedContent = '';
-    if (note.trim()) {
-      forwardedContent += `[Note from user]\n${note.trim()}\n\n`;
-    }
-    forwardedContent += `[Forwarded Latest Reply from ${currentRole?.name}]\n${latestAssistantMessage.content}`;
+    const forwardingFromRole = currentTask.roles.find((r) => r.id === currentTaskRoleId) ?? null;
+    const forwardedUserMessage: Message = {
+      id: `forward-${Date.now()}`,
+      role: 'user',
+      content: forwardedContent,
+      timestamp: Date.now(),
+    };
+
+    console.log('[Forward] Starting handoff forwarding', {
+      fromRoleId: currentTaskRoleId,
+      fromRoleName: forwardingFromRole?.name,
+      targetRoleId,
+      targetRoleName: targetRole.name,
+      targetSessionId: targetRole.session_id,
+      contentLength: forwardedContent.length,
+      preview: forwardedContent.slice(0, 200),
+    });
 
     setShowForwardModal(false);
     setPendingHandoffSuggestion(null);
 
+    let appendedForwardMessage = false;
+
     try {
       if (targetRoleId !== currentTaskRoleId) {
+        console.log('[Forward] Switching active role before send', {
+          fromRoleId: currentTaskRoleId,
+          toRoleId: targetRoleId,
+          toSessionId: targetRole.session_id,
+        });
         await handleTaskRoleSelected(targetRoleId);
-        // 等待角色切换和消息加载完成
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      // 先添加用户消息到前端显示
-      const forwardedUserMessage: Message = {
-        id: `forward-${Date.now()}`,
-        role: 'user',
-        content: forwardedContent,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, forwardedUserMessage]);
+      console.log('[Forward] Active role switch completed', {
+        expectedRoleId: targetRoleId,
+        expectedSessionId: targetRole.session_id,
+      });
 
-      // 触发AI响应,send_message会自动添加用户消息到数据库并触发AI处理
-      await invoke('send_message', { message: forwardedContent });
+      appendedForwardMessage = true;
+      setMessages((prev) => {
+        console.log('[Forward] Appending forwarded message to UI state', {
+          previousCount: prev.length,
+          nextCount: prev.length + 1,
+          targetRoleId,
+        });
+        return [...prev, forwardedUserMessage];
+      });
+
+      console.log('[Forward] Invoking send_message for target role', {
+        targetRoleId,
+        targetSessionId: targetRole.session_id,
+        contentLength: forwardedContent.length,
+      });
+      const sendResult = await invoke<string>('send_message', { message: forwardedContent });
+      console.log('[Forward] send_message completed', {
+        targetRoleId,
+        targetSessionId: targetRole.session_id,
+        responseLength: sendResult?.length ?? 0,
+      });
     } catch (error) {
-      console.error('Failed to forward message:', error);
+      const errorMessage = String(error);
+      const wasCancelled = /cancelled/i.test(errorMessage);
+
+      console.error('[Forward] Failed to forward message', {
+        targetRoleId,
+        targetSessionId: targetRole.session_id,
+        error,
+        wasCancelled,
+      });
+
+      if (appendedForwardMessage && wasCancelled) {
+        setMessages((prev) => prev.filter((message) => message.id !== forwardedUserMessage.id));
+      }
+
+      if (wasCancelled) {
+        console.info('[Forward] Forwarding request was cancelled by user', {
+          targetRoleId,
+          targetSessionId: targetRole.session_id,
+        });
+        return;
+      }
+
       alert(`Failed to forward message: ${error}`);
     }
   };
+
 
   const handleExitTask = async () => {
     // 任务状态已由后端自动持久化，无需手动保存

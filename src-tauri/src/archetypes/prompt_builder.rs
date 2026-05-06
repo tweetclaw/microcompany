@@ -115,7 +115,13 @@ mod tests {
     #[test]
     fn test_get_role_definition_path() {
         let path = crate::archetypes::get_role_definition_path("product_manager");
-        assert_eq!(path, "resources/role-definitions/product_manager.md");
+        assert_eq!(path, "src-tauri/resources/role-definitions/product_manager.md");
+    }
+
+    #[test]
+    fn test_get_role_definition_path_maps_software_engineer() {
+        let path = crate::archetypes::get_role_definition_path("software_engineer");
+        assert_eq!(path, "src-tauri/resources/role-definitions/backend_developer.md");
     }
 
     #[test]
@@ -123,7 +129,7 @@ mod tests {
         let prompt = build_role_system_prompt_v2(
             "Alice",
             "Product Manager",
-            Some("resources/role-definitions/product_manager.md"),
+            Some("src-tauri/resources/role-definitions/product_manager.md"),
             Some(&sample_role_context()),
             Some("/workspace"),
         );
@@ -131,7 +137,7 @@ mod tests {
         assert!(prompt.contains("# 角色：Alice"));
         assert!(prompt.contains("🔴 首要任务：读取角色定义"));
         assert!(prompt.contains("务必使用 Read 工具读取"));
-        assert!(prompt.contains("resources/role-definitions/product_manager.md"));
+        assert!(prompt.contains("src-tauri/resources/role-definitions/product_manager.md"));
         assert!(prompt.contains("务必先读取再回答问题"));
         assert!(prompt.contains("## 工作目录"));
         assert!(prompt.contains("/workspace"));
@@ -146,7 +152,7 @@ mod tests {
         assert!(composition.contains("a. Alice - Product Manager (你)"));
         assert!(composition.contains("b. Bob - Developer"));
         assert!(composition.contains("<handoff>成员编号</handoff>"));
-        assert!(composition.contains("使用成员编号（字母），不是角色名称"));
+        assert!(composition.contains("每次回答都必须在末尾添加交接标签"));
     }
 
     #[tokio::test]
@@ -182,7 +188,7 @@ mod tests {
         let system_prompt = build_role_system_prompt_v2(
             "TestRole",
             "Product Manager",
-            Some("resources/role-definitions/product_manager.md"),
+            Some("src-tauri/resources/role-definitions/product_manager.md"),
             Some(&sample_role_context()),
             Some("/test/workspace"),
         );

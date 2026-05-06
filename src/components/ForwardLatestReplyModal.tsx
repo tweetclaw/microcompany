@@ -46,15 +46,27 @@ function ForwardLatestReplyModal({
       return;
     }
 
+    const trimmedFullMessage = fullMessage.trim();
+    if (!trimmedFullMessage) {
+      alert('没有可转发的上一条回复');
+      return;
+    }
+
+    const trimmedNote = note.trim();
+    const forwardMessage = trimmedNote
+      ? `请接手工作\n\n[Note from user]\n${trimmedNote}\n\n前一个角色的最后一条信息是：\n---\n${trimmedFullMessage}\n---`
+      : `请接手工作\n\n前一个角色的最后一条信息是：\n---\n${trimmedFullMessage}\n---`;
+
+    console.log('[ForwardLatestReplyModal] Prepared forward payload', {
+      targetRoleId,
+      hasNote: Boolean(trimmedNote),
+      fullMessageLength: trimmedFullMessage.length,
+      payloadLength: forwardMessage.length,
+      preview: forwardMessage.slice(0, 200),
+    });
+
     setIsForwarding(true);
     try {
-      // 拼接消息：用户输入 + 完整消息
-      const userPart = note.trim()
-        ? `请接手工作，用户的需求是：${note}\n\n`
-        : '请接手工作\n\n';
-
-      const forwardMessage = `${userPart}前一个角色的最后一条信息是：\n---\n${fullMessage}\n---`;
-
       await onForward(targetRoleId, forwardMessage);
     } finally {
       setIsForwarding(false);

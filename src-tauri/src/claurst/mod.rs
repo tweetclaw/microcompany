@@ -131,14 +131,15 @@ fn build_prompt_preview(prompt_snapshot: Option<&str>) -> String {
 fn generate_title(first_message: &str) -> String {
     let max_length = 30;
     let trimmed = first_message.trim();
+    let char_count = trimmed.chars().count();
 
-    if trimmed.len() <= max_length {
+    if char_count <= max_length {
         trimmed.to_string()
     } else {
         // Find the last space before max_length to avoid cutting words
-        let truncated = &trimmed[..max_length];
+        let truncated: String = trimmed.chars().take(max_length).collect();
         if let Some(last_space) = truncated.rfind(' ') {
-            format!("{}...", &trimmed[..last_space])
+            format!("{}...", &truncated[..last_space])
         } else {
             format!("{}...", truncated)
         }
@@ -157,6 +158,7 @@ fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
         .trim()
         .to_string()
 }
+
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -804,6 +806,23 @@ impl ClaurstSession {
                         }));
                     }
                     QueryEvent::TurnComplete { .. } => {
+                        if let Some(trace) = event_task_trace.as_ref() {
+                            log::info!(
+                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={}",
+                                event_request_id,
+                                event_session_id,
+                                trace.task_id,
+                                trace.role_id,
+                                trace.role_name
+                            );
+                        } else {
+                            log::info!(
+                                "claurst_turn_complete request_id={} session_id={}",
+                                event_request_id,
+                                event_session_id
+                            );
+                        }
+
                         let now = chrono::Utc::now().timestamp_millis();
                         let _ = event_window.emit("ai-status", serde_json::json!({
                             "request_id": event_request_id.clone(),
@@ -839,7 +858,7 @@ impl ClaurstSession {
         // 4. 调用 run_query_loop
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
-                "claurst_request_begin request_id={} session_id={} task_id={} role_id={} role_name={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={} history_messages={}",
+                "claurst_request_begin request_id={} session_id={} task_id={} role_id={} role_name={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} prompt_chars={} prompt_preview={} history_messages={} api_key_present={} base_url_present={}",
                 request_id,
                 self.session_id,
                 trace.task_id,
@@ -856,7 +875,9 @@ impl ClaurstSession {
                     .map(|value| value.chars().count())
                     .unwrap_or(0),
                 build_prompt_preview(self.config.system_prompt.as_deref()),
-                self.messages.len()
+                self.messages.len(),
+                !self.api_key.trim().is_empty(),
+                self.base_url.is_some()
             );
         } else {
             log::info!(
@@ -910,41 +931,72 @@ impl ClaurstSession {
         // 5. 处理结果并发送终态事件
         match outcome {
             QueryOutcome::EndTurn { message, .. } => {
-                // 优先从 message.content 提取文本
+                // Diagnostic logging: what's in the EndTurn message?
+                match &message.content {
+                    MessageContent::Text(s) => {
+                        log::info!("🔍 [DIAGNOSTIC] EndTurn message.content is Text variant, length: {}", s.len());
+                    }
+                    MessageContent::Blocks(blocks) => {
+                        log::info!("🔍 [DIAGNOSTIC] EndTurn message.content is Blocks variant, block_count: {}", blocks.len());
+                        for (i, block) in blocks.iter().enumerate() {
+                            match block {
+                                claurst_core::ContentBlock::Text { text } => {
+                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: Text, length: {}", i, text.len());
+                                }
+                                claurst_core::ContentBlock::ToolUse { name, .. } => {
+                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: ToolUse, name: {}", i, name);
+                                }
+                                claurst_core::ContentBlock::ToolResult { tool_use_id, .. } => {
+                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: ToolResult, tool_use_id: {}", i, tool_use_id);
+                                }
+                                _ => {
+                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: Other variant", i);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Diagnostic logging: what's in self.messages?
+                log::info!("🔍 [DIAGNOSTIC] self.messages total count: {}", self.messages.len());
+                let assistant_messages: Vec<_> = self.messages.iter()
+                    .enumerate()
+                    .filter(|(_, msg)| matches!(msg.role, claurst_core::Role::Assistant))
+                    .collect();
+                log::info!("🔍 [DIAGNOSTIC] Assistant messages count: {}", assistant_messages.len());
+                for (idx, msg) in assistant_messages.iter() {
+                    match &msg.content {
+                        MessageContent::Text(s) => {
+                            log::info!("🔍 [DIAGNOSTIC]   Message[{}]: Text, length: {}", idx, s.len());
+                        }
+                        MessageContent::Blocks(blocks) => {
+                            log::info!("🔍 [DIAGNOSTIC]   Message[{}]: Blocks, block_count: {}", idx, blocks.len());
+                            for (i, block) in blocks.iter().enumerate() {
+                                match block {
+                                    claurst_core::ContentBlock::Text { text } => {
+                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: Text, length: {}", i, text.len());
+                                    }
+                                    claurst_core::ContentBlock::ToolUse { name, .. } => {
+                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: ToolUse, name: {}", i, name);
+                                    }
+                                    claurst_core::ContentBlock::ToolResult { tool_use_id, .. } => {
+                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: ToolResult, tool_use_id: {}", i, tool_use_id);
+                                    }
+                                    _ => {
+                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: Other variant", i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let mut text = match &message.content {
                     MessageContent::Text(s) => s.trim().to_string(),
                     MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
                 };
 
-                log::info!("🔍 [DEBUG] EndTurn message.content extracted text length: {}", text.len());
-                if !text.is_empty() {
-                    log::info!("🔍 [DEBUG] EndTurn text preview (first 200 chars): {}",
-                        text.chars().take(200).collect::<String>());
-                }
-
-                // 如果 message.content 为空，从 self.messages 中获取最后一条 assistant 消息
-                // 注意：这里获取的是完整的累积文本，而不是中间的流式片段
-                if text.is_empty() {
-                    log::info!("🔍 [DEBUG] text is empty, searching in self.messages (total: {})", self.messages.len());
-
-                    // 获取最后一条 assistant 消息的完整文本
-                    if let Some(last_assistant_msg) = self.messages.iter().rev().find(|msg| matches!(msg.role, claurst_core::Role::Assistant)) {
-                        text = last_assistant_msg.get_all_text().trim().to_string();
-                        log::info!("🔍 [DEBUG] Found assistant message text length: {}", text.len());
-                        if !text.is_empty() {
-                            log::info!("🔍 [DEBUG] Assistant message text preview (first 200 chars): {}",
-                                text.chars().take(200).collect::<String>());
-                        }
-                    } else {
-                        log::warn!("🔍 [DEBUG] No assistant message found in self.messages fallback path");
-                    }
-                }
-
-                let pre_handoff_text = text.clone();
-                log::info!(
-                    "🔍 [DEBUG] Pre-handoff text length: {} chars",
-                    pre_handoff_text.len()
-                );
+                log::info!("🔍 [DIAGNOSTIC] Extracted text from EndTurn message, length: {}", text.len());
 
                 let parsed_handoff = extract_handoff_block(&text);
 
@@ -955,27 +1007,7 @@ impl ClaurstSession {
                 );
 
                 if let Some(parsed) = parsed_handoff.as_ref() {
-                    log::info!(
-                        "🔍 [DEBUG] Handoff block parsed: visible_text_len={} recommended={} target_role={:?}",
-                        parsed.visible_text.len(),
-                        parsed.recommended,
-                        parsed.target_role_name
-                    );
-
-                    if parsed.visible_text.trim().is_empty() {
-                        log::warn!(
-                            "🔍 [DEBUG] Handoff visible_text is empty; preserving pre-handoff text length={} instead of overwriting",
-                            pre_handoff_text.len()
-                        );
-                    } else {
-                        text = parsed.visible_text.clone();
-                        log::info!(
-                            "🔍 [DEBUG] Replaced final text with handoff visible_text, new length: {} chars",
-                            text.len()
-                        );
-                    }
-                } else {
-                    log::info!("🔍 [DEBUG] No handoff block found; keeping pre-handoff text");
+                    text = parsed.visible_text.clone();
                 }
 
                 let handoff_suggestion = parsed_handoff
@@ -986,12 +1018,6 @@ impl ClaurstSession {
                     self.session_id,
                     handoff_suggestion.is_some()
                 );
-
-                log::info!("🔍 [DEBUG] Final text to send in ai-request-end, length: {} chars", text.len());
-                if !text.is_empty() {
-                    log::info!("🔍 [DEBUG] Final text preview (first 200 chars): {}",
-                        text.chars().take(200).collect::<String>());
-                }
 
                 log::info!("AI response received, length: {} chars", text.len());
 

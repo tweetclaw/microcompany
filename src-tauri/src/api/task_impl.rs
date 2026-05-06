@@ -625,6 +625,12 @@ fn build_system_prompt_snapshot(
 
     // 使用文件资源方案生成系统提示词
     let role_definition_path = crate::archetypes::get_role_definition_path(archetype_id);
+    log::info!(
+        "task_role_definition_path_resolved role_name={} archetype_id={} path={}",
+        role.name,
+        archetype_id,
+        role_definition_path
+    );
     let prompt_text = crate::archetypes::build_role_system_prompt_v2(
         &role.name,
         &role.identity,

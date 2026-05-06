@@ -28,7 +28,17 @@ pub fn get_role_archetype(archetype_id: &str) -> Result<Option<RoleArchetype>, S
         .map_err(|e| format!("Failed to load archetype {}: {}", archetype_id, e))
 }
 
-/// 获取角色定义文件的相对路径
+fn role_definition_file_name(archetype_id: &str) -> String {
+    match archetype_id {
+        "software_engineer" => "backend_developer.md".to_string(),
+        _ if archetype_id.ends_with(".md") => archetype_id.to_string(),
+        _ => format!("{}.md", archetype_id),
+    }
+}
+
 pub fn get_role_definition_path(archetype_id: &str) -> String {
-    format!("resources/role-definitions/{}.md", archetype_id)
+    format!(
+        "src-tauri/resources/role-definitions/{}",
+        role_definition_file_name(archetype_id)
+    )
 }

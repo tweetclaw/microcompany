@@ -54,12 +54,25 @@ pub async fn send_message(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<String, String> {
+    log::info!(
+        "send_message_command_received message_chars={}",
+        message.chars().count()
+    );
+
+    let command_started_at = chrono::Utc::now();
+
     // 获取会话的可变引用
     let mut session_guard = state.session.lock().await;
     let session = session_guard.as_mut()
         .ok_or("Session not initialized. Please select a working directory first.")?;
 
     let session_id = session.get_session_id().to_string();
+    log::info!(
+        "send_message_command_session_bound session_id={} message_chars={}",
+        session_id,
+        message.chars().count()
+    );
+
     let task_context = load_task_session_trace_context(&session_id)?;
 
     // 创建新的取消令牌与请求 ID
@@ -100,6 +113,16 @@ pub async fn send_message(
         );
         Err("Request cancelled".to_string())
     } else {
+        log::info!(
+            "task_message_send_dispatch request_id={} session_id={} task_id={} role_id={} role_name={} message_chars={} elapsed_ms={}",
+            request_id,
+            session_id,
+            task_context.as_ref().map(|context| context.task_id.as_str()).unwrap_or("unknown"),
+            task_context.as_ref().map(|context| context.role_id.as_str()).unwrap_or("unknown"),
+            task_context.as_ref().map(|context| context.role_name.as_str()).unwrap_or("unknown"),
+            message.chars().count(),
+            (chrono::Utc::now() - command_started_at).num_milliseconds()
+        );
         {
             let send_future = session.send_message(&message, &request_id, window.clone(), cancel_token.clone());
 
