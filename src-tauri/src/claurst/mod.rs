@@ -431,6 +431,12 @@ impl ClaurstSession {
         query_config.model = model;
         query_config.system_prompt = system_prompt.clone();
 
+        log::info!(
+            "🔍 [DIAGNOSTIC] After setting query_config.system_prompt: is_some={} length={}",
+            query_config.system_prompt.is_some(),
+            query_config.system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
+        );
+
         if let Some(ref prompt) = system_prompt {
             log::info!(
                 "🔍 ClaurstSession::new system_prompt length={} first_200_chars={}",
@@ -997,6 +1003,33 @@ impl ClaurstSession {
                 };
 
                 log::info!("🔍 [DIAGNOSTIC] Extracted text from EndTurn message, length: {}", text.len());
+
+                // WORKAROUND: run_query_loop bug - it may return a user message (with ToolResult blocks)
+                // instead of an assistant message when PostModelTurn hook blocks continuation.
+                // In this case, we need to find the last assistant message with text.
+                if text.is_empty() {
+                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty, searching self.messages for last assistant text (run_query_loop bug workaround)");
+                    for msg in self.messages.iter().rev() {
+                        if !matches!(msg.role, claurst_core::Role::Assistant) {
+                            continue;
+                        }
+
+                        let msg_text = match &msg.content {
+                            MessageContent::Text(s) => s.trim().to_string(),
+                            MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
+                        };
+
+                        if !msg_text.is_empty() {
+                            log::info!("🔍 [DIAGNOSTIC] Found assistant text in history, length: {}", msg_text.len());
+                            text = msg_text;
+                            break;
+                        }
+                    }
+
+                    if text.is_empty() {
+                        log::error!("🔍 [DIAGNOSTIC] No assistant text found in entire message history");
+                    }
+                }
 
                 let parsed_handoff = extract_handoff_block(&text);
 

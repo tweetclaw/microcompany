@@ -69,7 +69,12 @@ fn build_team_composition_v2(
 
     // 交接规则（强制要求）
     section.push_str("## 🔴 输出格式要求（必须遵守）\n\n");
-    section.push_str("**每次回答都必须在末尾添加交接标签，这是强制要求，不可省略！**\n\n");
+    section.push_str("**每次回答都必须包含文本响应和交接标签，这是强制要求，不可省略！**\n\n");
+
+    section.push_str("### 关键规则\n");
+    section.push_str("- ✅ **必须生成文本响应**：即使调用了工具，也必须用文字总结结果或说明下一步\n");
+    section.push_str("- ✅ **不能只调用工具就结束**：工具调用后必须生成文本来解释或展示结果\n");
+    section.push_str("- ✅ **每次回答都必须包含交接标签**：标签必须在文本响应的最后一行\n\n");
 
     section.push_str("### 交接标签格式\n\n");
     section.push_str("**需要交接给其他成员时：**\n");
@@ -79,11 +84,11 @@ fn build_team_composition_v2(
     section.push_str("**不需要交接时（工作未完成或需要用户继续输入）：**\n");
     section.push_str("```\n<handoff></handoff>\n```\n\n");
 
-    section.push_str("### 重要规则\n");
+    section.push_str("### 格式规则\n");
     section.push_str("- ✅ 成员编号使用字母（a, b, c...），不是角色名称\n");
     section.push_str("- ✅ 标签必须在回答的最后一行\n");
-    section.push_str("- ✅ 每次回答都必须包含此标签\n");
-    section.push_str("- ❌ 不可以省略此标签\n");
+    section.push_str("- ❌ 不可以省略文本响应\n");
+    section.push_str("- ❌ 不可以省略交接标签\n");
     section.push_str("- ❌ 不可以使用角色名称代替编号\n\n");
 
     section
