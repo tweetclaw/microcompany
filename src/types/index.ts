@@ -11,7 +11,22 @@ export interface Message {
 }
 
 export type AiStatusPhase = 'thinking' | 'tool_running' | 'generating' | 'finalizing';
+export type AiLifecyclePhase = 'thinking' | 'tool_running' | 'streaming' | 'finalizing' | 'completed' | 'cancelled' | 'error';
 export type AiRequestResult = 'success' | 'cancelled' | 'error';
+
+export interface AiUsageInfo {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  total_tokens?: number;
+  estimated_cost_usd?: number;
+}
+
+export interface AiWarningInfo {
+  warning_type: string;
+  message: string;
+}
 
 export type AiRunState =
   | 'idle'
@@ -36,12 +51,43 @@ export interface AiStatusEvent {
   timestamp: number;
 }
 
+export interface AiRequestLifecycleEvent {
+  request_id: string;
+  session_id: string;
+  phase: AiLifecyclePhase;
+  label?: string;
+  source: string;
+  timestamp: number;
+}
+
+export interface AiRequestUsageEvent {
+  request_id: string;
+  session_id: string;
+  scope: 'current_turn' | 'cumulative';
+  usage: AiUsageInfo;
+  timestamp: number;
+}
+
+export interface AiTokenWarningEvent {
+  request_id: string;
+  session_id: string;
+  warning_type: string;
+  message: string;
+  details?: Record<string, unknown>;
+  timestamp: number;
+}
+
 export interface AiRequestEndEvent {
   request_id: string;
+  session_id?: string;
   result: AiRequestResult;
+  final_phase?: 'completed' | 'cancelled' | 'error';
   error_message?: string;
   final_text?: string;
+  has_visible_text?: boolean;
   handoffSuggestion?: HandoffSuggestion;
+  usage?: AiUsageInfo;
+  warnings?: AiWarningInfo[];
   timestamp: number;
 }
 
@@ -66,10 +112,10 @@ export interface AiToolEndEvent {
 export interface ProcessTimelineItem {
   id: string;
   requestId: string;
-  kind: 'request_start' | 'status' | 'tool_start' | 'tool_end' | 'request_end' | 'error';
+  kind: 'request_start' | 'status' | 'tool_start' | 'tool_end' | 'request_end' | 'error' | 'lifecycle' | 'warning';
   text: string;
   timestamp: number;
-  phase?: AiStatusPhase;
+  phase?: AiStatusPhase | AiLifecyclePhase;
   result?: AiRequestResult;
   tool?: string;
   success?: boolean;

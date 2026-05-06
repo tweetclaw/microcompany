@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
 import { TitleBar } from './components/TitleBar';
@@ -81,41 +80,6 @@ function App() {
   const [isSessionListCollapsed, setIsSessionListCollapsed] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
-
-  useEffect(() => {
-    console.log('[App] Setting up event listeners for ai-status and ai-request-end');
-
-    const unlistenStatus = listen<{ phase: string }>('ai-status', (event) => {
-      const phase = event.payload.phase;
-      console.log('[App] AI status changed, phase:', phase);
-
-      // Map phase to AiRunState
-      let state: AiRunState = 'idle';
-      if (phase === 'thinking') {
-        state = 'running_thinking';
-      } else if (phase === 'tool_running') {
-        state = 'running_tool';
-      } else if (phase === 'generating') {
-        state = 'running_generating';
-      } else if (phase === 'finalizing') {
-        state = 'finalizing';
-      }
-
-      console.log('[App] Mapped to runState:', state);
-      setRunState(state);
-    });
-
-    const unlistenRequestEnd = listen<{ result: string; error_message?: string }>('ai-request-end', (event) => {
-      console.log('[App] AI request ended, result:', event.payload.result, 'error:', event.payload.error_message);
-      setRunState('idle');
-    });
-
-    return () => {
-      console.log('[App] Cleaning up event listeners');
-      unlistenStatus.then((fn) => fn());
-      unlistenRequestEnd.then((fn) => fn());
-    };
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -734,6 +698,7 @@ function App() {
             name: '',
             description: '',
             icon: '',
+            status: 'ready',
             pm_first_workflow: false,
             role_count: 0,
             total_messages: 0,

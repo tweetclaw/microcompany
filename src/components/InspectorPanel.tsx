@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AiRunState, ProcessTimelineItem, ToolCall } from '../types';
+import { AiRunState, AiUsageInfo, AiWarningInfo, ProcessTimelineItem, ToolCall } from '../types';
 import './InspectorPanel.css';
 
 interface InspectorPanelProps {
@@ -13,6 +13,8 @@ interface InspectorPanelProps {
   lastError: string | null;
   providerLabel: string | null;
   modelLabel: string | null;
+  currentUsage: AiUsageInfo | null;
+  tokenWarnings: AiWarningInfo[];
   collapsed: boolean;
   isCompact: boolean;
 }
@@ -28,6 +30,8 @@ function InspectorPanel({
   lastError,
   providerLabel,
   modelLabel,
+  currentUsage,
+  tokenWarnings,
   collapsed,
   isCompact,
 }: InspectorPanelProps) {
@@ -35,6 +39,22 @@ function InspectorPanel({
     if (!path) return '未选择';
     const parts = path.split('/');
     return parts[parts.length - 1] || path;
+  };
+
+  const formatUsageValue = (value?: number) => {
+    if (value === undefined || value === null) {
+      return '—';
+    }
+
+    return value.toLocaleString();
+  };
+
+  const formatCostValue = (value?: number) => {
+    if (value === undefined || value === null) {
+      return '—';
+    }
+
+    return `$${value.toFixed(4)}`;
   };
 
   const runStateLabel =
@@ -105,6 +125,50 @@ function InspectorPanel({
             <span>Model</span>
             <strong>{modelLabel || '未选择'}</strong>
           </div>
+        </section>
+
+        <section className="inspector-card">
+          <div className="inspector-card-title">Usage</div>
+          <div className="inspector-key-value">
+            <span>Input</span>
+            <strong>{formatUsageValue(currentUsage?.input_tokens)}</strong>
+          </div>
+          <div className="inspector-key-value">
+            <span>Output</span>
+            <strong>{formatUsageValue(currentUsage?.output_tokens)}</strong>
+          </div>
+          <div className="inspector-key-value">
+            <span>Total</span>
+            <strong>{formatUsageValue(currentUsage?.total_tokens)}</strong>
+          </div>
+          <div className="inspector-key-value">
+            <span>Cache Write</span>
+            <strong>{formatUsageValue(currentUsage?.cache_creation_input_tokens)}</strong>
+          </div>
+          <div className="inspector-key-value">
+            <span>Cache Read</span>
+            <strong>{formatUsageValue(currentUsage?.cache_read_input_tokens)}</strong>
+          </div>
+          <div className="inspector-key-value inspector-key-value-last">
+            <span>Est. Cost</span>
+            <strong>{formatCostValue(currentUsage?.estimated_cost_usd)}</strong>
+          </div>
+        </section>
+
+        <section className="inspector-card">
+          <div className="inspector-card-title">Warnings</div>
+          {tokenWarnings.length > 0 ? (
+            <div className="inspector-warning-list">
+              {tokenWarnings.map((warning, index) => (
+                <div key={`${warning.warning_type}-${index}`} className="inspector-warning-item">
+                  <div className="inspector-warning-type">{warning.warning_type}</div>
+                  <div className="inspector-warning-message">{warning.message}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="inspector-empty-state">当前请求没有 warnings</div>
+          )}
         </section>
 
         <section className="inspector-card">

@@ -1,4 +1,4 @@
-use claurst_core::{Config, PermissionMode, Message, MessageContent, ContentBlock, CostTracker};
+use claurst_core::{Config, PermissionMode, Message, MessageContent, ContentBlock, CostTracker, UsageInfo};
 use claurst_query::{QueryConfig, QueryOutcome, QueryEvent, run_query_loop};
 use claurst_tools::{
     Tool, ToolContext,
@@ -8,6 +8,7 @@ use claurst_tools::{
 use claurst_api::{AnthropicClient, client::ClientConfig};
 use crate::storage::{ConversationStorage, StoredMessage};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -157,6 +158,139 @@ fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
         .join("\n")
         .trim()
         .to_string()
+}
+
+fn usage_to_json(usage: &UsageInfo) -> serde_json::Value {
+    let total_tokens = usage.input_tokens
+        + usage.output_tokens
+        + usage.cache_creation_input_tokens
+        + usage.cache_read_input_tokens;
+
+    serde_json::json!({
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+        "cache_read_input_tokens": usage.cache_read_input_tokens,
+        "total_tokens": total_tokens,
+    })
+}
+
+fn warning_to_json(warning_type: &str, message: String) -> Value {
+    serde_json::json!({
+        "warning_type": warning_type,
+        "message": message,
+    })
+}
+
+fn emit_usage_event(
+    window: &Window,
+    request_id: &str,
+    session_id: &str,
+    scope: &str,
+    usage: &UsageInfo,
+) {
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    log::info!(
+        "claurst_usage request_id={} session_id={} scope={} total_tokens={}",
+        request_id,
+        session_id,
+        scope,
+        usage.input_tokens
+            + usage.output_tokens
+            + usage.cache_creation_input_tokens
+            + usage.cache_read_input_tokens,
+    );
+    let _ = window.emit("ai-request-usage", serde_json::json!({
+        "request_id": request_id,
+        "session_id": session_id,
+        "scope": scope,
+        "usage": usage_to_json(usage),
+        "timestamp": timestamp,
+    }));
+}
+
+fn emit_terminal_event(
+    window: &Window,
+    request_id: &str,
+    session_id: &str,
+    result: &str,
+    final_phase: &str,
+    error_message: Option<&str>,
+    final_text: Option<&str>,
+    has_visible_text: Option<bool>,
+    handoff_suggestion: Option<&HandoffSuggestion>,
+    usage: Option<&UsageInfo>,
+    warnings: &[Value],
+) {
+    let now = chrono::Utc::now().timestamp_millis();
+    emit_lifecycle_event(
+        window,
+        request_id,
+        session_id,
+        final_phase,
+        status_label_for_phase(final_phase),
+        match final_phase {
+            "completed" => "outcome_end_turn",
+            "cancelled" => "outcome_cancelled",
+            _ => "outcome_error",
+        },
+    );
+    let _ = window.emit("ai-request-end", serde_json::json!({
+        "request_id": request_id,
+        "session_id": session_id,
+        "result": result,
+        "final_phase": final_phase,
+        "error_message": error_message,
+        "final_text": final_text,
+        "has_visible_text": has_visible_text,
+        "handoffSuggestion": handoff_suggestion,
+        "usage": usage.map(usage_to_json),
+        "warnings": warnings,
+        "timestamp": now,
+    }));
+}
+
+fn emit_display_status(window: &Window, request_id: &str, phase: &str, text: &str) {
+    let now = chrono::Utc::now().timestamp_millis();
+    let _ = window.emit("ai-status", serde_json::json!({
+        "request_id": request_id,
+        "phase": phase,
+        "text": text,
+        "timestamp": now,
+    }));
+}
+
+fn take_text_from_message_content(content: &MessageContent) -> String {
+    match content {
+        MessageContent::Text(s) => s.trim().to_string(),
+        MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
+    }
+}
+
+fn emit_lifecycle_event(
+    window: &Window,
+    request_id: &str,
+    session_id: &str,
+    phase: &str,
+    label: &str,
+    source: &str,
+) {
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    log::info!(
+        "claurst_lifecycle request_id={} session_id={} phase={} source={}",
+        request_id,
+        session_id,
+        phase,
+        source
+    );
+    let _ = window.emit("ai-request-lifecycle", serde_json::json!({
+        "request_id": request_id,
+        "session_id": session_id,
+        "phase": phase,
+        "label": label,
+        "source": source,
+        "timestamp": timestamp,
+    }));
 }
 
 
@@ -350,6 +484,19 @@ fn infer_phase_from_status(status: &str) -> &'static str {
         "finalizing"
     } else {
         "thinking"
+    }
+}
+
+fn status_label_for_phase(phase: &str) -> &'static str {
+    match phase {
+        "thinking" => "思考中",
+        "tool_running" => "工具执行中",
+        "streaming" => "生成回复中",
+        "finalizing" => "整理最终回答",
+        "completed" => "请求完成",
+        "cancelled" => "请求已取消",
+        "error" => "请求失败",
+        _ => "处理中",
     }
 }
 
@@ -700,12 +847,15 @@ impl ClaurstSession {
             "session_id": self.session_id.clone(),
             "timestamp": timestamp,
         }));
-        let _ = window.emit("ai-status", serde_json::json!({
-            "request_id": request_id,
-            "phase": "thinking",
-            "text": "思考中",
-            "timestamp": timestamp,
-        }));
+        emit_lifecycle_event(
+            &window,
+            request_id,
+            &self.session_id,
+            "thinking",
+            status_label_for_phase("thinking"),
+            "request_start",
+        );
+        emit_display_status(&window, request_id, "thinking", "思考中");
 
         // 2. 创建事件通道
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
@@ -716,13 +866,27 @@ impl ClaurstSession {
         let event_request_id = request_id_owned.clone();
         let event_session_id = self.session_id.clone();
         let event_task_trace = task_trace.clone();
+        let terminal_warnings = Arc::new(parking_lot::Mutex::new(Vec::<Value>::new()));
+        let event_warnings = terminal_warnings.clone();
         tokio::spawn(async move {
+            let mut has_emitted_streaming = false;
             while let Some(event) = event_rx.recv().await {
                 match event {
                     QueryEvent::Stream(stream_event) => {
                         use claurst_api::{streaming::ContentDelta, AnthropicStreamEvent};
                         if let AnthropicStreamEvent::ContentBlockDelta { delta, .. } = stream_event {
                             if let ContentDelta::TextDelta { text } = delta {
+                                if !has_emitted_streaming {
+                                    has_emitted_streaming = true;
+                                    emit_lifecycle_event(
+                                        &event_window,
+                                        &event_request_id,
+                                        &event_session_id,
+                                        "streaming",
+                                        status_label_for_phase("streaming"),
+                                        "stream_first_chunk",
+                                    );
+                                }
                                 log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars",
                                     event_request_id, text.len());
                                 let _ = event_window.emit("message-chunk", serde_json::json!({
@@ -752,14 +916,17 @@ impl ClaurstSession {
                             );
                         }
 
-                        let now = chrono::Utc::now().timestamp_millis();
+                        emit_lifecycle_event(
+                            &event_window,
+                            &event_request_id,
+                            &event_session_id,
+                            "tool_running",
+                            status_label_for_phase("tool_running"),
+                            "tool_start",
+                        );
+
                         let description = format!("Executing {}", tool_name);
-                        let _ = event_window.emit("ai-status", serde_json::json!({
-                            "request_id": event_request_id.clone(),
-                            "phase": "tool_running",
-                            "text": description,
-                            "timestamp": now,
-                        }));
+                        emit_display_status(&event_window, &event_request_id, "tool_running", &description);
                         let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
@@ -767,7 +934,6 @@ impl ClaurstSession {
                         }));
                     }
                     QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
-                        let now = chrono::Utc::now().timestamp_millis();
 
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
@@ -804,59 +970,76 @@ impl ClaurstSession {
                             "success": !is_error,
                             "result": result,
                         }));
-                        let _ = event_window.emit("ai-status", serde_json::json!({
-                            "request_id": event_request_id.clone(),
-                            "phase": "thinking",
-                            "text": "工具执行完成，继续处理中",
-                            "timestamp": now,
-                        }));
+                        emit_lifecycle_event(
+                            &event_window,
+                            &event_request_id,
+                            &event_session_id,
+                            "thinking",
+                            status_label_for_phase("thinking"),
+                            "tool_end",
+                        );
+                        emit_display_status(&event_window, &event_request_id, "thinking", "工具执行完成，继续处理中");
                     }
-                    QueryEvent::TurnComplete { .. } => {
+                    QueryEvent::TurnComplete { usage, .. } => {
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={}",
+                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
                                 trace.task_id,
                                 trace.role_id,
-                                trace.role_name
+                                trace.role_name,
+                                usage.is_some()
                             );
                         } else {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={}",
+                                "claurst_turn_complete request_id={} session_id={} usage_present={}",
                                 event_request_id,
-                                event_session_id
+                                event_session_id,
+                                usage.is_some()
                             );
                         }
 
-                        let now = chrono::Utc::now().timestamp_millis();
-                        let _ = event_window.emit("ai-status", serde_json::json!({
-                            "request_id": event_request_id.clone(),
-                            "phase": "finalizing",
-                            "text": "整理最终回答",
-                            "timestamp": now,
-                        }));
+                        if let Some(usage) = usage.as_ref() {
+                            emit_usage_event(
+                                &event_window,
+                                &event_request_id,
+                                &event_session_id,
+                                "current_turn",
+                                usage,
+                            );
+                        }
                     }
                     QueryEvent::Status(status) => {
+                        emit_display_status(&event_window, &event_request_id, infer_phase_from_status(&status), &status);
+                    }
+                    QueryEvent::TokenWarning { state, pct_used } => {
                         let now = chrono::Utc::now().timestamp_millis();
-                        let _ = event_window.emit("ai-status", serde_json::json!({
+                        let warning_message = format!("Token usage warning: {:?} ({:.1}% used)", state, pct_used * 100.0);
+                        event_warnings.lock().push(warning_to_json("token_warning", warning_message.clone()));
+                        log::warn!(
+                            "claurst_token_warning request_id={} session_id={} state={:?} pct_used={:.3}",
+                            event_request_id,
+                            event_session_id,
+                            state,
+                            pct_used
+                        );
+                        let _ = event_window.emit("ai-token-warning", serde_json::json!({
                             "request_id": event_request_id.clone(),
-                            "phase": infer_phase_from_status(&status),
-                            "text": status,
+                            "session_id": event_session_id.clone(),
+                            "warning_type": "token_warning",
+                            "message": warning_message,
+                            "details": {
+                                "state": format!("{:?}", state),
+                                "pct_used": pct_used,
+                            },
                             "timestamp": now,
                         }));
                     }
                     QueryEvent::Error(err) => {
-                        let now = chrono::Utc::now().timestamp_millis();
                         log::error!("Query event error: {}", err);
-                        let _ = event_window.emit("ai-status", serde_json::json!({
-                            "request_id": event_request_id.clone(),
-                            "phase": "finalizing",
-                            "text": format!("发生错误: {}", err),
-                            "timestamp": now,
-                        }));
+                        emit_display_status(&event_window, &event_request_id, "finalizing", &format!("发生错误: {}", err));
                     }
-                    _ => {}
                 }
             }
         });
@@ -935,8 +1118,9 @@ impl ClaurstSession {
         }
 
         // 5. 处理结果并发送终态事件
+        let warnings_snapshot = terminal_warnings.lock().clone();
         match outcome {
-            QueryOutcome::EndTurn { message, .. } => {
+            QueryOutcome::EndTurn { message, usage } => {
                 // Diagnostic logging: what's in the EndTurn message?
                 match &message.content {
                     MessageContent::Text(s) => {
@@ -997,41 +1181,21 @@ impl ClaurstSession {
                     }
                 }
 
-                let mut text = match &message.content {
-                    MessageContent::Text(s) => s.trim().to_string(),
-                    MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
-                };
+                let mut text = take_text_from_message_content(&message.content);
 
                 log::info!("🔍 [DIAGNOSTIC] Extracted text from EndTurn message, length: {}", text.len());
 
-                // WORKAROUND: run_query_loop bug - it may return a user message (with ToolResult blocks)
-                // instead of an assistant message when PostModelTurn hook blocks continuation.
-                // In this case, we need to find the last assistant message with text.
                 if text.is_empty() {
-                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty, searching self.messages for last assistant text (run_query_loop bug workaround)");
-                    for msg in self.messages.iter().rev() {
-                        if !matches!(msg.role, claurst_core::Role::Assistant) {
-                            continue;
-                        }
-
-                        let msg_text = match &msg.content {
-                            MessageContent::Text(s) => s.trim().to_string(),
-                            MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
-                        };
-
-                        if !msg_text.is_empty() {
-                            log::info!("🔍 [DIAGNOSTIC] Found assistant text in history, length: {}", msg_text.len());
-                            text = msg_text;
-                            break;
-                        }
-                    }
-
-                    if text.is_empty() {
-                        log::error!("🔍 [DIAGNOSTIC] No assistant text found in entire message history");
-                    }
+                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty for current turn");
                 }
 
-                let parsed_handoff = extract_handoff_block(&text);
+                let has_visible_text = !text.is_empty();
+
+                let parsed_handoff = if has_visible_text {
+                    extract_handoff_block(&text)
+                } else {
+                    None
+                };
 
                 log::debug!(
                     "handoff_block_extracted session_id={} found={}",
@@ -1052,7 +1216,21 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
-                log::info!("AI response received, length: {} chars", text.len());
+                log::info!(
+                    "AI response received, length: {} chars, has_visible_text={}, handoff_found={}",
+                    text.len(),
+                    has_visible_text,
+                    handoff_suggestion.is_some()
+                );
+
+                log::debug!(
+                    "request_end_payload session_id={} request_id={} final_text_chars={} has_visible_text={} handoff_found={}",
+                    self.session_id,
+                    request_id_owned,
+                    text.chars().count(),
+                    has_visible_text,
+                    handoff_suggestion.is_some()
+                );
 
                 save_message_to_file_storage(
                     &self.storage,
@@ -1098,14 +1276,29 @@ impl ClaurstSession {
                     }
                 }
 
-                let now = chrono::Utc::now().timestamp_millis();
-                let _ = window.emit("ai-request-end", serde_json::json!({
-                    "request_id": request_id_owned.clone(),
-                    "result": "success",
-                    "final_text": text,
-                    "handoffSuggestion": handoff_suggestion.as_ref(),
-                    "timestamp": now,
-                }));
+                emit_lifecycle_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "finalizing",
+                    status_label_for_phase("finalizing"),
+                    "query_outcome_end_turn",
+                );
+                emit_display_status(&window, &request_id_owned, "finalizing", "整理最终回答");
+
+                emit_terminal_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "success",
+                    "completed",
+                    None,
+                    Some(&text),
+                    Some(has_visible_text),
+                    handoff_suggestion.as_ref(),
+                    Some(&usage),
+                    &warnings_snapshot,
+                );
 
                 Ok(text)
             }
@@ -1127,12 +1320,29 @@ impl ClaurstSession {
                     );
                 }
 
-                let now = chrono::Utc::now().timestamp_millis();
-                let _ = window.emit("ai-request-end", serde_json::json!({
-                    "request_id": request_id_owned.clone(),
-                    "result": "cancelled",
-                    "timestamp": now,
-                }));
+                emit_lifecycle_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "finalizing",
+                    status_label_for_phase("finalizing"),
+                    "query_outcome_cancelled",
+                );
+                emit_display_status(&window, &request_id_owned, "finalizing", "整理最终回答");
+
+                emit_terminal_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "cancelled",
+                    "cancelled",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    &warnings_snapshot,
+                );
                 Err(anyhow::anyhow!("Request cancelled"))
             }
             QueryOutcome::Error(e) => {
@@ -1155,13 +1365,29 @@ impl ClaurstSession {
                     );
                 }
 
-                let now = chrono::Utc::now().timestamp_millis();
-                let _ = window.emit("ai-request-end", serde_json::json!({
-                    "request_id": request_id_owned.clone(),
-                    "result": "error",
-                    "error_message": e.to_string(),
-                    "timestamp": now,
-                }));
+                emit_lifecycle_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "finalizing",
+                    status_label_for_phase("finalizing"),
+                    "query_outcome_error",
+                );
+                emit_display_status(&window, &request_id_owned, "finalizing", &format!("发生错误: {}", e));
+
+                emit_terminal_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "error",
+                    "error",
+                    Some(&e.to_string()),
+                    None,
+                    None,
+                    None,
+                    None,
+                    &warnings_snapshot,
+                );
                 Err(anyhow::anyhow!("API error: {}", e))
             }
             QueryOutcome::BudgetExceeded { cost_usd, limit_usd } => {
@@ -1187,17 +1413,34 @@ impl ClaurstSession {
                     );
                 }
 
-                let now = chrono::Utc::now().timestamp_millis();
-                let _ = window.emit("ai-request-end", serde_json::json!({
-                    "request_id": request_id_owned.clone(),
-                    "result": "error",
-                    "error_message": message,
-                    "timestamp": now,
-                }));
+                emit_lifecycle_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "finalizing",
+                    status_label_for_phase("finalizing"),
+                    "query_outcome_budget_exceeded",
+                );
+                emit_display_status(&window, &request_id_owned, "finalizing", &message);
+
+                emit_terminal_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "error",
+                    "error",
+                    Some(&message),
+                    None,
+                    None,
+                    None,
+                    None,
+                    &warnings_snapshot,
+                );
                 Err(anyhow::anyhow!("{}", message))
             }
-            QueryOutcome::MaxTokens { .. } => {
+            QueryOutcome::MaxTokens { partial_message, usage } => {
                 let message = "Max tokens reached".to_string();
+                let partial_text = take_text_from_message_content(&partial_message.content);
                 if let Some(trace) = task_trace.as_ref() {
                     log::error!(
                         "claurst_request_max_tokens request_id={} session_id={} task_id={} role_id={} role_name={}",
@@ -1215,13 +1458,29 @@ impl ClaurstSession {
                     );
                 }
 
-                let now = chrono::Utc::now().timestamp_millis();
-                let _ = window.emit("ai-request-end", serde_json::json!({
-                    "request_id": request_id_owned,
-                    "result": "error",
-                    "error_message": message,
-                    "timestamp": now,
-                }));
+                emit_lifecycle_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "finalizing",
+                    status_label_for_phase("finalizing"),
+                    "query_outcome_max_tokens",
+                );
+                emit_display_status(&window, &request_id_owned, "finalizing", &message);
+
+                emit_terminal_event(
+                    &window,
+                    &request_id_owned,
+                    &self.session_id,
+                    "error",
+                    "error",
+                    Some(&message),
+                    Some(&partial_text),
+                    Some(!partial_text.is_empty()),
+                    None,
+                    Some(&usage),
+                    &warnings_snapshot,
+                );
                 Err(anyhow::anyhow!("Max tokens reached"))
             }
         }

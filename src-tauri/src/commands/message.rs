@@ -196,9 +196,19 @@ pub async fn send_message(
         }
 
         let now = chrono::Utc::now().timestamp_millis();
+        let _ = window.emit("ai-request-lifecycle", serde_json::json!({
+            "request_id": request_id.clone(),
+            "session_id": session_id,
+            "phase": "cancelled",
+            "label": "请求已取消",
+            "source": "local_cancel_recovery",
+            "timestamp": now,
+        }));
         let _ = window.emit("ai-request-end", serde_json::json!({
             "request_id": request_id,
+            "session_id": session_id,
             "result": "cancelled",
+            "final_phase": "cancelled",
             "timestamp": now,
         }));
     }
@@ -364,10 +374,10 @@ pub async fn cancel_message(
             "timestamp": now,
         }));
 
-        log::info!("message_cancelled request_id={}", request_id);
+        log::info!("message_cancelled request_id={} active_request_present=true cancelling_pending=true", request_id);
         Ok(())
     } else {
-        log::warn!("message_cancel_missing_token request_id={}", request_id);
+        log::warn!("message_cancel_missing_token request_id={} active_request_present=true", request_id);
         Err("No active message to cancel".to_string())
     }
 }

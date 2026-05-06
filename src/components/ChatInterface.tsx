@@ -15,9 +15,12 @@ import './ResizeHandle.css';
 import {
   AiMessageChunkEvent,
   AiRequestEndEvent,
+  AiRequestLifecycleEvent,
   AiRequestStartEvent,
+  AiRequestUsageEvent,
   AiRunState,
   AiStatusEvent,
+  AiTokenWarningEvent,
   AiToolEndEvent,
   AiToolStartEvent,
   Message,
@@ -175,8 +178,11 @@ function ChatInterface({
   const [runState, setRunState] = useState<AiRunState>('idle');
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [processTimeline, setProcessTimeline] = useState<ProcessTimelineItem[]>([]);
+  const [isRequestDispatching, setIsRequestDispatching] = useState(false);
+  const [currentUsage, setCurrentUsage] = useState<AiRequestUsageEvent['usage'] | null>(null);
+  const [tokenWarnings, setTokenWarnings] = useState<AiTokenWarningEvent[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
-  const [retryMessageContent, setRetryMessageContent] = useState<string | null>(null);
+  const [retryMessageContent, setRetryMessageContent] = useState('');
   const visibleError = useMemo(() => (
     lastError ? buildVisibleError(lastError) : null
   ), [lastError]);
@@ -194,11 +200,13 @@ function ChatInterface({
 
   const onMessagesChangeRef = useRef(onMessagesChange);
   const activeRequestIdRef = useRef<string | null>(activeRequestId);
+  const processTimelineRef = useRef(processTimeline);
   const currentRoleNameRef = useRef<string | null>(currentRoleName ?? null);
+  const terminalRequestIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    onMessagesChangeRef.current = onMessagesChange;
-  }, [onMessagesChange]);
+    processTimelineRef.current = processTimeline;
+  }, [processTimeline]);
 
   useEffect(() => {
     activeRequestIdRef.current = activeRequestId;
@@ -219,7 +227,7 @@ function ChatInterface({
   }, [currentSessionId]);
 
   const isBusy = RUNNING_STATES.includes(runState);
-  const canCancel = isBusy && Boolean(activeRequestId);
+  const canCancel = isBusy && (isRequestDispatching || Boolean(activeRequestId));
   const isCancelling = runState === 'finalizing';
   const isInputDisabled = !workingDirectory;
 
@@ -227,15 +235,21 @@ function ChatInterface({
     setProcessTimeline((prev) => [...prev, item]);
   };
 
-  const finalizeStreamingMessage = (requestId?: string | null, finalText?: string) => {
+  const finalizeStreamingMessage = (
+    requestId?: string | null,
+    finalText?: string,
+    options?: { hasVisibleText?: boolean },
+  ) => {
     onMessagesChangeRef.current((prev: Message[]) => {
       const targetIndex = [...prev]
         .map((message, index) => ({ message, index }))
         .reverse()
         .find(({ message }) => message.role === 'assistant' && (!requestId || message.requestId === requestId))?.index;
 
+      const hasVisibleText = options?.hasVisibleText ?? Boolean(finalText?.trim());
+
       if (targetIndex === undefined) {
-        if (finalText && finalText.trim()) {
+        if (hasVisibleText && finalText && finalText.trim()) {
           return [
             ...prev,
             {
@@ -253,6 +267,14 @@ function ChatInterface({
 
       const targetMessage = prev[targetIndex];
 
+      if (!hasVisibleText) {
+        return [
+          ...prev.slice(0, targetIndex),
+          { ...targetMessage, isStreaming: false },
+          ...prev.slice(targetIndex + 1),
+        ];
+      }
+
       // 默认保持前端已累积的完整文本，只在需要移除机器可读后缀时用 final_text 覆盖
       const nextContent = finalText && targetMessage.content.includes('[HANDOFF]')
         ? finalText.trim() || targetMessage.content
@@ -269,9 +291,16 @@ function ChatInterface({
   const resetRunIfTerminal = (delayMs = 0) => {
     const applyReset = () => {
       setCurrentToolCall(null);
+      setIsRequestDispatching(false);
       activeRequestIdRef.current = null;
       setActiveRequestId(null);
       setRunState('idle');
+      console.log('[ChatInterface] resetRunIfTerminal -> idle', {
+        currentRoleName: currentRoleNameRef.current,
+        timelineLength: processTimelineRef.current.length,
+        activeRequestId: activeRequestIdRef.current,
+        isRequestDispatching: false,
+      });
     };
 
     if (delayMs > 0) {
@@ -286,9 +315,17 @@ function ChatInterface({
     setRunState('idle');
     setLastError(null);
     setCurrentToolCall(null);
+    setCurrentUsage(null);
+    setTokenWarnings([]);
     setProcessTimeline([]);
+    setIsRequestDispatching(false);
+    terminalRequestIdsRef.current.clear();
     activeRequestIdRef.current = null;
     setActiveRequestId(null);
+    console.log('[ChatInterface] resetConversationRunState', {
+      currentRoleName: currentRoleNameRef.current,
+      isRequestDispatching: false,
+    });
   };
 
   useEffect(() => {
@@ -320,22 +357,31 @@ function ChatInterface({
     let unlistenToolStart: (() => void) | null = null;
     let unlistenToolEnd: (() => void) | null = null;
     let unlistenRequestStart: (() => void) | null = null;
+    let unlistenLifecycle: (() => void) | null = null;
+    let unlistenUsage: (() => void) | null = null;
+    let unlistenTokenWarning: (() => void) | null = null;
     let unlistenStatus: (() => void) | null = null;
     let unlistenRequestEnd: (() => void) | null = null;
 
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
         const payload = event.payload;
+        terminalRequestIdsRef.current.delete(payload.request_id);
         console.log('[ChatInterface] ai-request-start', {
           requestId: payload.request_id,
           timestamp: payload.timestamp,
           currentRoleName,
+          previousActiveRequestId: activeRequestIdRef.current,
+          isRequestDispatching,
         });
+        setIsRequestDispatching(false);
         setActiveRequestId(payload.request_id);
         activeRequestIdRef.current = payload.request_id;
         setRunState('running_thinking');
         setLastError(null);
         setCurrentToolCall(null);
+        setCurrentUsage(null);
+        setTokenWarnings([]);
         setProcessTimeline([]);
         appendTimeline({
           id: `${payload.request_id}-${payload.timestamp}-start`,
@@ -346,8 +392,109 @@ function ChatInterface({
         });
       });
 
+      unlistenLifecycle = await listen<AiRequestLifecycleEvent>('ai-request-lifecycle', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+        if (terminalRequestIdsRef.current.has(payload.request_id) && !['completed', 'cancelled', 'error'].includes(payload.phase)) {
+          console.log('[ChatInterface] ignore terminal ai-request-lifecycle', {
+            requestId: payload.request_id,
+            phase: payload.phase,
+            source: payload.source,
+          });
+          return;
+        }
+
+        console.log('[ChatInterface] ai-request-lifecycle', {
+          requestId: payload.request_id,
+          phase: payload.phase,
+          source: payload.source,
+          timestamp: payload.timestamp,
+        });
+
+        const nextState: AiRunState =
+          payload.phase === 'thinking'
+            ? 'running_thinking'
+            : payload.phase === 'tool_running'
+              ? 'running_tool'
+              : payload.phase === 'streaming'
+                ? 'running_generating'
+                : payload.phase === 'finalizing'
+                  ? 'finalizing'
+                  : payload.phase === 'completed'
+                    ? 'completed'
+                    : payload.phase === 'cancelled'
+                      ? 'cancelled'
+                      : 'error';
+
+        setRunState(nextState);
+
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-lifecycle-${payload.phase}`,
+          requestId: payload.request_id,
+          kind: 'lifecycle',
+          text: payload.label || payload.phase,
+          timestamp: payload.timestamp,
+          phase: payload.phase,
+        });
+      });
+
+      unlistenUsage = await listen<AiRequestUsageEvent>('ai-request-usage', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal ai-request-usage', {
+            requestId: payload.request_id,
+            scope: payload.scope,
+          });
+          return;
+        }
+
+        console.log('[ChatInterface] ai-request-usage', {
+          requestId: payload.request_id,
+          scope: payload.scope,
+          totalTokens: payload.usage.total_tokens ?? null,
+        });
+
+        setCurrentUsage(payload.usage);
+      });
+
+      unlistenTokenWarning = await listen<AiTokenWarningEvent>('ai-token-warning', (event) => {
+        const payload = event.payload;
+        if (payload.request_id !== activeRequestIdRef.current) return;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal ai-token-warning', {
+            requestId: payload.request_id,
+            warningType: payload.warning_type,
+          });
+          return;
+        }
+
+        console.log('[ChatInterface] ai-token-warning', {
+          requestId: payload.request_id,
+          warningType: payload.warning_type,
+          message: payload.message,
+        });
+
+        setTokenWarnings((prev) => [...prev, payload]);
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-warning-${payload.warning_type}`,
+          requestId: payload.request_id,
+          kind: 'warning',
+          text: payload.message,
+          timestamp: payload.timestamp,
+        });
+      });
+
       unlistenStatus = await listen<AiStatusEvent>('ai-status', (event) => {
         const payload = event.payload;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal ai-status', {
+            requestId: payload.request_id,
+            phase: payload.phase,
+            timestamp: payload.timestamp,
+          });
+          return;
+        }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
         console.log('[ChatInterface] ai-status', {
@@ -357,16 +504,6 @@ function ChatInterface({
           timestamp: payload.timestamp,
           currentRoleName: currentRoleNameRef.current,
         });
-
-        if (payload.phase === 'thinking') {
-          setRunState((prev) => (prev === 'finalizing' ? prev : 'running_thinking'));
-        } else if (payload.phase === 'tool_running') {
-          setRunState('running_tool');
-        } else if (payload.phase === 'generating') {
-          setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
-        } else if (payload.phase === 'finalizing') {
-          setRunState('finalizing');
-        }
 
         appendTimeline({
           id: `${payload.request_id}-${payload.timestamp}-status-${Math.random().toString(36).slice(2, 8)}`,
@@ -381,13 +518,19 @@ function ChatInterface({
       unlistenChunk = await listen<AiMessageChunkEvent>('message-chunk', (event) => {
         const payload = event.payload;
 
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal message-chunk', {
+            requestId: payload.request_id,
+            chunkChars: payload.chunk.length,
+          });
+          return;
+        }
+
         if (payload.request_id !== activeRequestIdRef.current) {
           return;
         }
 
         console.log('📥 [ChatInterface] Received message-chunk, request_id:', payload.request_id, 'chunk_len:', payload.chunk.length);
-
-        setRunState((prev) => (prev === 'finalizing' ? prev : 'running_generating'));
 
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
@@ -415,9 +558,16 @@ function ChatInterface({
 
       unlistenToolStart = await listen<AiToolStartEvent>('tool-call-start', (event) => {
         const payload = event.payload;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal tool-call-start', {
+            requestId: payload.request_id,
+            tool: payload.tool,
+            action: payload.action,
+          });
+          return;
+        }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        setRunState('running_tool');
         setCurrentToolCall({
           tool: payload.tool,
           action: payload.action,
@@ -435,6 +585,14 @@ function ChatInterface({
 
       unlistenToolEnd = await listen<AiToolEndEvent>('tool-call-end', (event) => {
         const payload = event.payload;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore terminal tool-call-end', {
+            requestId: payload.request_id,
+            tool: payload.tool,
+            success: payload.success,
+          });
+          return;
+        }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
         setCurrentToolCall({
@@ -443,7 +601,6 @@ function ChatInterface({
           status: payload.success ? 'success' : 'error',
           result: payload.result,
         });
-        setRunState((prev) => (prev === 'finalizing' ? prev : 'running_thinking'));
         appendTimeline({
           id: `${payload.request_id}-${Date.now()}-tool-end`,
           requestId: payload.request_id,
@@ -457,34 +614,96 @@ function ChatInterface({
 
       unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', async (event) => {
         const payload = event.payload;
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          console.log('[ChatInterface] ignore duplicate ai-request-end', {
+            requestId: payload.request_id,
+            result: payload.result,
+            timestamp: payload.timestamp,
+          });
+          return;
+        }
         if (payload.request_id !== activeRequestIdRef.current) return;
+
+        terminalRequestIdsRef.current.add(payload.request_id);
 
         console.log('[ChatInterface] ai-request-end', {
           requestId: payload.request_id,
           result: payload.result,
           timestamp: payload.timestamp,
           hasError: Boolean(payload.error_message),
+          hasVisibleText: payload.has_visible_text ?? null,
           finalTextChars: payload.final_text?.length ?? 0,
           currentRoleName: currentRoleNameRef.current,
         });
         let accumulatedText = '';
+        let hadAssistantMessageForRequest = false;
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const lastAssistantMsg = [...currentMessages]
             .reverse()
             .find((msg) => msg.role === 'assistant' && msg.requestId === payload.request_id);
           if (lastAssistantMsg) {
             accumulatedText = lastAssistantMsg.content;
+            hadAssistantMessageForRequest = true;
           }
           return currentMessages;
         });
 
-        // Use accumulated text if backend's final_text is empty
-        const finalText = payload.final_text || accumulatedText;
-        finalizeStreamingMessage(payload.request_id, finalText);
+        const hasVisibleText = payload.has_visible_text ?? Boolean(payload.final_text?.trim());
+        const finalText = hasVisibleText ? payload.final_text?.trim() ?? '' : '';
+        const resolvedUsage = payload.usage ?? currentUsage;
+        const resolvedWarnings = payload.warnings ?? tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }));
+
+        console.log('[ChatInterface] finalize request', {
+          requestId: payload.request_id,
+          hasVisibleText,
+          finalTextChars: finalText.length,
+          accumulatedTextChars: accumulatedText.length,
+          hadAssistantMessageForRequest,
+          activeRequestId: activeRequestIdRef.current,
+          timelineLength: processTimelineRef.current.length,
+        });
+
+        finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText });
+        setCurrentUsage(resolvedUsage ?? null);
+        setTokenWarnings(resolvedWarnings.map((warning) => ({
+          request_id: payload.request_id,
+          session_id: payload.session_id ?? currentSessionId ?? '',
+          warning_type: warning.warning_type,
+          message: warning.message,
+          timestamp: payload.timestamp,
+        })));
+
+        console.log('[ChatInterface] finalizeStreamingMessage complete', {
+          requestId: payload.request_id,
+          hasVisibleText,
+          finalTextChars: finalText.length,
+        });
 
         if (payload.result === 'success') {
+          if (!hasVisibleText) {
+            appendTimeline({
+              id: `${payload.request_id}-${payload.timestamp}-no-visible-text`,
+              requestId: payload.request_id,
+              kind: 'status',
+              text: '工具已执行完成，但本轮未返回可显示文本',
+              timestamp: payload.timestamp,
+              phase: 'finalizing',
+            });
+          }
+
+          if (payload.handoffSuggestion && onHandoffSuggestion) {
+            console.log('✅ [ChatInterface] 后端直接提供了 handoffSuggestion');
+            onHandoffSuggestion(payload);
+            setRunState('completed');
+            resetRunIfTerminal();
+            if (onMessageCompleted) {
+              onMessageCompleted();
+            }
+            return;
+          }
+
           // Try new JSON API observer first (Task mode only)
-          if (onHandoffSuggestion && currentRoleNameRef.current && finalText) {
+          if (hasVisibleText && onHandoffSuggestion && currentRoleNameRef.current && finalText) {
             console.log('🎯 [ChatInterface] AI 任务完成，准备调用观察者');
             console.log('🎯 [ChatInterface] 当前角色:', currentRoleNameRef.current);
             console.log('🎯 [ChatInterface] 消息长度:', finalText.length, '字符');
@@ -536,7 +755,7 @@ function ChatInterface({
 
           // Fallback: If backend didn't provide handoff suggestion but we have accumulated text, check for handoff manually
           console.log('🔄 [ChatInterface] 检查回退逻辑：标签解析');
-          if (!payload.handoffSuggestion && finalText && onHandoffSuggestion) {
+          if (finalText && onHandoffSuggestion) {
             console.log('🔄 [ChatInterface] 尝试标签解析...');
             // Extract handoff block from accumulated text
             const handoffMatch = finalText.match(/\[HANDOFF\]([\s\S]*?)\[\/HANDOFF\]/);
@@ -617,6 +836,9 @@ function ChatInterface({
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
       if (unlistenRequestStart) unlistenRequestStart();
+      if (unlistenLifecycle) unlistenLifecycle();
+      if (unlistenUsage) unlistenUsage();
+      if (unlistenTokenWarning) unlistenTokenWarning();
       if (unlistenStatus) unlistenStatus();
       if (unlistenRequestEnd) unlistenRequestEnd();
     };
@@ -685,7 +907,17 @@ function ChatInterface({
     setRetryMessageContent(content);
     // 先设置运行状态，防止 session 创建时触发的 useEffect 重置状态
     setRunState('running_thinking');
+    setIsRequestDispatching(true);
     setLastError(null);
+
+    console.log('[ChatInterface] handleSendMessage start', {
+      contentChars: content.length,
+      currentSessionId,
+      currentRoleName: currentRoleNameRef.current,
+      activeRequestId: activeRequestIdRef.current,
+      runState,
+      isRequestDispatching: true,
+    });
 
     // 如果是草稿对话，先确保创建真实 session
     try {
@@ -693,6 +925,7 @@ function ChatInterface({
     } catch (error) {
       const errorMessage = String(error);
       console.error('Failed to ensure session:', errorMessage);
+      setIsRequestDispatching(false);
       setRunState('error');
       setLastError(`创建会话失败: ${errorMessage}`);
       appendTimeline({
@@ -720,12 +953,15 @@ function ChatInterface({
         currentSessionId,
         currentRoleName: currentRoleNameRef.current,
         activeRequestId: activeRequestIdRef.current,
+        isRequestDispatching: true,
       });
       await invoke<string>('send_message', { message: content });
       console.log('[ChatInterface] send_message invoke resolved', {
         contentChars: content.length,
         currentSessionId,
         currentRoleName: currentRoleNameRef.current,
+        activeRequestId: activeRequestIdRef.current,
+        isRequestDispatching,
       });
     } catch (error) {
       const errorMessage = String(error);
@@ -734,6 +970,7 @@ function ChatInterface({
         return;
       }
 
+      setIsRequestDispatching(false);
       setRunState('error');
       setLastError(errorMessage);
       appendTimeline({
@@ -748,7 +985,16 @@ function ChatInterface({
   };
 
   const handleCancelMessage = async () => {
-    if (!canCancel) return;
+    console.log('[ChatInterface] handleCancelMessage clicked', {
+      canCancel,
+      runState,
+      activeRequestId: activeRequestIdRef.current,
+      isRequestDispatching,
+    });
+
+    if (!canCancel) {
+      return;
+    }
 
     setRunState('finalizing');
     appendTimeline({
@@ -764,6 +1010,22 @@ function ChatInterface({
       await invoke('cancel_message');
     } catch (error) {
       const errorMessage = String(error);
+      const isDispatchRace = isRequestDispatching && errorMessage.includes('No active message to cancel');
+
+      console.warn('[ChatInterface] cancel_message failed', {
+        errorMessage,
+        canCancel,
+        runState,
+        activeRequestId: activeRequestIdRef.current,
+        isRequestDispatching,
+        isDispatchRace,
+      });
+
+      if (isDispatchRace) {
+        setRunState('running_thinking');
+        return;
+      }
+
       setLastError(errorMessage);
       appendTimeline({
         id: `${Date.now()}-cancel-error`,
@@ -966,6 +1228,8 @@ function ChatInterface({
                   lastError={lastError}
                   providerLabel={currentProviderName}
                   modelLabel={currentModelName}
+                  currentUsage={currentUsage}
+                  tokenWarnings={tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }))}
                   collapsed={false}
                   isCompact={false}
                 />
@@ -993,6 +1257,8 @@ function ChatInterface({
             lastError={lastError}
             providerLabel={currentProviderName}
             modelLabel={currentModelName}
+            currentUsage={currentUsage}
+            tokenWarnings={tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }))}
             collapsed={!isInspectorDrawerOpen}
             isCompact={true}
           />

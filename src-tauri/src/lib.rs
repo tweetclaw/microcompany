@@ -296,8 +296,7 @@ pub fn run() {
 
       // VS Code-style window sizing for macOS Retina displays
       if let Some(window) = app.get_webview_window("main") {
-        use tauri::{LogicalSize, LogicalPosition};
-        use std::sync::atomic::{AtomicU32, Ordering};
+        use tauri::{LogicalPosition, LogicalSize};
 
         println!("[Window Setup] Starting VS Code-style window initialization...");
 
