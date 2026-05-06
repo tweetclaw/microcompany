@@ -80,7 +80,7 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
     if (isOpen && config) {
       setSearchApiKey(config.braveSearchApiKey || '');
       setRoutingApiKey(config.routingConfig?.apiKey || '');
-      setRoutingModel(config.routingConfig?.model || 'deepseek-chat');
+      setRoutingModel(config.routingConfig?.model || 'deepseek-v4-flash');
     }
   }, [isOpen]);
 
@@ -115,6 +115,9 @@ export function Settings({ isOpen, onClose, config, availableProviders, onSaveCo
       }
       if (searchApiKeyTimerRef.current) {
         window.clearTimeout(searchApiKeyTimerRef.current);
+      }
+      if (routingApiKeyTimerRef.current) {
+        window.clearTimeout(routingApiKeyTimerRef.current);
       }
     };
   }, []);

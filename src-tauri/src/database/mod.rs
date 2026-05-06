@@ -19,30 +19,58 @@ pub fn optimize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
 }
 
 pub fn initialize_database(db_path: &str) -> Result<(), String> {
+    println!("[database::initialize_database] Begin initialization for db_path={}", db_path);
+
     if let Some(parent) = Path::new(db_path).parent() {
+        println!("[database::initialize_database] Ensuring parent directory exists: {:?}", parent);
         fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create database directory: {}", e))?;
+            .map_err(|e| {
+                let err = format!("Failed to create database directory: {}", e);
+                println!("[database::initialize_database] ERROR: {}", err);
+                err
+            })?;
     }
 
+    println!("[database::initialize_database] Opening sqlite connection...");
     let mut conn = Connection::open(db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+        .map_err(|e| {
+            let err = format!("Failed to open database: {}", e);
+            println!("[database::initialize_database] ERROR: {}", err);
+            err
+        })?;
 
+    println!("[database::initialize_database] Applying pragmas...");
     optimize_database(&conn)
-        .map_err(|e| format!("Failed to optimize database: {}", e))?;
+        .map_err(|e| {
+            let err = format!("Failed to optimize database: {}", e);
+            println!("[database::initialize_database] ERROR: {}", err);
+            err
+        })?;
 
+    println!("[database::initialize_database] Running migrations...");
     migration::run_migrations(&mut conn)?;
+    println!("[database::initialize_database] Migrations completed");
 
     // Run integrity check using pragma_query since it returns results
+    println!("[database::initialize_database] Running integrity check...");
     let integrity: String = conn.pragma_query_value(None, "integrity_check", |row| row.get(0))
-        .map_err(|e| format!("Database integrity check failed: {}", e))?;
+        .map_err(|e| {
+            let err = format!("Database integrity check failed: {}", e);
+            println!("[database::initialize_database] ERROR: {}", err);
+            err
+        })?;
 
+    println!("[database::initialize_database] Integrity check result: {}", integrity);
     if integrity != "ok" {
-        return Err(format!("Database integrity check failed: {}", integrity));
+        let err = format!("Database integrity check failed: {}", integrity);
+        println!("[database::initialize_database] ERROR: {}", err);
+        return Err(err);
     }
 
     // Initialize connection pool
+    println!("[database::initialize_database] Initializing pool...");
     pool::init_pool(db_path)?;
 
-    println!("Database initialized successfully at {}", db_path);
+    println!("[database::initialize_database] Database initialized successfully at {}", db_path);
     Ok(())
 }

@@ -14,24 +14,43 @@ const STORAGE_KEY = 'microcompany-window-state';
 export async function restoreWindowState() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
+    console.log('[WindowState] restoreWindowState raw:', raw);
     if (!raw) {
+      console.log('[WindowState] No stored window state found');
       return;
     }
 
     const state = JSON.parse(raw) as Partial<WindowState>;
+    console.log('[WindowState] Parsed stored state:', state);
     const appWindow = getCurrentWindow();
 
     if (state.width && state.height) {
+      console.log('[WindowState] Restoring logical size:', state.width, state.height);
       await appWindow.setSize(new LogicalSize(state.width, state.height));
     }
 
     if (typeof state.x === 'number' && typeof state.y === 'number') {
+      console.log('[WindowState] Restoring logical position:', state.x, state.y);
       await appWindow.setPosition(new LogicalPosition(state.x, state.y));
     }
 
     if (state.maximized) {
+      console.log('[WindowState] Restoring maximized state');
       await appWindow.maximize();
     }
+
+    const [innerSize, outerPosition, scaleFactor, maximized] = await Promise.all([
+      appWindow.innerSize(),
+      appWindow.outerPosition(),
+      appWindow.scaleFactor(),
+      appWindow.isMaximized(),
+    ]);
+    console.log('[WindowState] State after restore:', {
+      innerSize,
+      outerPosition,
+      scaleFactor,
+      maximized,
+    });
   } catch (error) {
     console.warn('Failed to restore window state:', error);
   }
@@ -42,11 +61,19 @@ export async function bindWindowStatePersistence() {
 
   const persist = async () => {
     try {
-      const [size, position, maximized] = await Promise.all([
+      const [size, position, maximized, scaleFactor] = await Promise.all([
         appWindow.innerSize(),
         appWindow.outerPosition(),
         appWindow.isMaximized(),
+        appWindow.scaleFactor(),
       ]);
+
+      console.log('[WindowState] Persisting state snapshot:', {
+        size,
+        position,
+        maximized,
+        scaleFactor,
+      });
 
       if (maximized) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -72,10 +99,12 @@ export async function bindWindowStatePersistence() {
   };
 
   const unlistenResize = await appWindow.onResized(() => {
+    console.log('[WindowState] onResized event received');
     void persist();
   });
 
   const unlistenMove = await appWindow.onMoved(() => {
+    console.log('[WindowState] onMoved event received');
     void persist();
   });
 

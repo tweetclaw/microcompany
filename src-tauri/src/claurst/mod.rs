@@ -935,8 +935,16 @@ impl ClaurstSession {
                             log::info!("🔍 [DEBUG] Assistant message text preview (first 200 chars): {}",
                                 text.chars().take(200).collect::<String>());
                         }
+                    } else {
+                        log::warn!("🔍 [DEBUG] No assistant message found in self.messages fallback path");
                     }
                 }
+
+                let pre_handoff_text = text.clone();
+                log::info!(
+                    "🔍 [DEBUG] Pre-handoff text length: {} chars",
+                    pre_handoff_text.len()
+                );
 
                 let parsed_handoff = extract_handoff_block(&text);
 
@@ -947,7 +955,27 @@ impl ClaurstSession {
                 );
 
                 if let Some(parsed) = parsed_handoff.as_ref() {
-                    text = parsed.visible_text.clone();
+                    log::info!(
+                        "🔍 [DEBUG] Handoff block parsed: visible_text_len={} recommended={} target_role={:?}",
+                        parsed.visible_text.len(),
+                        parsed.recommended,
+                        parsed.target_role_name
+                    );
+
+                    if parsed.visible_text.trim().is_empty() {
+                        log::warn!(
+                            "🔍 [DEBUG] Handoff visible_text is empty; preserving pre-handoff text length={} instead of overwriting",
+                            pre_handoff_text.len()
+                        );
+                    } else {
+                        text = parsed.visible_text.clone();
+                        log::info!(
+                            "🔍 [DEBUG] Replaced final text with handoff visible_text, new length: {} chars",
+                            text.len()
+                        );
+                    }
+                } else {
+                    log::info!("🔍 [DEBUG] No handoff block found; keeping pre-handoff text");
                 }
 
                 let handoff_suggestion = parsed_handoff

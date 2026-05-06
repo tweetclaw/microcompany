@@ -301,6 +301,19 @@ pub fn run() {
 
         println!("[Window Setup] Starting VS Code-style window initialization...");
 
+        if let Ok(scale) = window.scale_factor() {
+          println!("[Window Setup] Current window scale factor before sizing: {}", scale);
+        }
+        if let Ok(outer) = window.outer_size() {
+          println!("[Window Setup] Current outer size before sizing: {}x{}", outer.width, outer.height);
+        }
+        if let Ok(inner) = window.inner_size() {
+          println!("[Window Setup] Current inner size before sizing: {}x{}", inner.width, inner.height);
+        }
+        if let Ok(pos) = window.outer_position() {
+          println!("[Window Setup] Current outer position before sizing: ({}, {})", pos.x, pos.y);
+        }
+
         // Get monitor info to calculate 75% screen size (VS Code style)
         let (logical_width, logical_height, screen_width, screen_height) = if let Ok(monitors) = window.available_monitors() {
           if let Some(monitor) = monitors.first() {
@@ -336,6 +349,8 @@ pub fn run() {
           tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
           println!("[Window Setup] Setting size and position...");
+          println!("[Window Setup] Applying logical size: {}x{}", logical_width, logical_height);
+          println!("[Window Setup] Screen logical bounds used for centering: {}x{}", screen_width, screen_height);
 
           // Set size using logical coordinates
           if let Err(e) = window_clone.set_size(LogicalSize::new(logical_width, logical_height)) {
@@ -353,6 +368,12 @@ pub fn run() {
           // Log state before show
           if let Ok(size) = window_clone.outer_size() {
             println!("[Window Setup] Size before show: {}x{}", size.width, size.height);
+          }
+          if let Ok(inner_size) = window_clone.inner_size() {
+            println!("[Window Setup] Inner size before show: {}x{}", inner_size.width, inner_size.height);
+          }
+          if let Ok(scale) = window_clone.scale_factor() {
+            println!("[Window Setup] Scale factor before show: {}", scale);
           }
           if let Ok(position) = window_clone.outer_position() {
             println!("[Window Setup] Position before show: ({}, {})", position.x, position.y);

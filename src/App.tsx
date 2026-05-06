@@ -8,7 +8,7 @@ import Toolbar from './components/Toolbar';
 import { AiRequestEndEvent, HandoffSuggestion, Message, Task, TaskCreateRequest, TaskSummary, TaskRole, TeamBrief, AiRunState } from './types';
 import { ProviderConfig, ProviderInfo, SettingsData, ensureValidActiveProvider, isProviderUsable, normalizeProviderInfo, normalizeSettingsData, toBackendSettingsData } from './types/settings';
 import { getSession, createTask, getTask, getTeamBrief, restartTaskRoleSession } from './api';
-import { bindWindowStatePersistence, restoreWindowState } from './utils/windowState';
+import { bindWindowStatePersistence } from './utils/windowState';
 import { ThemePreference, applyTheme, loadThemePreference, saveThemePreference } from './utils/themeState';
 import './App.css';
 
@@ -130,18 +130,34 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const initialize = async () => {
-      await initializeDb();
-      loadConfig();
-      loadProviderCatalog();
+    const logViewportMetrics = (reason: string) => {
+      const root = document.getElementById('root');
+      const app = document.querySelector('.app') as HTMLElement | null;
+      const welcome = document.querySelector('.welcome-page') as HTMLElement | null;
+      const metrics = {
+        reason,
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        outerWidth: window.outerWidth,
+        outerHeight: window.outerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+        rootClientWidth: root?.clientWidth,
+        rootClientHeight: root?.clientHeight,
+        appClientWidth: app?.clientWidth,
+        appClientHeight: app?.clientHeight,
+        welcomeClientWidth: welcome?.clientWidth,
+        welcomeClientHeight: welcome?.clientHeight,
+      };
+      console.log('[Layout Debug] viewport metrics:', metrics);
     };
 
-    initialize();
+    logViewportMetrics('mount');
+    const handleResize = () => logViewportMetrics('resize');
+    window.addEventListener('resize', handleResize);
 
-    // Initialize theme
-    const savedTheme = loadThemePreference();
-    setThemePreference(savedTheme);
-    applyTheme(savedTheme);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const initializeDb = async () => {
@@ -156,10 +172,24 @@ function App() {
   };
 
   useEffect(() => {
+    const initialize = async () => {
+      await initializeDb();
+      loadConfig();
+      loadProviderCatalog();
+    };
+
+    initialize();
+
+    const savedTheme = loadThemePreference();
+    setThemePreference(savedTheme);
+    applyTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
     let cleanup: (() => void) | undefined;
 
     const setupWindowState = async () => {
-      await restoreWindowState();
+      console.log('[WindowState] Skipping restoreWindowState on startup to avoid conflict with Rust window setup');
       cleanup = await bindWindowStatePersistence();
     };
 

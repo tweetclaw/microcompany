@@ -110,6 +110,40 @@ const PANEL_FILL_STYLE: React.CSSProperties = {
   overflow: 'hidden',
 };
 
+function resolveSuggestedTaskRole(
+  suggestedRole: string | null | undefined,
+  taskRoles?: Array<{ id: string; name: string }>,
+) {
+  if (!suggestedRole || !taskRoles?.length) {
+    return null;
+  }
+
+  const normalizedSuggestedRole = suggestedRole.trim().toLowerCase();
+  if (!normalizedSuggestedRole) {
+    return null;
+  }
+
+  const directMatch = taskRoles.find(
+    (role) => role.id.toLowerCase() === normalizedSuggestedRole || role.name.toLowerCase() === normalizedSuggestedRole,
+  );
+
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const shorthandMatch = normalizedSuggestedRole.match(/^(?:role_)?([a-z])$/i);
+  if (!shorthandMatch) {
+    return null;
+  }
+
+  const roleIndex = shorthandMatch[1].charCodeAt(0) - 'a'.charCodeAt(0);
+  if (roleIndex < 0 || roleIndex >= taskRoles.length) {
+    return null;
+  }
+
+  return taskRoles[roleIndex] ?? null;
+}
+
 function ChatInterface({
   workingDirectory,
   currentSessionId,
@@ -449,13 +483,10 @@ function ChatInterface({
                 console.log('✅ [ChatInterface] 推荐角色:', handoffInfo.suggestedRole);
                 console.log('✅ [ChatInterface] 完整消息长度:', handoffInfo.fullMessage.length);
 
-                // Convert role name to role ID
-                const targetRole = taskRoles?.find(
-                  r => r.name.toLowerCase() === (handoffInfo.suggestedRole || '').toLowerCase()
-                );
+                const targetRole = resolveSuggestedTaskRole(handoffInfo.suggestedRole, taskRoles);
                 const targetRoleId = targetRole?.id || null;
 
-                console.log('✅ [ChatInterface] 角色名称转换: ', handoffInfo.suggestedRole, '->', targetRoleId);
+                console.log('✅ [ChatInterface] 角色名称转换: ', handoffInfo.suggestedRole, '->', targetRoleId, targetRole?.name);
 
                 // Create handoff suggestion from observer data
                 const handoffSuggestion = {

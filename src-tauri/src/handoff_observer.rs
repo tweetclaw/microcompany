@@ -417,3 +417,39 @@ pub fn extract_handoff_from_tag(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_handoff_with_content() {
+        let text = "这是一些文本 <handoff>b</handoff> 更多文本";
+        assert_eq!(parse_handoff_tag(text), Some("b".to_string()));
+    }
+
+    #[test]
+    fn test_parse_handoff_empty() {
+        let text = "这是一些文本 <handoff></handoff> 更多文本";
+        assert_eq!(parse_handoff_tag(text), None);
+    }
+
+    #[test]
+    fn test_parse_handoff_no_tag() {
+        let text = "这是一些文本，没有标签";
+        assert_eq!(parse_handoff_tag(text), None);
+    }
+
+    #[test]
+    fn test_parse_handoff_whitespace() {
+        let text = "<handoff>  </handoff>";
+        assert_eq!(parse_handoff_tag(text), None);
+    }
+
+    #[test]
+    fn test_parse_handoff_multiple_tags() {
+        let text = "文本 <handoff>a</handoff> 中间 <handoff>b</handoff> 结尾";
+        // 应该提取第一个标签
+        assert_eq!(parse_handoff_tag(text), Some("a".to_string()));
+    }
+}

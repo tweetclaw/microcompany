@@ -68,15 +68,23 @@ fn build_team_composition_v2(
     section.push_str("\n");
 
     // 交接规则（强制要求）
-    section.push_str("## 🔴 输出格式要求\n\n");
-    section.push_str("**务必在回答末尾添加交接标签（必需）：**\n\n");
-    section.push_str("需要交接时：\n");
-    section.push_str("```\n<handoff>成员编号</handoff>\n```\n\n");
-    section.push_str("不需要交接时：\n");
+    section.push_str("## 🔴 输出格式要求（必须遵守）\n\n");
+    section.push_str("**每次回答都必须在末尾添加交接标签，这是强制要求，不可省略！**\n\n");
+
+    section.push_str("### 交接标签格式\n\n");
+    section.push_str("**需要交接给其他成员时：**\n");
+    section.push_str("```\n<handoff>成员编号</handoff>\n```\n");
+    section.push_str("示例：`<handoff>b</handoff>` 表示交接给成员 b\n\n");
+
+    section.push_str("**不需要交接时（工作未完成或需要用户继续输入）：**\n");
     section.push_str("```\n<handoff></handoff>\n```\n\n");
-    section.push_str("**注意：**\n");
-    section.push_str("- 成员编号使用字母（a, b, c...），不是角色名称\n");
-    section.push_str("- 必须在回答末尾添加此标签，不可省略\n\n");
+
+    section.push_str("### 重要规则\n");
+    section.push_str("- ✅ 成员编号使用字母（a, b, c...），不是角色名称\n");
+    section.push_str("- ✅ 标签必须在回答的最后一行\n");
+    section.push_str("- ✅ 每次回答都必须包含此标签\n");
+    section.push_str("- ❌ 不可以省略此标签\n");
+    section.push_str("- ❌ 不可以使用角色名称代替编号\n\n");
 
     section
 }
