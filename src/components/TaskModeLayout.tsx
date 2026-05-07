@@ -339,7 +339,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                 maxSize="40%"
                 style={PANEL_FILL_STYLE}
               >
-                <div className="task-mode-chat-panel">
+                <div className={`task-mode-chat-panel ${isAiWorking ? 'working' : ''}`}>
                   <div className="task-mode-chat-panel-header">
                     <div>
                       <div className="task-mode-chat-panel-label">Chat</div>

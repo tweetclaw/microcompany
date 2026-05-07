@@ -1186,7 +1186,8 @@ impl ClaurstSession {
                 log::info!("🔍 [DIAGNOSTIC] Extracted text from EndTurn message, length: {}", text.len());
 
                 if text.is_empty() {
-                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty for current turn");
+                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty for current turn, adding default message");
+                    text = "✓ 已完成工具执行".to_string();
                 }
 
                 let has_visible_text = !text.is_empty();

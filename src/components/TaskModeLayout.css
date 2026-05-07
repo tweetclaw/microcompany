@@ -555,6 +555,14 @@
   flex-direction: column;
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--border-default);
+  transition: background-color 0.3s ease, border-left-color 0.3s ease;
+}
+
+.task-mode-chat-panel.working {
+  background:
+    linear-gradient(180deg, rgba(251, 146, 60, 0.08), rgba(251, 146, 60, 0.03)),
+    var(--bg-secondary);
+  border-left-color: rgba(251, 146, 60, 0.4);
 }
 
 .task-mode-chat-panel-header {
