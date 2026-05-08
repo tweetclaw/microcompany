@@ -12,8 +12,13 @@ export interface Message {
   toolCalls?: ToolCallRecord[]; // Legacy field for backward compatibility
 }
 
+// Timeline item types
+// IMPORTANT: Keep in sync with:
+// - Backend: src-tauri/src/api/message.rs TimelineItem struct
+// - Database: src-tauri/migrations/008_add_timeline_items.sql CHECK constraint
 export interface TimelineItem {
   id: string;
+  messageId: string;
   type: 'thinking' | 'tool_call' | 'output';
   timestamp: number;
   content?: string; // For thinking and output
@@ -125,12 +130,14 @@ export interface AiMessageChunkEvent {
 export interface AiToolStartEvent {
   request_id: string;
   tool: string;
+  tool_use_id: string;
   action: string;
 }
 
 export interface AiToolEndEvent {
   request_id: string;
   tool: string;
+  tool_use_id: string;
   success: boolean;
   result: string;
 }

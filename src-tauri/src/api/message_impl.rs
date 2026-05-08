@@ -1,6 +1,6 @@
 use rusqlite::params;
 use crate::api::{Message, MessageCreateRequest};
-use crate::api::message::ToolCallRecord;
+use crate::api::message::{ToolCallRecord, TimelineItem};
 use crate::database::get_pool;
 use uuid::Uuid;
 use chrono::Utc;
@@ -27,7 +27,7 @@ pub async fn get_messages(
     let limit = limit.unwrap_or(100);
     let offset = offset.unwrap_or(0);
 
-    let messages = {
+    let mut messages = {
         let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, created_at, request_id, is_streaming, tool_calls
              FROM messages
@@ -50,12 +50,70 @@ pub async fn get_messages(
                 request_id: row.get(5)?,
                 is_streaming: row.get(6)?,
                 tool_calls,
+                timeline: None, // Will be loaded separately
             })
         }).map_err(|e| format!("Failed to query messages: {}", e))?;
 
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect messages: {}", e))?
     };
+
+    // Load timeline items for all messages in a single query (avoid N+1)
+    if !messages.is_empty() {
+        let message_ids: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+
+        // Validate message IDs format (defensive programming)
+        for id in &message_ids {
+            if !id.chars().all(|c| c.is_alphanumeric() || c == '-') {
+                return Err(format!("Invalid message ID format: {}", id));
+            }
+        }
+
+        let placeholders = message_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT id, message_id, type, timestamp, content, tool, action, status, result
+             FROM timeline_items
+             WHERE message_id IN ({})
+             ORDER BY message_id, timestamp ASC",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)
+            .map_err(|e| format!("Failed to prepare timeline query: {}", e))?;
+
+        let timeline_items = stmt.query_map(
+            rusqlite::params_from_iter(message_ids.iter()),
+            |row| {
+                Ok(TimelineItem {
+                    id: row.get(0)?,
+                    message_id: row.get(1)?,
+                    item_type: row.get(2)?,
+                    timestamp: row.get(3)?,
+                    content: row.get(4)?,
+                    tool: row.get(5)?,
+                    action: row.get(6)?,
+                    status: row.get(7)?,
+                    result: row.get(8)?,
+                })
+            }
+        ).map_err(|e| format!("Failed to query timeline items: {}", e))?;
+
+        // Group timeline items by message_id
+        let mut timeline_map: std::collections::HashMap<String, Vec<TimelineItem>> = std::collections::HashMap::new();
+        for item_result in timeline_items {
+            let item = item_result.map_err(|e| format!("Failed to collect timeline item: {}", e))?;
+            timeline_map.entry(item.message_id.clone())
+                .or_insert_with(Vec::new)
+                .push(item);
+        }
+
+        // Assign timeline items to corresponding messages
+        for message in &mut messages {
+            if let Some(items) = timeline_map.remove(&message.id) {
+                message.timeline = Some(items);
+            }
+        }
+    }
 
     Ok(messages)
 }
@@ -96,6 +154,27 @@ pub async fn save_message(message: MessageCreateRequest) -> Result<String, Strin
             &tool_calls_json,
         ],
     ).map_err(|e| format!("Failed to insert message: {}", e))?;
+
+    // Save timeline items if present
+    if let Some(timeline_items) = message.timeline {
+        for item in timeline_items {
+            conn.execute(
+                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    &item.id,
+                    &message_id,
+                    &item.item_type,
+                    &item.timestamp,
+                    &item.content,
+                    &item.tool,
+                    &item.action,
+                    &item.status,
+                    &item.result,
+                ],
+            ).map_err(|e| format!("Failed to insert timeline item: {}", e))?;
+        }
+    }
 
     Ok(message_id)
 }

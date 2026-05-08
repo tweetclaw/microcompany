@@ -215,6 +215,19 @@ struct CompletedToolOnlyDiagnosticContext {
     turn_summaries: Arc<parking_lot::Mutex<Vec<Value>>>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct TimelineItemData {
+    id: String,
+    item_type: String,  // "thinking", "tool_call", "output"
+    timestamp: i64,
+    content: Option<String>,
+    tool: Option<String>,
+    action: Option<String>,
+    status: Option<String>,
+    result: Option<String>,
+    tool_use_id: Option<String>,  // Store original tool_id for matching in ToolEnd
+}
+
 fn warning_to_json(warning_type: &str, message: String) -> Value {
     serde_json::json!({
         "warning_type": warning_type,
@@ -1087,6 +1100,10 @@ impl ClaurstSession {
         let event_turn_summaries = diagnostic_context.turn_summaries.clone();
         let accumulated_streaming_text = Arc::new(parking_lot::Mutex::new(String::new()));
         let event_accumulated_text = accumulated_streaming_text.clone();
+
+        // Timeline data collection
+        let timeline_items = Arc::new(parking_lot::Mutex::new(Vec::<TimelineItemData>::new()));
+        let event_timeline_items = timeline_items.clone();
         tokio::spawn(async move {
             let mut has_emitted_streaming = false;
             while let Some(event) = event_rx.recv().await {
@@ -1128,38 +1145,102 @@ impl ClaurstSession {
                 match event {
                     QueryEvent::Stream(stream_event) => {
                         use claurst_api::{streaming::ContentDelta, AnthropicStreamEvent};
-                        if let AnthropicStreamEvent::ContentBlockDelta { delta, .. } = stream_event {
-                            if let ContentDelta::TextDelta { text } = delta {
-                                // Filter out system-reminder tags from streaming content
-                                let filtered_text = filter_system_tags(&text);
 
-                                // Only emit if there's content after filtering
-                                if !filtered_text.is_empty() {
-                                    // Accumulate streaming text
-                                    event_accumulated_text.lock().push_str(&filtered_text);
-
-                                    if !has_emitted_streaming {
-                                        has_emitted_streaming = true;
-                                        emit_lifecycle_event(
-                                            &event_window,
-                                            &event_request_id,
-                                            &event_session_id,
-                                            "streaming",
-                                            status_label_for_phase("streaming"),
-                                            "stream_first_chunk",
-                                        );
-                                    }
-                                    log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars (original: {} chars)",
-                                        event_request_id, filtered_text.len(), text.len());
-                                    let _ = event_window.emit("message-chunk", serde_json::json!({
-                                        "request_id": event_request_id.clone(),
-                                        "chunk": filtered_text,
-                                    }));
+                        match stream_event {
+                            AnthropicStreamEvent::ContentBlockStart { content_block, .. } => {
+                                // Handle thinking block start
+                                if let ContentBlock::Thinking { thinking, .. } = content_block {
+                                    let item = TimelineItemData {
+                                        id: format!("timeline-{}", uuid::Uuid::new_v4()),
+                                        item_type: "thinking".to_string(),
+                                        timestamp: chrono::Utc::now().timestamp_millis(),
+                                        content: Some(thinking.clone()),
+                                        tool: None,
+                                        action: None,
+                                        status: None,
+                                        result: None,
+                                        tool_use_id: None,
+                                    };
+                                    event_timeline_items.lock().push(item);
                                 }
                             }
+                            AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
+                                match delta {
+                                    ContentDelta::ThinkingDelta { thinking } => {
+                                        // Append to the last thinking item
+                                        let mut items = event_timeline_items.lock();
+                                        if let Some(last_item) = items.last_mut() {
+                                            if last_item.item_type == "thinking" {
+                                                if let Some(ref mut content) = last_item.content {
+                                                    content.push_str(&thinking);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ContentDelta::TextDelta { text } => {
+                                        // Filter out system-reminder tags from streaming content
+                                        let filtered_text = filter_system_tags(&text);
+
+                                        // Only emit if there's content after filtering
+                                        if !filtered_text.is_empty() {
+                                            // Accumulate streaming text
+                                            event_accumulated_text.lock().push_str(&filtered_text);
+
+                                            if !has_emitted_streaming {
+                                                has_emitted_streaming = true;
+                                                emit_lifecycle_event(
+                                                    &event_window,
+                                                    &event_request_id,
+                                                    &event_session_id,
+                                                    "streaming",
+                                                    status_label_for_phase("streaming"),
+                                                    "stream_first_chunk",
+                                                );
+                                            }
+                                            log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars (original: {} chars)",
+                                                event_request_id, filtered_text.len(), text.len());
+                                            let _ = event_window.emit("message-chunk", serde_json::json!({
+                                                "request_id": event_request_id.clone(),
+                                                "chunk": filtered_text,
+                                            }));
+
+                                            // Collect timeline data for output
+                                            let mut items = event_timeline_items.lock();
+                                            let last_is_output = items.last()
+                                                .map(|i| i.item_type == "output")
+                                                .unwrap_or(false);
+
+                                            if last_is_output {
+                                                // Append to existing output item
+                                                if let Some(last_item) = items.last_mut() {
+                                                    if let Some(ref mut content) = last_item.content {
+                                                        content.push_str(&filtered_text);
+                                                    }
+                                                }
+                                            } else {
+                                                // Create new output item
+                                                let item = TimelineItemData {
+                                                    id: format!("timeline-{}", uuid::Uuid::new_v4()),
+                                                    item_type: "output".to_string(),
+                                                    timestamp: chrono::Utc::now().timestamp_millis(),
+                                                    content: Some(filtered_text.clone()),
+                                                    tool: None,
+                                                    action: None,
+                                                    status: None,
+                                                    result: None,
+                                                    tool_use_id: None,
+                                                };
+                                                items.push(item);
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    QueryEvent::ToolStart { tool_name, input_json, .. } => {
+                    QueryEvent::ToolStart { tool_name, tool_id, input_json } => {
                         let tool_sequence_index = {
                             let mut tool_sequence = event_tool_sequence.lock();
                             tool_sequence.push(serde_json::json!({
@@ -1213,11 +1294,27 @@ impl ClaurstSession {
                         let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
+                            "tool_use_id": tool_id,
                             "action": description,
                             "input": input_json,
                         }));
+
+                        // Collect timeline data for tool call start
+                        let unique_id = format!("tool-{}-{}", tool_id, uuid::Uuid::new_v4());
+                        let item = TimelineItemData {
+                            id: unique_id.clone(),
+                            item_type: "tool_call".to_string(),
+                            timestamp: chrono::Utc::now().timestamp_millis(),
+                            content: None,
+                            tool: Some(tool_name.clone()),
+                            action: Some(description),
+                            status: Some("running".to_string()),
+                            result: None,
+                            tool_use_id: Some(tool_id.clone()),
+                        };
+                        event_timeline_items.lock().push(item);
                     }
-                    QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
+                    QueryEvent::ToolEnd { tool_name, tool_id, result, is_error } => {
                         let result_chars = result.chars().count();
                         let result_preview = result
                             .chars()
@@ -1278,6 +1375,7 @@ impl ClaurstSession {
                         let _ = event_window.emit("tool-call-end", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
+                            "tool_use_id": tool_id,
                             "success": !is_error,
                             "result": result,
                         }));
@@ -1290,6 +1388,13 @@ impl ClaurstSession {
                             "tool_end",
                         );
                         emit_display_status(&event_window, &event_request_id, "thinking", "工具执行完成，继续处理中");
+
+                        // Update timeline data for tool call end
+                        let mut items = event_timeline_items.lock();
+                        if let Some(item) = items.iter_mut().find(|i| i.tool_use_id.as_ref() == Some(&tool_id)) {
+                            item.status = Some(if is_error { "error" } else { "success" }.to_string());
+                            item.result = Some(result.clone());
+                        }
                     }
                     QueryEvent::TurnComplete { usage, .. } => {
                         {
@@ -1544,7 +1649,8 @@ impl ClaurstSession {
                     text = "✓ 已完成工具执行".to_string();
                 }
 
-                let has_visible_text = !extracted_text_was_empty;
+                // has_visible_text should be based on the final text after fallback, not the original extracted text
+                let has_visible_text = !text.is_empty();
                 let fallback_visible_text_used = extracted_text_was_empty;
 
                 let parsed_handoff = if has_visible_text {
@@ -1623,13 +1729,18 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
+                // Save the full accumulated text to message content
+                // Timeline contains the same text split into output items for display
+                // Frontend will use timeline for display if available, content as fallback
+                let content_to_save = text.clone();
+
                 // Always save assistant message to storage and database
                 save_message_to_file_storage(
                     &self.storage,
                     &self.session_id,
                     StoredMessage {
                         role: "assistant".to_string(),
-                        content: text.clone(),
+                        content: content_to_save.clone(),
                         timestamp: chrono::Utc::now().timestamp(),
                     },
                     task_session,
@@ -1641,11 +1752,35 @@ impl ClaurstSession {
                     if let Ok(conn) = pool.get() {
                         let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
                         let created_at = chrono::Utc::now().to_rfc3339();
+
+                        // Insert message
                         let _ = conn.execute(
                             "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
                              VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
-                            rusqlite::params![&msg_id, &self.session_id, &text, &created_at, &request_id_owned],
+                            rusqlite::params![&msg_id, &self.session_id, &content_to_save, &created_at, &request_id_owned],
                         );
+
+                        // Insert timeline items
+                        let timeline_items_vec = timeline_items.lock().clone();
+                        for item in timeline_items_vec {
+                            if let Err(e) = conn.execute(
+                                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
+                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                rusqlite::params![
+                                    &item.id,
+                                    &msg_id,
+                                    &item.item_type,
+                                    &item.timestamp,
+                                    &item.content,
+                                    &item.tool,
+                                    &item.action,
+                                    &item.status,
+                                    &item.result,
+                                ],
+                            ) {
+                                log::error!("Failed to insert timeline item {}: {}", item.id, e);
+                            }
+                        }
                     }
                 }
 

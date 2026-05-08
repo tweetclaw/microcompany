@@ -23,12 +23,17 @@
   background: var(--bg-elevated);
 }
 
-.output-marker {
-  background: var(--bg-elevated);
+.thinking-marker {
+  background: #f5f5f5;
+  border: 1px dashed #d1d5db;
 }
 
 .tool-marker {
   background: var(--bg-hover);
+}
+
+.output-marker {
+  background: var(--bg-elevated);
 }
 
 .timeline-content {
@@ -36,10 +41,65 @@
   min-width: 0;
 }
 
-.timeline-output .timeline-content {
-  padding: 0.5rem 0;
+/* Thinking Item Styles */
+.timeline-thinking .timeline-content {
+  background: #f5f5f5;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  padding: 0.75rem;
 }
 
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.thinking-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.thinking-toggle {
+  font-size: 0.75rem;
+  color: var(--primary-blue-start);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.thinking-toggle:hover {
+  color: var(--primary-blue-end);
+}
+
+.thinking-content {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.thinking-content.collapsed {
+  max-height: 3rem;
+  overflow: hidden;
+}
+
+.thinking-content.expanded {
+  max-height: none;
+}
+
+.thinking-preview {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Tool Call Item Styles */
 .timeline-tool .timeline-content {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
@@ -96,24 +156,39 @@
   padding-top: 0.5rem;
 }
 
-.tool-result summary {
+.tool-result-toggle {
   cursor: pointer;
   color: var(--primary-blue-start);
   font-size: 0.875rem;
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-.tool-result summary:hover {
+.tool-result-toggle:hover {
   color: var(--primary-blue-end);
 }
 
-.tool-result pre {
+.tool-result-content {
   margin-top: 0.5rem;
   padding: 0.5rem;
   background: var(--bg-base);
   border-radius: 4px;
   font-size: 0.75rem;
   overflow-x: auto;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+}
+
+/* Output Item Styles */
+.timeline-output .timeline-content {
+  padding: 0.5rem 0;
+}
+
+/* Smooth transitions */
+.thinking-content,
+.tool-result-content {
+  transition: max-height 0.3s ease-in-out;
 }

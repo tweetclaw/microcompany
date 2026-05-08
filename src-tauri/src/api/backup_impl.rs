@@ -4,8 +4,22 @@ use chrono::Utc;
 use crate::api::backup::{BackupInfo, VacuumResult};
 use crate::database::get_pool;
 
-pub async fn create_backup(app_data_dir: PathBuf) -> Result<BackupInfo, String> {
-    let backup_dir = app_data_dir.join(".mc").join("backups");
+fn get_microcompany_dir() -> Result<PathBuf, String> {
+    dirs::home_dir()
+        .map(|h| h.join(".microcompany"))
+        .ok_or_else(|| "Failed to get home directory".to_string())
+}
+
+fn get_backup_dir() -> Result<PathBuf, String> {
+    Ok(get_microcompany_dir()?.join("backups"))
+}
+
+fn get_db_path() -> Result<PathBuf, String> {
+    Ok(get_microcompany_dir()?.join("data.db"))
+}
+
+pub async fn create_backup() -> Result<BackupInfo, String> {
+    let backup_dir = get_backup_dir()?;
     fs::create_dir_all(&backup_dir)
         .map_err(|e| format!("Failed to create backup directory: {}", e))?;
 
@@ -37,8 +51,8 @@ pub async fn create_backup(app_data_dir: PathBuf) -> Result<BackupInfo, String> 
     })
 }
 
-pub async fn list_backups(app_data_dir: PathBuf) -> Result<Vec<BackupInfo>, String> {
-    let backup_dir = app_data_dir.join(".mc").join("backups");
+pub async fn list_backups() -> Result<Vec<BackupInfo>, String> {
+    let backup_dir = get_backup_dir()?;
 
     if !backup_dir.exists() {
         return Ok(Vec::new());
@@ -77,7 +91,6 @@ pub async fn list_backups(app_data_dir: PathBuf) -> Result<Vec<BackupInfo>, Stri
 
 pub async fn restore_backup(
     backup_path: String,
-    app_data_dir: PathBuf,
 ) -> Result<(), String> {
     let backup_path = Path::new(&backup_path);
 
@@ -98,12 +111,12 @@ pub async fn restore_backup(
         }).map_err(|e| format!("Backup file integrity check failed: {}", e))?;
     }
 
-    create_backup(app_data_dir.clone()).await?;
+    create_backup().await?;
 
     crate::database::pool::close_pool()
         .map_err(|e| format!("Failed to close connection pool: {}", e))?;
 
-    let db_path = app_data_dir.join(".mc").join("data.db");
+    let db_path = get_db_path()?;
 
     fs::copy(backup_path, &db_path)
         .map_err(|e| format!("Failed to restore backup: {}", e))?;
@@ -126,8 +139,8 @@ pub async fn restore_backup(
     Ok(())
 }
 
-pub async fn vacuum_database(app_data_dir: PathBuf) -> Result<VacuumResult, String> {
-    let db_path = app_data_dir.join(".mc").join("data.db");
+pub async fn vacuum_database() -> Result<VacuumResult, String> {
+    let db_path = get_db_path()?;
 
     let size_before = fs::metadata(&db_path)
         .map_err(|e| format!("Failed to get database size: {}", e))?

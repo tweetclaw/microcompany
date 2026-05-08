@@ -597,6 +597,7 @@ function ChatInterface({
           // Create new output item
           timeline.push({
             id: `output-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            messageId: '',
             type: 'output',
             timestamp: Date.now(),
             content: payload.chunk,
@@ -610,7 +611,7 @@ function ChatInterface({
           if (last && last.role === 'assistant' && last.requestId === payload.request_id) {
             return [
               ...currentMessages.slice(0, -1),
-              { ...last, content: last.content + payload.chunk, isStreaming: true },
+              { ...last, content: last.content + payload.chunk, timeline: [...timeline], isStreaming: true },
             ];
           }
 
@@ -623,6 +624,7 @@ function ChatInterface({
               timestamp: Date.now(),
               isStreaming: true,
               requestId: payload.request_id,
+              timeline: [...timeline],
             },
           ];
         });
@@ -642,9 +644,9 @@ function ChatInterface({
 
         // Add to timeline
         const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
-        const toolCallId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         timeline.push({
-          id: toolCallId,
+          id: payload.tool_use_id, // Use tool_use_id as unique identifier
+          messageId: '', // Will be set when message is created
           type: 'tool_call',
           timestamp: Date.now(),
           tool: payload.tool,
@@ -653,9 +655,21 @@ function ChatInterface({
         });
         timelineForRequestRef.current.set(payload.request_id, timeline);
 
+        // Update message with timeline in real-time
+        onMessagesChangeRef.current((currentMessages: Message[]) => {
+          const lastMsg = currentMessages[currentMessages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.requestId === payload.request_id) {
+            return [
+              ...currentMessages.slice(0, -1),
+              { ...lastMsg, timeline: [...timeline] },
+            ];
+          }
+          return currentMessages;
+        });
+
         // Legacy: Collect tool call record for backward compatibility
         const toolCall: ToolCallRecord = {
-          id: toolCallId,
+          id: payload.tool_use_id,
           tool: payload.tool,
           action: payload.action,
           status: 'running',
@@ -696,14 +710,26 @@ function ChatInterface({
 
         // Update timeline item with result
         const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
-        const lastToolCall = [...timeline].reverse().find(item =>
-          item.type === 'tool_call' && item.tool === payload.tool && item.status === 'running'
+        const toolItem = timeline.find(item =>
+          item.type === 'tool_call' && item.id === payload.tool_use_id
         );
-        if (lastToolCall) {
-          lastToolCall.status = payload.success ? 'success' : 'error';
-          lastToolCall.result = payload.result;
+        if (toolItem) {
+          toolItem.status = payload.success ? 'success' : 'error';
+          toolItem.result = payload.result;
         }
         timelineForRequestRef.current.set(payload.request_id, timeline);
+
+        // Update message with timeline in real-time
+        onMessagesChangeRef.current((currentMessages: Message[]) => {
+          const lastMsg = currentMessages[currentMessages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.requestId === payload.request_id) {
+            return [
+              ...currentMessages.slice(0, -1),
+              { ...lastMsg, timeline: [...timeline] },
+            ];
+          }
+          return currentMessages;
+        });
 
         // Legacy: Update tool call record with result
         const calls = toolCallsForRequestRef.current.get(payload.request_id);

@@ -287,7 +287,31 @@ function App() {
       }
 
       // 从数据库加载消息（任务会话和普通会话都支持）
-      const messages = await invoke<Array<{ id: string; role: string; content: string; created_at: string }>>('get_messages', {
+      const messages = await invoke<Array<{
+        id: string;
+        role: string;
+        content: string;
+        created_at: string;
+        timeline?: Array<{
+          id: string;
+          messageId: string;
+          type: 'thinking' | 'tool_call' | 'output';
+          timestamp: number;
+          content?: string;
+          tool?: string;
+          action?: string;
+          status?: 'running' | 'success' | 'error';
+          result?: string;
+        }>;
+        tool_calls?: Array<{
+          id: string;
+          tool: string;
+          action: string;
+          status: 'running' | 'success' | 'error';
+          result?: string;
+          timestamp: number;
+        }>;
+      }>>('get_messages', {
         sessionId,
       });
 
@@ -296,6 +320,8 @@ function App() {
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
         timestamp: new Date(msg.created_at).getTime(),
+        timeline: msg.timeline,
+        toolCalls: msg.tool_calls,
       }));
 
       setCurrentSessionId(sessionId);
