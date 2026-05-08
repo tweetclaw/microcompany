@@ -751,10 +751,15 @@ impl ClaurstSession {
         config.project_dir = Some(working_dir.clone());
         config.permission_mode = PermissionMode::BypassPermissions;
         config.model = Some(model.clone());
+        // Enable auto compact to handle long conversation histories
+        config.auto_compact = true;
+        config.compact_threshold = 0.7; // Trigger compact at 70% context usage (earlier than default 90%)
 
         // 4. 创建 QueryConfig
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
+        // Increase max_turns to allow more tool calls in a single request
+        query_config.max_turns = 50;
         // 注意：不再将 system_prompt 传递给 API 的 system 参数
         // 改为在第一条用户消息前拼接角色提示词
         // query_config.system_prompt = system_prompt.clone();
@@ -821,18 +826,52 @@ impl ClaurstSession {
                             Ok(rows) => {
                                 let db_messages: Vec<Message> = rows
                                     .filter_map(|r| r.ok())
-                                    .map(|(role, content)| {
-                                        if role == "user" {
-                                            Message::user(content)
+                                    .filter_map(|(role, content)| {
+                                        // Filter out empty assistant messages to prevent API issues
+                                        if role == "assistant" && content.trim().is_empty() {
+                                            log::warn!("Skipping empty assistant message for session {}", session_id);
+                                            None
+                                        } else if role == "user" {
+                                            Some(Message::user(content))
                                         } else {
-                                            Message::assistant(content)
+                                            Some(Message::assistant(content))
                                         }
                                     })
                                     .collect();
 
                                 if !db_messages.is_empty() {
                                     log::info!("Loaded {} messages from database for session {}", db_messages.len(), session_id);
-                                    db_messages
+
+                                    // Apply context collapse to limit message history
+                                    use claurst_core::context_collapse::{collapse_context, CollapseStrategy, estimate_message_tokens};
+
+                                    let estimated_tokens = estimate_message_tokens(&db_messages);
+                                    let max_tokens = 100_000u64; // Conservative limit to support various models
+
+                                    log::info!(
+                                        "Context check: {} messages, estimated {} tokens, max {} tokens",
+                                        db_messages.len(),
+                                        estimated_tokens,
+                                        max_tokens
+                                    );
+
+                                    let (collapsed_messages, collapse_state) = collapse_context(
+                                        db_messages,
+                                        max_tokens,
+                                        CollapseStrategy::DropOldest
+                                    );
+
+                                    if let Some(state) = collapse_state {
+                                        log::warn!(
+                                            "⚠️ Context collapsed for session {}: dropped {} messages, {} tokens -> {} tokens",
+                                            session_id,
+                                            state.messages_dropped,
+                                            state.tokens_before,
+                                            state.tokens_after
+                                        );
+                                    }
+
+                                    collapsed_messages
                                 } else {
                                     // No messages in DB, try file storage
                                     storage.load_messages(&session_id)
@@ -1492,6 +1531,22 @@ impl ClaurstSession {
                             },
                             "timestamp": now,
                         }));
+
+                        // If token usage is >= 70%, emit compact start event
+                        if pct_used >= 0.7 {
+                            log::info!(
+                                "claurst_compact_triggered request_id={} session_id={} pct_used={:.3}",
+                                event_request_id,
+                                event_session_id,
+                                pct_used
+                            );
+                            let _ = event_window.emit("ai-compact-start", serde_json::json!({
+                                "request_id": event_request_id.clone(),
+                                "session_id": event_session_id.clone(),
+                                "pct_used": pct_used,
+                                "timestamp": now,
+                            }));
+                        }
                     }
                     QueryEvent::Error(err) => {
                         log::error!("Query event error: {}", err);
@@ -1839,54 +1894,59 @@ impl ClaurstSession {
                 // Frontend will use timeline for display if available, content as fallback
                 let content_to_save = text.clone();
 
-                // Always save assistant message to storage and database
-                save_message_to_file_storage(
-                    &self.storage,
-                    &self.session_id,
-                    StoredMessage {
-                        role: "assistant".to_string(),
-                        content: content_to_save.clone(),
-                        timestamp: chrono::Utc::now().timestamp(),
-                    },
-                    task_session,
-                    "assistant",
-                );
+                // Only save assistant message if content is not empty
+                if !content_to_save.trim().is_empty() {
+                    // Save assistant message to storage and database
+                    save_message_to_file_storage(
+                        &self.storage,
+                        &self.session_id,
+                        StoredMessage {
+                            role: "assistant".to_string(),
+                            content: content_to_save.clone(),
+                            timestamp: chrono::Utc::now().timestamp(),
+                        },
+                        task_session,
+                        "assistant",
+                    );
 
-                // Also save to database
-                if let Ok(pool) = crate::database::get_pool() {
-                    if let Ok(conn) = pool.get() {
-                        let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
-                        let created_at = chrono::Utc::now().to_rfc3339();
+                    // Also save to database
+                    if let Ok(pool) = crate::database::get_pool() {
+                        if let Ok(conn) = pool.get() {
+                            let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                            let created_at = chrono::Utc::now().to_rfc3339();
 
-                        // Insert message
-                        let _ = conn.execute(
-                            "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
-                             VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
-                            rusqlite::params![&msg_id, &self.session_id, &content_to_save, &created_at, &request_id_owned],
-                        );
+                            // Insert message
+                            let _ = conn.execute(
+                                "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                                 VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
+                                rusqlite::params![&msg_id, &self.session_id, &content_to_save, &created_at, &request_id_owned],
+                            );
 
-                        // Insert timeline items
-                        let timeline_items_vec = timeline_items.lock().clone();
-                        for item in timeline_items_vec {
-                            if let Err(e) = conn.execute(
-                                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
-                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                                rusqlite::params![
-                                    &item.id,
-                                    &msg_id,
-                                    &item.item_type,
-                                    &item.timestamp,
-                                    &item.content,
-                                    &item.tool,
-                                    &item.action,
-                                    &item.status,
-                                    &item.result,
-                                ],
-                            ) {
-                                log::error!("Failed to insert timeline item {}: {}", item.id, e);
+                            // Insert timeline items
+                            let timeline_items_vec = timeline_items.lock().clone();
+                            for item in timeline_items_vec {
+                                if let Err(e) = conn.execute(
+                                    "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                    rusqlite::params![
+                                        &item.id,
+                                        &msg_id,
+                                        &item.item_type,
+                                        &item.timestamp,
+                                        &item.content,
+                                        &item.tool,
+                                        &item.action,
+                                        &item.status,
+                                        &item.result,
+                                    ],
+                                ) {
+                                    log::error!("Failed to insert timeline item {}: {}", item.id, e);
+                                }
                             }
                         }
                     }
+                } else {
+                    log::warn!("Skipping save of empty assistant message for request {}", request_id_owned);
                 }
 
                 if let Some(trace) = task_trace.as_ref() {

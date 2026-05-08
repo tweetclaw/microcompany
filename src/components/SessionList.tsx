@@ -28,7 +28,7 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
 
     try {
       setLoading(true);
-      const result = await listNormalSessions();
+      const result = await listNormalSessions(workingDirectory);
       setSessions(result);
     } catch (error) {
       console.error('Failed to load sessions:', error);

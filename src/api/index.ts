@@ -66,8 +66,8 @@ export async function getSession(sessionId: string): Promise<Session> {
   return invoke('get_session', { sessionId });
 }
 
-export async function listNormalSessions(): Promise<SessionSummary[]> {
-  return invoke('list_normal_sessions');
+export async function listNormalSessions(workingDirectory?: string): Promise<SessionSummary[]> {
+  return invoke('list_normal_sessions', { workingDirectory: workingDirectory || null });
 }
 
 export async function deleteSession(sessionId: string): Promise<DeleteSessionResult> {

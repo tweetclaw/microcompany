@@ -218,6 +218,7 @@ function ChatInterface({
   const [tokenWarnings, setTokenWarnings] = useState<AiTokenWarningEvent[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [retryMessageContent, setRetryMessageContent] = useState('');
+  const [isCompacting, setIsCompacting] = useState(false);
   const visibleError = useMemo(() => (
     lastError ? buildVisibleError(lastError) : null
   ), [lastError]);
@@ -429,6 +430,7 @@ function ChatInterface({
     let unlistenTokenWarning: (() => void) | null = null;
     let unlistenStatus: (() => void) | null = null;
     let unlistenRequestEnd: (() => void) | null = null;
+    let unlistenCompactStart: (() => void) | null = null;
 
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
@@ -758,6 +760,25 @@ function ChatInterface({
         });
       });
 
+      unlistenCompactStart = await listen('ai-compact-start', (event: any) => {
+        const payload = event.payload;
+        console.log('[ChatInterface] ai-compact-start', {
+          requestId: payload.request_id,
+          sessionId: payload.session_id,
+          pctUsed: payload.pct_used,
+          timestamp: payload.timestamp,
+        });
+
+        setIsCompacting(true);
+        appendTimeline({
+          id: `${payload.request_id}-${payload.timestamp}-compact-start`,
+          requestId: payload.request_id,
+          kind: 'lifecycle',
+          text: '正在压缩上下文...',
+          timestamp: payload.timestamp,
+        });
+      });
+
       unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', async (event) => {
         const payload = event.payload;
         if (terminalRequestIdsRef.current.has(payload.request_id)) {
@@ -1027,6 +1048,18 @@ function ChatInterface({
           onMessageCompleted();
         }
 
+        // Clear compact state when request ends
+        if (isCompacting) {
+          setIsCompacting(false);
+          appendTimeline({
+            id: `${payload.request_id}-${payload.timestamp}-compact-end`,
+            requestId: payload.request_id,
+            kind: 'lifecycle',
+            text: '上下文压缩完成',
+            timestamp: payload.timestamp,
+          });
+        }
+
         console.log('[ChatInterface] scheduling terminal reset', {
           requestId: payload.request_id,
           delayMs: shouldDelayReset ? 450 : 0,
@@ -1049,6 +1082,7 @@ function ChatInterface({
       if (unlistenUsage) unlistenUsage();
       if (unlistenTokenWarning) unlistenTokenWarning();
       if (unlistenStatus) unlistenStatus();
+      if (unlistenCompactStart) unlistenCompactStart();
       if (unlistenRequestEnd) unlistenRequestEnd();
     };
   }, []);
@@ -1339,12 +1373,13 @@ function ChatInterface({
                       <InputBox
                         onSendMessage={handleSendMessage}
                         onCancelMessage={handleCancelMessage}
-                        isBusy={isBusy}
+                        isBusy={isBusy || isCompacting}
                         canCancel={canCancel}
                         isCancelling={isCancelling}
-                        isInputDisabled={isInputDisabled}
+                        isInputDisabled={isInputDisabled || isCompacting}
                         currentProviderName={currentProviderName}
                         currentModelName={currentModelName}
+                        placeholderText={isCompacting ? '正在压缩上下文，请稍候...' : undefined}
                       />
                     </>
                   ) : isDraftConversation ? (
@@ -1391,12 +1426,13 @@ function ChatInterface({
                       <InputBox
                         onSendMessage={handleSendMessage}
                         onCancelMessage={handleCancelMessage}
-                        isBusy={isBusy}
+                        isBusy={isBusy || isCompacting}
                         canCancel={canCancel}
                         isCancelling={isCancelling}
-                        isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid}
+                        isInputDisabled={isInputDisabled || !selectedProviderValue || !selectedModelValid || isCompacting}
                         currentProviderName={currentProviderName}
                         currentModelName={currentModelName}
+                        placeholderText={isCompacting ? '正在压缩上下文，请稍候...' : undefined}
                       />
                     </>
                   ) : (

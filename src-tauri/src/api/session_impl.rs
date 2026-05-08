@@ -94,31 +94,57 @@ pub async fn get_session(session_id: String) -> Result<Session, String> {
     Ok(session)
 }
 
-pub async fn list_normal_sessions() -> Result<Vec<SessionSummary>, String> {
+pub async fn list_normal_sessions(working_directory: Option<String>) -> Result<Vec<SessionSummary>, String> {
     let pool = get_pool()?;
     let conn = pool.get()
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     let sessions = {
-        let mut stmt = conn.prepare(
-            "SELECT
-                s.id,
-                s.type,
-                s.name,
-                s.model,
-                s.provider,
-                s.status,
-                COUNT(m.id) as message_count,
-                s.created_at,
-                s.updated_at
-             FROM sessions s
-             LEFT JOIN messages m ON m.session_id = s.id
-             WHERE s.type = 'normal'
-             GROUP BY s.id
-             ORDER BY s.created_at DESC"
-        ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+        let (query, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(wd) = working_directory {
+            (
+                "SELECT
+                    s.id,
+                    s.type,
+                    s.name,
+                    s.model,
+                    s.provider,
+                    s.status,
+                    COUNT(m.id) as message_count,
+                    s.created_at,
+                    s.updated_at
+                 FROM sessions s
+                 LEFT JOIN messages m ON m.session_id = s.id
+                 WHERE s.type = 'normal' AND s.working_directory = ?1
+                 GROUP BY s.id
+                 ORDER BY s.created_at DESC".to_string(),
+                vec![Box::new(wd)]
+            )
+        } else {
+            (
+                "SELECT
+                    s.id,
+                    s.type,
+                    s.name,
+                    s.model,
+                    s.provider,
+                    s.status,
+                    COUNT(m.id) as message_count,
+                    s.created_at,
+                    s.updated_at
+                 FROM sessions s
+                 LEFT JOIN messages m ON m.session_id = s.id
+                 WHERE s.type = 'normal'
+                 GROUP BY s.id
+                 ORDER BY s.created_at DESC".to_string(),
+                vec![]
+            )
+        };
 
-        let rows = stmt.query_map([], |row| {
+        let mut stmt = conn.prepare(&query)
+            .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(SessionSummary {
                 id: row.get(0)?,
                 r#type: row.get(1)?,

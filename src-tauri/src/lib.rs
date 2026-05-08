@@ -114,8 +114,8 @@ async fn get_session(session_id: String) -> Result<api::Session, String> {
 }
 
 #[tauri::command]
-async fn list_normal_sessions() -> Result<Vec<api::SessionSummary>, String> {
-    api::list_normal_sessions().await
+async fn list_normal_sessions(working_directory: Option<String>) -> Result<Vec<api::SessionSummary>, String> {
+    api::list_normal_sessions(working_directory).await
 }
 
 #[tauri::command]

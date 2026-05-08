@@ -29,7 +29,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 
 # Claurst dependencies
-claurst-core = { path = "../claurst/src-rust/crates/core" }
+claurst-core = { path = "../claurst/src-rust/crates/core", features = ["cached_microcompact"] }
 claurst-api = { path = "../claurst/src-rust/crates/api" }
 claurst-query = { path = "../claurst/src-rust/crates/query" }
 claurst-tools = { path = "../claurst/src-rust/crates/tools" }
