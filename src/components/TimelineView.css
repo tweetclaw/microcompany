@@ -1,0 +1,119 @@
+.timeline-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.timeline-marker {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+
+.output-marker {
+  background: var(--bg-elevated);
+}
+
+.tool-marker {
+  background: var(--bg-hover);
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-output .timeline-content {
+  padding: 0.5rem 0;
+}
+
+.timeline-tool .timeline-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 0.875rem;
+}
+
+.tool-status {
+  font-size: 0.875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.status-running {
+  color: var(--primary-blue-start);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.status-success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.status-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tool-action {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-result {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border-default);
+  padding-top: 0.5rem;
+}
+
+.tool-result summary {
+  cursor: pointer;
+  color: var(--primary-blue-start);
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.tool-result summary:hover {
+  color: var(--primary-blue-end);
+}
+
+.tool-result pre {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}

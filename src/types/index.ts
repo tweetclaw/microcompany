@@ -8,6 +8,29 @@ export interface Message {
   timestamp: number;
   isStreaming?: boolean;
   requestId?: string;
+  timeline?: TimelineItem[];
+  toolCalls?: ToolCallRecord[]; // Legacy field for backward compatibility
+}
+
+export interface TimelineItem {
+  id: string;
+  type: 'thinking' | 'tool_call' | 'output';
+  timestamp: number;
+  content?: string; // For thinking and output
+  tool?: string; // For tool_call
+  action?: string; // For tool_call
+  status?: 'running' | 'success' | 'error'; // For tool_call
+  result?: string; // For tool_call
+}
+
+// Legacy structure - kept for backward compatibility during migration
+export interface ToolCallRecord {
+  id: string;
+  tool: string;
+  action: string;
+  status: 'running' | 'success' | 'error';
+  result?: string;
+  timestamp: number;
 }
 
 export type AiActivityPhase = 'thinking' | 'tool_running' | 'streaming' | 'finalizing';

@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useState } from 'react';
 import { Message } from '../types';
+import { TimelineView } from './TimelineView';
 import './MessageItem.css';
 
 interface MessageItemProps {
@@ -28,15 +29,21 @@ function MessageItem({ message }: MessageItemProps) {
         {isUser ? '👤' : '🤖'}
       </div>
       <div className="message-content">
-        {isUser ? (
-          <div className="message-text">{message.content}</div>
+        {!isUser && message.timeline && message.timeline.length > 0 ? (
+          <TimelineView timeline={message.timeline} />
         ) : (
-          <Suspense fallback={<div className="message-text">{message.content}</div>}>
-            <MarkdownRenderer
-              content={message.content}
-              isStreaming={message.isStreaming}
-            />
-          </Suspense>
+          <>
+            {isUser ? (
+              <div className="message-text">{message.content}</div>
+            ) : (
+              <Suspense fallback={<div className="message-text">{message.content}</div>}>
+                <MarkdownRenderer
+                  content={message.content}
+                  isStreaming={message.isStreaming}
+                />
+              </Suspense>
+            )}
+          </>
         )}
       </div>
       {!isUser && !message.isStreaming && (

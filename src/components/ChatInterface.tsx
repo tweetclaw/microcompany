@@ -27,7 +27,9 @@ import {
   AiToolStartEvent,
   Message,
   ProcessTimelineItem,
+  TimelineItem,
   ToolCall,
+  ToolCallRecord,
 } from '../types';
 import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
@@ -236,6 +238,8 @@ function ChatInterface({
   const processTimelineRef = useRef(processTimeline);
   const currentRoleNameRef = useRef<string | null>(currentRoleName ?? null);
   const terminalRequestIdsRef = useRef<Set<string>>(new Set());
+  const toolCallsForRequestRef = useRef<Map<string, ToolCallRecord[]>>(new Map());
+  const timelineForRequestRef = useRef<Map<string, TimelineItem[]>>(new Map());
 
   useEffect(() => {
     processTimelineRef.current = processTimeline;
@@ -285,6 +289,12 @@ function ChatInterface({
 
       const hasVisibleText = options?.hasVisibleText ?? Boolean(finalText?.trim());
 
+      // Get timeline for this request
+      const timeline = requestId ? timelineForRequestRef.current.get(requestId) : undefined;
+
+      // Legacy: Get tool calls for backward compatibility
+      const toolCalls = requestId ? toolCallsForRequestRef.current.get(requestId) : undefined;
+
       if (targetIndex === undefined) {
         frontendLogger.info('[ChatInterface] finalizeStreamingMessage missing target', {
           requestId: requestId ?? null,
@@ -301,6 +311,8 @@ function ChatInterface({
               timestamp: Date.now(),
               isStreaming: false,
               requestId: requestId || undefined,
+              timeline: timeline,
+              toolCalls: toolCalls, // Legacy field
             },
           ];
         }
@@ -329,7 +341,7 @@ function ChatInterface({
       if (!hasVisibleText) {
         return [
           ...prev.slice(0, targetIndex),
-          { ...targetMessage, isStreaming: false },
+          { ...targetMessage, isStreaming: false, timeline: timeline, toolCalls: toolCalls },
           ...prev.slice(targetIndex + 1),
         ];
       }
@@ -337,7 +349,7 @@ function ChatInterface({
       // 默认保持前端已累积的完整文本，只在需要移除机器可读后缀时用 final_text 覆盖
       return [
         ...prev.slice(0, targetIndex),
-        { ...targetMessage, content: nextContent, isStreaming: false },
+        { ...targetMessage, content: nextContent, isStreaming: false, timeline: timeline, toolCalls: toolCalls },
         ...prev.slice(targetIndex + 1),
       ];
     });
@@ -574,6 +586,24 @@ function ChatInterface({
 
         console.log('📥 [ChatInterface] Received message-chunk, request_id:', payload.request_id, 'chunk_len:', payload.chunk.length);
 
+        // Add to timeline - track text output
+        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
+        const lastItem = timeline[timeline.length - 1];
+
+        if (lastItem && lastItem.type === 'output') {
+          // Append to existing output item
+          lastItem.content = (lastItem.content || '') + payload.chunk;
+        } else {
+          // Create new output item
+          timeline.push({
+            id: `output-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            type: 'output',
+            timestamp: Date.now(),
+            content: payload.chunk,
+          });
+        }
+        timelineForRequestRef.current.set(payload.request_id, timeline);
+
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const last = currentMessages[currentMessages.length - 1];
 
@@ -610,6 +640,33 @@ function ChatInterface({
         }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
+        // Add to timeline
+        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
+        const toolCallId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        timeline.push({
+          id: toolCallId,
+          type: 'tool_call',
+          timestamp: Date.now(),
+          tool: payload.tool,
+          action: payload.action,
+          status: 'running',
+        });
+        timelineForRequestRef.current.set(payload.request_id, timeline);
+
+        // Legacy: Collect tool call record for backward compatibility
+        const toolCall: ToolCallRecord = {
+          id: toolCallId,
+          tool: payload.tool,
+          action: payload.action,
+          status: 'running',
+          timestamp: Date.now(),
+        };
+
+        if (!toolCallsForRequestRef.current.has(payload.request_id)) {
+          toolCallsForRequestRef.current.set(payload.request_id, []);
+        }
+        toolCallsForRequestRef.current.get(payload.request_id)!.push(toolCall);
+
         setCurrentToolCall({
           tool: payload.tool,
           action: payload.action,
@@ -636,6 +693,27 @@ function ChatInterface({
           return;
         }
         if (payload.request_id !== activeRequestIdRef.current) return;
+
+        // Update timeline item with result
+        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
+        const lastToolCall = [...timeline].reverse().find(item =>
+          item.type === 'tool_call' && item.tool === payload.tool && item.status === 'running'
+        );
+        if (lastToolCall) {
+          lastToolCall.status = payload.success ? 'success' : 'error';
+          lastToolCall.result = payload.result;
+        }
+        timelineForRequestRef.current.set(payload.request_id, timeline);
+
+        // Legacy: Update tool call record with result
+        const calls = toolCallsForRequestRef.current.get(payload.request_id);
+        if (calls && calls.length > 0) {
+          const lastCall = calls[calls.length - 1];
+          if (lastCall.tool === payload.tool) {
+            lastCall.status = payload.success ? 'success' : 'error';
+            lastCall.result = payload.result;
+          }
+        }
 
         setCurrentToolCall({
           tool: payload.tool,

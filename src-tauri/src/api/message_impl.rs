@@ -1,5 +1,6 @@
 use rusqlite::params;
 use crate::api::{Message, MessageCreateRequest};
+use crate::api::message::ToolCallRecord;
 use crate::database::get_pool;
 use uuid::Uuid;
 use chrono::Utc;
@@ -28,7 +29,7 @@ pub async fn get_messages(
 
     let messages = {
         let mut stmt = conn.prepare(
-            "SELECT id, session_id, role, content, created_at, request_id, is_streaming
+            "SELECT id, session_id, role, content, created_at, request_id, is_streaming, tool_calls
              FROM messages
              WHERE session_id = ?1
              ORDER BY created_at ASC
@@ -36,6 +37,10 @@ pub async fn get_messages(
         ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
         let rows = stmt.query_map(params![&session_id, limit, offset], |row| {
+            let tool_calls_json: Option<String> = row.get(7)?;
+            let tool_calls: Option<Vec<ToolCallRecord>> = tool_calls_json
+                .and_then(|json| serde_json::from_str(&json).ok());
+
             Ok(Message {
                 id: row.get(0)?,
                 session_id: row.get(1)?,
@@ -44,6 +49,7 @@ pub async fn get_messages(
                 created_at: row.get(4)?,
                 request_id: row.get(5)?,
                 is_streaming: row.get(6)?,
+                tool_calls,
             })
         }).map_err(|e| format!("Failed to query messages: {}", e))?;
 
@@ -72,9 +78,13 @@ pub async fn save_message(message: MessageCreateRequest) -> Result<String, Strin
     let message_id = format!("msg-{}", Uuid::new_v4());
     let created_at = Utc::now().to_rfc3339();
 
+    let tool_calls_json = message.tool_calls
+        .as_ref()
+        .and_then(|calls| serde_json::to_string(calls).ok());
+
     conn.execute(
-        "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming, tool_calls)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             &message_id,
             &message.session_id,
@@ -83,6 +93,7 @@ pub async fn save_message(message: MessageCreateRequest) -> Result<String, Strin
             &created_at,
             &message.request_id,
             &message.is_streaming,
+            &tool_calls_json,
         ],
     ).map_err(|e| format!("Failed to insert message: {}", e))?;
 

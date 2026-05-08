@@ -178,7 +178,7 @@ fn filter_system_tags(text: &str) -> String {
         }
     }
 
-    result.trim().to_string()
+    result
 }
 
 fn usage_to_json(usage: &UsageInfo) -> serde_json::Value {
@@ -402,6 +402,60 @@ fn emit_lifecycle_event(
         "source": source,
         "timestamp": timestamp,
     }));
+}
+
+// Generate a descriptive action string based on tool name and parameters
+fn generate_tool_description(tool_name: &str, input_json: &str) -> String {
+    // Try to parse the input JSON to extract useful parameters
+    if let Ok(input) = serde_json::from_str::<serde_json::Value>(input_json) {
+        match tool_name {
+            "Read" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Read {}", file_path);
+                }
+            }
+            "Edit" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Edit {}", file_path);
+                }
+            }
+            "Write" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Write {}", file_path);
+                }
+            }
+            "Bash" => {
+                if let Some(command) = input.get("command").and_then(|v| v.as_str()) {
+                    // Truncate long commands
+                    let truncated = if command.len() > 80 {
+                        format!("{}...", &command[..77])
+                    } else {
+                        command.to_string()
+                    };
+                    return format!("Run: {}", truncated);
+                }
+            }
+            "Glob" => {
+                if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
+                    return format!("Search files: {}", pattern);
+                }
+            }
+            "Grep" => {
+                if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
+                    return format!("Search content: {}", pattern);
+                }
+            }
+            "WebSearch" => {
+                if let Some(query) = input.get("query").and_then(|v| v.as_str()) {
+                    return format!("Web search: {}", query);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Fallback to generic description
+    format!("Executing {}", tool_name)
 }
 
 
@@ -1031,6 +1085,8 @@ impl ClaurstSession {
         };
         let event_tool_sequence = diagnostic_context.tool_sequence.clone();
         let event_turn_summaries = diagnostic_context.turn_summaries.clone();
+        let accumulated_streaming_text = Arc::new(parking_lot::Mutex::new(String::new()));
+        let event_accumulated_text = accumulated_streaming_text.clone();
         tokio::spawn(async move {
             let mut has_emitted_streaming = false;
             while let Some(event) = event_rx.recv().await {
@@ -1079,6 +1135,9 @@ impl ClaurstSession {
 
                                 // Only emit if there's content after filtering
                                 if !filtered_text.is_empty() {
+                                    // Accumulate streaming text
+                                    event_accumulated_text.lock().push_str(&filtered_text);
+
                                     if !has_emitted_streaming {
                                         has_emitted_streaming = true;
                                         emit_lifecycle_event(
@@ -1100,7 +1159,7 @@ impl ClaurstSession {
                             }
                         }
                     }
-                    QueryEvent::ToolStart { tool_name, .. } => {
+                    QueryEvent::ToolStart { tool_name, input_json, .. } => {
                         let tool_sequence_index = {
                             let mut tool_sequence = event_tool_sequence.lock();
                             tool_sequence.push(serde_json::json!({
@@ -1148,12 +1207,14 @@ impl ClaurstSession {
                             "tool_start",
                         );
 
-                        let description = format!("Executing {}", tool_name);
+                        // Generate a more descriptive action based on tool parameters
+                        let description = generate_tool_description(&tool_name, &input_json);
                         emit_display_status(&event_window, &event_request_id, "tool_running", &description);
                         let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
                             "action": description,
+                            "input": input_json,
                         }));
                     }
                     QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
@@ -1456,6 +1517,10 @@ impl ClaurstSession {
                 let turn_summaries = diagnostic_context.turn_summaries.lock().clone();
 
                 let mut text = take_text_from_message_content(&message.content);
+
+                // Filter out system tags from the final message content
+                text = filter_system_tags(&text);
+
                 let extracted_text_before_fallback = text.clone();
                 let extracted_text_before_fallback_chars = extracted_text_before_fallback.chars().count();
                 let extracted_text_before_fallback_preview = extracted_text_before_fallback
@@ -1465,7 +1530,17 @@ impl ClaurstSession {
                     .replace('\n', "\\n");
                 let extracted_text_was_empty = text.is_empty();
 
-                if extracted_text_was_empty {
+                // Use accumulated streaming text if available and extracted text is empty
+                let accumulated_text = accumulated_streaming_text.lock().clone();
+                if extracted_text_was_empty && !accumulated_text.is_empty() {
+                    log::info!(
+                        "Using accumulated streaming text instead of extracted text: request_id={} accumulated_chars={} extracted_chars={}",
+                        request_id_owned,
+                        accumulated_text.chars().count(),
+                        extracted_text_before_fallback_chars
+                    );
+                    text = accumulated_text;
+                } else if extracted_text_was_empty {
                     text = "✓ 已完成工具执行".to_string();
                 }
 
@@ -1548,33 +1623,29 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
-                // Only save message to storage/database if it's not completed_tool_only
-                // For completed_tool_only, the streaming content was already saved during streaming
-                // and we don't want to overwrite it with the fallback text
-                if outcome != "completed_tool_only" {
-                    save_message_to_file_storage(
-                        &self.storage,
-                        &self.session_id,
-                        StoredMessage {
-                            role: "assistant".to_string(),
-                            content: text.clone(),
-                            timestamp: chrono::Utc::now().timestamp(),
-                        },
-                        task_session,
-                        "assistant",
-                    );
+                // Always save assistant message to storage and database
+                save_message_to_file_storage(
+                    &self.storage,
+                    &self.session_id,
+                    StoredMessage {
+                        role: "assistant".to_string(),
+                        content: text.clone(),
+                        timestamp: chrono::Utc::now().timestamp(),
+                    },
+                    task_session,
+                    "assistant",
+                );
 
-                    // Also save to database
-                    if let Ok(pool) = crate::database::get_pool() {
-                        if let Ok(conn) = pool.get() {
-                            let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
-                            let created_at = chrono::Utc::now().to_rfc3339();
-                            let _ = conn.execute(
-                                "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
-                                 VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
-                                rusqlite::params![&msg_id, &self.session_id, &text, &created_at, &request_id_owned],
-                            );
-                        }
+                // Also save to database
+                if let Ok(pool) = crate::database::get_pool() {
+                    if let Ok(conn) = pool.get() {
+                        let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                        let created_at = chrono::Utc::now().to_rfc3339();
+                        let _ = conn.execute(
+                            "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                             VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
+                            rusqlite::params![&msg_id, &self.session_id, &text, &created_at, &request_id_owned],
+                        );
                     }
                 }
 
