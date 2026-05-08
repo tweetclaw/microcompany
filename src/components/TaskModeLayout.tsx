@@ -1,9 +1,11 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import TaskListPanel from './TaskListPanel';
 import ChatInterface from './ChatInterface';
+import SaveTemplateModal from './SaveTemplateModal';
 import { AiRequestEndEvent, Message, Task, TaskSummary, ProviderConfig, AiRunState, TeamBrief } from '../types';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
+import { saveTaskAsTemplate } from '../api/templates';
 import './TaskModeLayout.css';
 import './ResizeHandle.css';
 
@@ -92,6 +94,8 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
     () => chunkRoles(props.currentTask?.roles ?? [], 3),
     [props.currentTask],
   );
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [saveTemplateError, setSaveTemplateError] = useState<string | null>(null);
 
   const isAiWorking = useMemo(() => {
     return props.runState === 'running_thinking'
@@ -145,6 +149,26 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
     if (dirty) saveLayoutState(next);
   };
 
+  const handleSaveAsTemplate = async (name: string, description: string) => {
+    if (!props.currentTask) return;
+
+    try {
+      setSaveTemplateError(null);
+      await saveTaskAsTemplate({
+        name,
+        description,
+        icon: 'team',
+        source_task_id: props.currentTask.id,
+      });
+      setShowSaveTemplateModal(false);
+      // TODO: 可以添加成功提示
+      alert('模板保存成功！');
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      setSaveTemplateError(error instanceof Error ? error.message : '保存模板失败');
+    }
+  };
+
   return (
     <Group
       orientation="horizontal"
@@ -186,6 +210,15 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                         : 'Select a role at the table and work through the task one specialist at a time.'}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    className="task-mode-save-template-button"
+                    onClick={() => setShowSaveTemplateModal(true)}
+                    disabled={isAiWorking}
+                    title={isAiWorking ? 'AI 处理中时暂时不能保存模板' : '将当前团队结构保存为模板'}
+                  >
+                    保存为模板
+                  </button>
                 </div>
 
                 {props.currentTask.pm_first_workflow && pmRole && (
@@ -395,6 +428,16 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
             </div>
           </div>
         </Panel>
+      )}
+      {showSaveTemplateModal && (
+        <SaveTemplateModal
+          taskName={props.currentTask?.name || '未命名任务'}
+          onSave={handleSaveAsTemplate}
+          onCancel={() => {
+            setShowSaveTemplateModal(false);
+            setSaveTemplateError(null);
+          }}
+        />
       )}
     </Group>
   );
