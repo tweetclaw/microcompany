@@ -328,44 +328,93 @@
 }
 
 /* Mode selection styles */
-.task-builder-mode-selection {
+.task-builder-mode-select {
+  max-width: 600px;
+}
+
+.task-builder-mode-options {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 32px 0;
+  gap: 20px;
+  padding: 40px 0 20px;
 }
 
 .task-builder-mode-option {
-  padding: 20px 24px;
-  background: var(--bg-secondary);
+  padding: 0;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-elevated) 100%);
   border: 2px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.task-builder-mode-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .task-builder-mode-option:hover {
-  border-color: var(--btn-primary-border);
-  background: var(--bg-tertiary);
-  box-shadow: var(--shadow-md);
+  border-color: #667eea;
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-secondary) 100%);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+  transform: translateY(-4px);
+}
+
+.task-builder-mode-option:hover::before {
+  opacity: 1;
+}
+
+.task-builder-mode-option:active {
   transform: translateY(-2px);
 }
 
-.task-builder-mode-option h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+.task-builder-mode-icon {
+  font-size: 56px;
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-right: 1px solid var(--border-default);
+  transition: all 0.3s ease;
 }
 
-.task-builder-mode-option p {
+.task-builder-mode-option:hover .task-builder-mode-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  transform: scale(1.1);
+}
+
+.task-builder-mode-info {
+  flex: 1;
+  padding: 24px 32px 24px 0;
+}
+
+.task-builder-mode-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.task-builder-mode-info p {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {
