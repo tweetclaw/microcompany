@@ -13,6 +13,7 @@ import TerminalPanel from './TerminalPanel';
 import { ToolIndicator } from './ToolIndicator';
 import './ResizeHandle.css';
 import {
+  AiActivityPhase,
   AiMessageChunkEvent,
   AiRequestEndEvent,
   AiRequestLifecycleEvent,
@@ -20,6 +21,7 @@ import {
   AiRequestUsageEvent,
   AiRunState,
   AiStatusEvent,
+  AiTerminalOutcome,
   AiTokenWarningEvent,
   AiToolEndEvent,
   AiToolStartEvent,
@@ -30,6 +32,7 @@ import {
 import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import { extractHandoffSuggestion } from '../api/handoff';
+import { frontendLogger } from '../utils/frontendLogger';
 import './ChatInterface.css';
 
 function formatVisibleError(error: string) {
@@ -88,6 +91,7 @@ interface ChatInterfaceProps {
   onCancelRequest?: () => Promise<void>;
   onMessageCompleted?: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
+  onRunStateChange?: (runState: AiRunState) => void;
   availableRoleNames?: string[]; // For Task AI mode handoff observer
   taskRoles?: Array<{ id: string; name: string }>; // Full role objects for ID lookup
   currentRoleName?: string | null;
@@ -106,6 +110,34 @@ const RUNNING_STATES: AiRunState[] = [
   'running_generating',
   'finalizing',
 ];
+
+function mapActivityPhaseToRunState(phase: AiActivityPhase): AiRunState {
+  switch (phase) {
+    case 'thinking':
+      return 'running_thinking';
+    case 'tool_running':
+      return 'running_tool';
+    case 'streaming':
+      return 'running_generating';
+    case 'finalizing':
+      return 'finalizing';
+    default:
+      return 'running_thinking';
+  }
+}
+
+function mapTerminalOutcomeToRunState(outcome: AiTerminalOutcome): AiRunState {
+  switch (outcome) {
+    case 'cancelled':
+      return 'cancelled';
+    case 'error':
+    case 'max_tokens':
+    case 'budget_exceeded':
+      return 'error';
+    default:
+      return 'completed';
+  }
+}
 
 const PANEL_FILL_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -166,6 +198,7 @@ function ChatInterface({
   onSettingsClick,
   onMessageCompleted,
   onHandoffSuggestion,
+  onRunStateChange,
   availableRoleNames,
   taskRoles,
   currentRoleName,
@@ -217,6 +250,10 @@ function ChatInterface({
   }, [currentRoleName]);
 
   useEffect(() => {
+    onRunStateChange?.(runState);
+  }, [onRunStateChange, runState]);
+
+  useEffect(() => {
     // 如果当前正在运行中（有活跃的请求），不要重置状态
     // 这样可以避免在草稿转换为真实 session 时中断流式显示
     // 注意：必须检查 ref 而不是状态，因为状态更新是异步的
@@ -249,6 +286,11 @@ function ChatInterface({
       const hasVisibleText = options?.hasVisibleText ?? Boolean(finalText?.trim());
 
       if (targetIndex === undefined) {
+        frontendLogger.info('[ChatInterface] finalizeStreamingMessage missing target', {
+          requestId: requestId ?? null,
+          hasVisibleText,
+          finalTextChars: finalText?.trim().length ?? 0,
+        });
         if (hasVisibleText && finalText && finalText.trim()) {
           return [
             ...prev,
@@ -266,6 +308,23 @@ function ChatInterface({
       }
 
       const targetMessage = prev[targetIndex];
+      const trimmedFinalText = finalText?.trim() ?? '';
+      const nextContent = hasVisibleText && trimmedFinalText && targetMessage.content.includes('[HANDOFF]')
+        ? trimmedFinalText || targetMessage.content
+        : targetMessage.content;
+      const contentReplaced = nextContent !== targetMessage.content;
+
+      frontendLogger.info('[ChatInterface] finalizeStreamingMessage target', {
+        requestId: requestId ?? null,
+        hasVisibleText,
+        targetIndex,
+        previousContentChars: targetMessage.content.length,
+        previousContentPreview: targetMessage.content.slice(0, 160),
+        finalTextChars: trimmedFinalText.length,
+        finalTextPreview: trimmedFinalText.slice(0, 160),
+        contentReplaced,
+        nextContentChars: nextContent.length,
+      });
 
       if (!hasVisibleText) {
         return [
@@ -276,10 +335,6 @@ function ChatInterface({
       }
 
       // 默认保持前端已累积的完整文本，只在需要移除机器可读后缀时用 final_text 覆盖
-      const nextContent = finalText && targetMessage.content.includes('[HANDOFF]')
-        ? finalText.trim() || targetMessage.content
-        : targetMessage.content;
-
       return [
         ...prev.slice(0, targetIndex),
         { ...targetMessage, content: nextContent, isStreaming: false },
@@ -395,7 +450,7 @@ function ChatInterface({
       unlistenLifecycle = await listen<AiRequestLifecycleEvent>('ai-request-lifecycle', (event) => {
         const payload = event.payload;
         if (payload.request_id !== activeRequestIdRef.current) return;
-        if (terminalRequestIdsRef.current.has(payload.request_id) && !['completed', 'cancelled', 'error'].includes(payload.phase)) {
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
           console.log('[ChatInterface] ignore terminal ai-request-lifecycle', {
             requestId: payload.request_id,
             phase: payload.phase,
@@ -411,20 +466,7 @@ function ChatInterface({
           timestamp: payload.timestamp,
         });
 
-        const nextState: AiRunState =
-          payload.phase === 'thinking'
-            ? 'running_thinking'
-            : payload.phase === 'tool_running'
-              ? 'running_tool'
-              : payload.phase === 'streaming'
-                ? 'running_generating'
-                : payload.phase === 'finalizing'
-                  ? 'finalizing'
-                  : payload.phase === 'completed'
-                    ? 'completed'
-                    : payload.phase === 'cancelled'
-                      ? 'cancelled'
-                      : 'error';
+        const nextState = mapActivityPhaseToRunState(payload.phase);
 
         setRunState(nextState);
 
@@ -615,7 +657,7 @@ function ChatInterface({
       unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', async (event) => {
         const payload = event.payload;
         if (terminalRequestIdsRef.current.has(payload.request_id)) {
-          console.log('[ChatInterface] ignore duplicate ai-request-end', {
+          frontendLogger.info('[ChatInterface] ignore duplicate ai-request-end', {
             requestId: payload.request_id,
             result: payload.result,
             timestamp: payload.timestamp,
@@ -626,9 +668,19 @@ function ChatInterface({
 
         terminalRequestIdsRef.current.add(payload.request_id);
 
-        console.log('[ChatInterface] ai-request-end', {
+        frontendLogger.info('[ChatInterface] mark request terminal', {
+          requestId: payload.request_id,
+          outcome: payload.outcome,
+          reasonCode: payload.reason_code ?? null,
+          currentRoleName: currentRoleNameRef.current,
+        });
+
+        frontendLogger.info('[ChatInterface] ai-request-end', {
           requestId: payload.request_id,
           result: payload.result,
+          outcome: payload.outcome,
+          reasonCode: payload.reason_code ?? null,
+          activityPhaseAtEnd: payload.activity_phase_at_end,
           timestamp: payload.timestamp,
           hasError: Boolean(payload.error_message),
           hasVisibleText: payload.has_visible_text ?? null,
@@ -637,6 +689,7 @@ function ChatInterface({
         });
         let accumulatedText = '';
         let hadAssistantMessageForRequest = false;
+        let lastAssistantMessageContent = '';
         onMessagesChangeRef.current((currentMessages: Message[]) => {
           const lastAssistantMsg = [...currentMessages]
             .reverse()
@@ -645,22 +698,45 @@ function ChatInterface({
             accumulatedText = lastAssistantMsg.content;
             hadAssistantMessageForRequest = true;
           }
+
+          // For completed_tool_only, also check the last assistant message regardless of requestId
+          const lastAssistantMsgAny = [...currentMessages]
+            .reverse()
+            .find((msg) => msg.role === 'assistant');
+          if (lastAssistantMsgAny) {
+            lastAssistantMessageContent = lastAssistantMsgAny.content;
+          }
           return currentMessages;
         });
 
         const hasVisibleText = payload.has_visible_text ?? Boolean(payload.final_text?.trim());
         const finalText = hasVisibleText ? payload.final_text?.trim() ?? '' : '';
+        const streamedVisibleText = accumulatedText.trim();
+        const hadStreamedVisibleText = streamedVisibleText.length > 0;
+
+        // For completed_tool_only: check if ANY assistant message has visible text
+        // This prevents showing "no visible text" notice when user already saw AI's response
+        const hasAnyAssistantText = lastAssistantMessageContent.trim().length > 0;
+        const shouldShowToolOnlyNotice = payload.outcome === 'completed_tool_only' && !hadStreamedVisibleText && !hasAnyAssistantText;
         const resolvedUsage = payload.usage ?? currentUsage;
         const resolvedWarnings = payload.warnings ?? tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }));
+        const terminalRunState = mapTerminalOutcomeToRunState(payload.outcome);
+        const shouldDelayReset = payload.outcome === 'cancelled' || terminalRunState === 'error';
 
-        console.log('[ChatInterface] finalize request', {
+        frontendLogger.info('[ChatInterface] finalize request', {
           requestId: payload.request_id,
           hasVisibleText,
           finalTextChars: finalText.length,
           accumulatedTextChars: accumulatedText.length,
           hadAssistantMessageForRequest,
+          hadStreamedVisibleText,
+          hasAnyAssistantText,
+          lastAssistantMessageContentChars: lastAssistantMessageContent.length,
+          shouldShowToolOnlyNotice,
           activeRequestId: activeRequestIdRef.current,
           timelineLength: processTimelineRef.current.length,
+          outcome: payload.outcome,
+          terminalRunState,
         });
 
         finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText });
@@ -673,159 +749,188 @@ function ChatInterface({
           timestamp: payload.timestamp,
         })));
 
-        console.log('[ChatInterface] finalizeStreamingMessage complete', {
+        frontendLogger.info('[ChatInterface] finalizeStreamingMessage complete', {
           requestId: payload.request_id,
           hasVisibleText,
           finalTextChars: finalText.length,
         });
 
-        if (payload.result === 'success') {
-          if (!hasVisibleText) {
+        let timelineText = '请求完成';
+
+        if (payload.outcome === 'completed_tool_only') {
+          if (shouldShowToolOnlyNotice) {
             appendTimeline({
               id: `${payload.request_id}-${payload.timestamp}-no-visible-text`,
               requestId: payload.request_id,
               kind: 'status',
               text: '工具已执行完成，但本轮未返回可显示文本',
               timestamp: payload.timestamp,
-              phase: 'finalizing',
+              phase: payload.activity_phase_at_end,
+            });
+          } else {
+            frontendLogger.info('[ChatInterface] suppress completed_tool_only fallback notice because streamed text already exists', {
+              requestId: payload.request_id,
+              accumulatedTextChars: accumulatedText.length,
+              streamedVisibleText: streamedVisibleText.slice(0, 160),
+              hasAnyAssistantText,
+              lastAssistantMessageContentChars: lastAssistantMessageContent.length,
+              lastAssistantMessageContentPreview: lastAssistantMessageContent.slice(0, 160),
             });
           }
-
-          if (payload.handoffSuggestion && onHandoffSuggestion) {
-            console.log('✅ [ChatInterface] 后端直接提供了 handoffSuggestion');
-            onHandoffSuggestion(payload);
-            setRunState('completed');
-            resetRunIfTerminal();
-            if (onMessageCompleted) {
-              onMessageCompleted();
-            }
-            return;
-          }
-
-          // Try new JSON API observer first (Task mode only)
-          if (hasVisibleText && onHandoffSuggestion && currentRoleNameRef.current && finalText) {
-            console.log('🎯 [ChatInterface] AI 任务完成，准备调用观察者');
-            console.log('🎯 [ChatInterface] 当前角色:', currentRoleNameRef.current);
-            console.log('🎯 [ChatInterface] 消息长度:', finalText.length, '字符');
-
-            try {
-              console.log('🎯 [ChatInterface] 调用观察者 API...');
-              const roles = availableRoleNames || [];
-              console.log('🎯 [ChatInterface] 可用角色:', roles);
-              const handoffInfo = await extractHandoffSuggestion(currentRoleNameRef.current, finalText, roles);
-
-              console.log('✅ [ChatInterface] 观察者返回结果:', handoffInfo);
-              console.log('✅ [ChatInterface] has_handoff:', handoffInfo.hasHandoff);
-
-              if (handoffInfo.hasHandoff) {
-                console.log('✅ [ChatInterface] 检测到交接意图！');
-                console.log('✅ [ChatInterface] 推荐角色:', handoffInfo.suggestedRole);
-                console.log('✅ [ChatInterface] 完整消息长度:', handoffInfo.fullMessage.length);
-
-                const targetRole = resolveSuggestedTaskRole(handoffInfo.suggestedRole, taskRoles);
-                const targetRoleId = targetRole?.id || null;
-
-                console.log('✅ [ChatInterface] 角色名称转换: ', handoffInfo.suggestedRole, '->', targetRoleId, targetRole?.name);
-
-                // Create handoff suggestion from observer data
-                const handoffSuggestion = {
-                  recommended: true,
-                  targetRoleId: targetRoleId,
-                  targetRoleName: handoffInfo.suggestedRole || '',
-                  reason: '标签解析交接',
-                  draftMessage: '',
-                  fullMessage: handoffInfo.fullMessage,
-                };
-
-                console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调');
-                onHandoffSuggestion({ ...payload, handoffSuggestion });
-                setRunState('completed');
-                resetRunIfTerminal();
-                if (onMessageCompleted) {
-                  onMessageCompleted();
-                }
-                return;
-              } else {
-                console.log('ℹ️ [ChatInterface] 观察者判断：无交接意图');
-              }
-            } catch (error) {
-              console.error('❌ [ChatInterface] 观察者提取失败，回退到标签解析:', error);
-            }
-          }
-
-          // Fallback: If backend didn't provide handoff suggestion but we have accumulated text, check for handoff manually
-          console.log('🔄 [ChatInterface] 检查回退逻辑：标签解析');
-          if (finalText && onHandoffSuggestion) {
-            console.log('🔄 [ChatInterface] 尝试标签解析...');
-            // Extract handoff block from accumulated text
-            const handoffMatch = finalText.match(/\[HANDOFF\]([\s\S]*?)\[\/HANDOFF\]/);
-            if (handoffMatch) {
-              console.log('✅ [ChatInterface] 找到 HANDOFF 标签');
-              const handoffContent = handoffMatch[1];
-              const lines = handoffContent.split('\n').map(line => line.trim()).filter(line => line);
-              const fields: Record<string, string> = {};
-              for (const line of lines) {
-                const colonIndex = line.indexOf(':');
-                if (colonIndex > 0) {
-                  const key = line.substring(0, colonIndex).trim().toLowerCase();
-                  const value = line.substring(colonIndex + 1).trim();
-                  fields[key] = value;
-                }
-              }
-
-              const recommended = fields['recommended']?.toLowerCase() === 'yes';
-              if (recommended && fields['target_role']) {
-                console.log('✅ [ChatInterface] 标签解析成功，推荐角色:', fields['target_role']);
-                // Create handoff suggestion from frontend-parsed data
-                const handoffSuggestion = {
-                  recommended: true,
-                  targetRoleId: null,
-                  targetRoleName: fields['target_role'],
-                  reason: fields['reason'] || '',
-                  draftMessage: fields['draft_message'] || '',
-                };
-                console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调（标签解析）');
-                onHandoffSuggestion({ ...payload, handoffSuggestion });
-              } else {
-                console.log('ℹ️ [ChatInterface] 标签解析：未推荐交接');
-              }
-            } else {
-              console.log('ℹ️ [ChatInterface] 未找到 HANDOFF 标签');
-            }
-          } else if (payload.handoffSuggestion && onHandoffSuggestion) {
-            console.log('✅ [ChatInterface] 后端直接提供了 handoffSuggestion');
-            onHandoffSuggestion(payload);
-          }
-          setRunState('completed');
-          resetRunIfTerminal();
-          // Refresh session list to update title
-          if (onMessageCompleted) {
-            onMessageCompleted();
-          }
-        } else if (payload.result === 'cancelled') {
-          setRunState('cancelled');
-          resetRunIfTerminal(450);
-        } else {
-          setRunState('error');
-          if (payload.error_message) {
-            setLastError(payload.error_message);
-          }
-          resetRunIfTerminal(450);
+          timelineText = '请求完成（仅工具结果）';
+        } else if (payload.outcome === 'handoff_ready') {
+          timelineText = '请求完成（可交接）';
+        } else if (payload.outcome === 'cancelled') {
+          timelineText = '请求已取消';
+        } else if (payload.outcome === 'max_tokens') {
+          timelineText = `请求因上下文限制结束${payload.error_message ? `: ${payload.error_message}` : ''}`;
+        } else if (payload.outcome === 'budget_exceeded') {
+          timelineText = `请求因预算限制结束${payload.error_message ? `: ${payload.error_message}` : ''}`;
+        } else if (terminalRunState === 'error') {
+          timelineText = `请求失败${payload.error_message ? `: ${payload.error_message}` : ''}`;
         }
 
         appendTimeline({
           id: `${payload.request_id}-${payload.timestamp}-end`,
           requestId: payload.request_id,
           kind: 'request_end',
-          text:
-            payload.result === 'success'
-              ? '请求完成'
-              : payload.result === 'cancelled'
-                ? '请求已取消'
-                : `请求失败${payload.error_message ? `: ${payload.error_message}` : ''}`,
+          text: timelineText,
           timestamp: payload.timestamp,
+          phase: payload.activity_phase_at_end,
           result: payload.result,
+          outcome: payload.outcome,
         });
+
+        frontendLogger.info('[ChatInterface] terminal outcome applied', {
+          requestId: payload.request_id,
+          outcome: payload.outcome,
+          terminalRunState,
+          timelineText,
+          shouldDelayReset,
+        });
+
+        setRunState(terminalRunState);
+
+        if (terminalRunState === 'error' && payload.error_message) {
+          setLastError(payload.error_message);
+        }
+
+        if (payload.handoffSuggestion && onHandoffSuggestion) {
+          console.log('✅ [ChatInterface] 后端直接提供了 handoffSuggestion');
+          onHandoffSuggestion(payload);
+          if (onMessageCompleted) {
+            onMessageCompleted();
+          }
+          console.log('[ChatInterface] reset after backend handoff suggestion', {
+            requestId: payload.request_id,
+            outcome: payload.outcome,
+          });
+          resetRunIfTerminal();
+          return;
+        }
+
+        if (payload.outcome === 'completed' && hasVisibleText && onHandoffSuggestion && currentRoleNameRef.current && finalText) {
+          console.log('🎯 [ChatInterface] 尝试 observer fallback 检测 handoff');
+          console.log('🎯 [ChatInterface] 当前角色:', currentRoleNameRef.current);
+          console.log('🎯 [ChatInterface] 消息长度:', finalText.length, '字符');
+
+          try {
+            console.log('🎯 [ChatInterface] 调用观察者 API...');
+            const roles = availableRoleNames || [];
+            console.log('🎯 [ChatInterface] 可用角色:', roles);
+            const handoffInfo = await extractHandoffSuggestion(currentRoleNameRef.current, finalText, roles);
+
+            console.log('✅ [ChatInterface] 观察者返回结果:', handoffInfo);
+            console.log('✅ [ChatInterface] has_handoff:', handoffInfo.hasHandoff);
+
+            if (handoffInfo.hasHandoff) {
+              console.log('✅ [ChatInterface] observer fallback 检测到交接意图');
+              console.log('✅ [ChatInterface] 推荐角色:', handoffInfo.suggestedRole);
+              console.log('✅ [ChatInterface] 完整消息长度:', handoffInfo.fullMessage.length);
+
+              const targetRole = resolveSuggestedTaskRole(handoffInfo.suggestedRole, taskRoles);
+              const targetRoleId = targetRole?.id || null;
+
+              console.log('✅ [ChatInterface] 角色名称转换: ', handoffInfo.suggestedRole, '->', targetRoleId, targetRole?.name);
+
+              const handoffSuggestion = {
+                recommended: true,
+                targetRoleId: targetRoleId,
+                targetRoleName: handoffInfo.suggestedRole || '',
+                reason: 'observer fallback',
+                draftMessage: '',
+                fullMessage: handoffInfo.fullMessage,
+              };
+
+              console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调（observer fallback）');
+              onHandoffSuggestion({ ...payload, handoffSuggestion });
+              if (onMessageCompleted) {
+                onMessageCompleted();
+              }
+              console.log('[ChatInterface] reset after observer fallback handoff', {
+                requestId: payload.request_id,
+                targetRoleId,
+                targetRoleName: handoffInfo.suggestedRole || '',
+              });
+              resetRunIfTerminal();
+              return;
+            }
+
+            console.log('ℹ️ [ChatInterface] observer fallback：无交接意图');
+          } catch (error) {
+            console.error('❌ [ChatInterface] observer fallback 失败，回退到标签解析:', error);
+          }
+        }
+
+        if (payload.outcome === 'completed' && finalText && onHandoffSuggestion) {
+          console.log('🔄 [ChatInterface] 检查 regex fallback 标签解析');
+          const handoffMatch = finalText.match(/\[HANDOFF\]([\s\S]*?)\[\/HANDOFF\]/);
+          if (handoffMatch) {
+            console.log('✅ [ChatInterface] regex fallback 找到 HANDOFF 标签');
+            const handoffContent = handoffMatch[1];
+            const lines = handoffContent.split('\n').map(line => line.trim()).filter(line => line);
+            const fields: Record<string, string> = {};
+            for (const line of lines) {
+              const colonIndex = line.indexOf(':');
+              if (colonIndex > 0) {
+                const key = line.substring(0, colonIndex).trim().toLowerCase();
+                const value = line.substring(colonIndex + 1).trim();
+                fields[key] = value;
+              }
+            }
+
+            const recommended = fields['recommended']?.toLowerCase() === 'yes';
+            if (recommended && fields['target_role']) {
+              console.log('✅ [ChatInterface] regex fallback 解析成功，推荐角色:', fields['target_role']);
+              const handoffSuggestion = {
+                recommended: true,
+                targetRoleId: null,
+                targetRoleName: fields['target_role'],
+                reason: 'regex fallback',
+                draftMessage: fields['draft_message'] || '',
+              };
+              console.log('✅ [ChatInterface] 触发 onHandoffSuggestion 回调（regex fallback）');
+              onHandoffSuggestion({ ...payload, handoffSuggestion });
+            } else {
+              console.log('ℹ️ [ChatInterface] regex fallback：未推荐交接');
+            }
+          } else {
+            console.log('ℹ️ [ChatInterface] regex fallback：未找到 HANDOFF 标签');
+          }
+        }
+
+        if (onMessageCompleted && terminalRunState === 'completed') {
+          onMessageCompleted();
+        }
+
+        console.log('[ChatInterface] scheduling terminal reset', {
+          requestId: payload.request_id,
+          delayMs: shouldDelayReset ? 450 : 0,
+          terminalRunState,
+          outcome: payload.outcome,
+        });
+
+        resetRunIfTerminal(shouldDelayReset ? 450 : 0);
       });
     };
 

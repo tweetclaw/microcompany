@@ -821,6 +821,7 @@ function App() {
                 isInspectorCollapsed={isInspectorCollapsed}
                 isTerminalCollapsed={isTerminalCollapsed}
                 runState={runState}
+                onRunStateChange={setRunState}
               />
             </Suspense>
           )}

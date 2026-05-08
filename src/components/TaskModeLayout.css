@@ -254,29 +254,57 @@
 }
 
 .task-seat-card.working {
-  border-color: rgba(251, 146, 60, 0.5);
+  border-color: rgba(239, 68, 68, 0.96);
   background:
-    linear-gradient(180deg, rgba(251, 146, 60, 0.12), rgba(251, 146, 60, 0.06)),
-    rgba(255, 255, 255, 0.06);
+    linear-gradient(180deg, rgba(253, 224, 71, 0.96), rgba(250, 204, 21, 0.82));
   box-shadow:
-    0 0 0 1px rgba(251, 146, 60, 0.2),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.12),
-    0 10px 24px rgba(251, 146, 60, 0.15);
-  animation: working-pulse 2s ease-in-out infinite;
+    0 0 0 2px rgba(239, 68, 68, 0.52),
+    0 0 30px rgba(239, 68, 68, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 16px 34px rgba(234, 88, 12, 0.28);
+  animation: working-pulse 1.2s ease-in-out infinite;
+}
+
+.task-seat-card.working .task-seat-avatar {
+  background: linear-gradient(135deg, rgb(239, 68, 68), rgb(249, 115, 22));
+  color: #fff7ed;
+  box-shadow:
+    0 0 0 4px rgba(254, 240, 138, 0.46),
+    0 0 28px rgba(239, 68, 68, 0.42),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.28),
+    0 10px 24px rgba(234, 88, 12, 0.3);
+}
+
+.task-seat-card.working .task-seat-avatar::after {
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.task-seat-card.working .task-seat-name {
+  color: rgb(120, 53, 15);
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.task-seat-card.working .task-seat-meta,
+.task-seat-card.working .task-seat-model {
+  color: rgba(120, 53, 15, 0.88);
+  opacity: 1;
 }
 
 @keyframes working-pulse {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(251, 146, 60, 0.2),
-      inset 0 0.5px 0 rgba(255, 255, 255, 0.12),
-      0 10px 24px rgba(251, 146, 60, 0.15);
+      0 0 0 2px rgba(239, 68, 68, 0.52),
+      0 0 30px rgba(239, 68, 68, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      0 16px 34px rgba(234, 88, 12, 0.28);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(251, 146, 60, 0.3),
-      inset 0 0.5px 0 rgba(255, 255, 255, 0.12),
-      0 10px 24px rgba(251, 146, 60, 0.25);
+      0 0 0 3px rgba(220, 38, 38, 0.72),
+      0 0 42px rgba(239, 68, 68, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      0 18px 38px rgba(220, 38, 38, 0.3);
   }
 }
 
@@ -569,6 +597,36 @@
   padding: 18px 16px 12px;
   border-bottom: 1px solid var(--border-default);
   background: rgba(255, 255, 255, 0.015);
+}
+
+.task-mode-chat-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-mode-chat-working-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 146, 60, 0.34);
+  background: rgba(251, 146, 60, 0.14);
+  color: rgb(253, 186, 116);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.task-mode-chat-panel.working .task-mode-chat-panel-header h3 {
+  color: rgb(255, 237, 213);
+}
+
+.task-mode-chat-panel.working .task-mode-chat-panel-label {
+  color: rgb(253, 186, 116);
 }
 
 .task-mode-chat-wrapper {

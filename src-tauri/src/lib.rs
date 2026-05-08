@@ -259,6 +259,7 @@ pub fn run() {
       commands::get_available_providers,
       commands::validate_provider_config,
       commands::extract_handoff_suggestion,
+      commands::log_from_frontend,
       initialize_database,
       create_task,
       get_task,
