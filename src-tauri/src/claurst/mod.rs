@@ -160,6 +160,27 @@ fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
         .to_string()
 }
 
+/// Filter out system tags like <system-reminder> from streaming content
+/// This is a simple implementation that removes complete tags
+fn filter_system_tags(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // Remove <system-reminder>...</system-reminder> tags and their content
+    while let Some(start) = result.find("<system-reminder>") {
+        if let Some(end) = result[start..].find("</system-reminder>") {
+            let end_pos = start + end + "</system-reminder>".len();
+            result.replace_range(start..end_pos, "");
+        } else {
+            // If we find opening tag but no closing tag, remove from opening tag to end
+            // This handles the case where the tag is incomplete in this chunk
+            result.truncate(start);
+            break;
+        }
+    }
+
+    result
+}
+
 fn usage_to_json(usage: &UsageInfo) -> serde_json::Value {
     let total_tokens = usage.input_tokens
         + usage.output_tokens
@@ -175,11 +196,83 @@ fn usage_to_json(usage: &UsageInfo) -> serde_json::Value {
     })
 }
 
+#[derive(Debug, Clone)]
+struct TerminalEventPayload {
+    result: &'static str,
+    outcome: &'static str,
+    activity_phase_at_end: &'static str,
+    reason_code: Option<&'static str>,
+    error_message: Option<String>,
+    final_text: Option<String>,
+    has_visible_text: Option<bool>,
+    handoff_suggestion: Option<HandoffSuggestion>,
+    usage: Option<UsageInfo>,
+}
+
+#[derive(Debug, Clone)]
+struct CompletedToolOnlyDiagnosticContext {
+    tool_sequence: Arc<parking_lot::Mutex<Vec<Value>>>,
+    turn_summaries: Arc<parking_lot::Mutex<Vec<Value>>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TimelineItemData {
+    id: String,
+    item_type: String,  // "thinking", "tool_call", "output"
+    timestamp: i64,
+    content: Option<String>,
+    tool: Option<String>,
+    action: Option<String>,
+    status: Option<String>,
+    result: Option<String>,
+    tool_use_id: Option<String>,  // Store original tool_id for matching in ToolEnd
+}
+
 fn warning_to_json(warning_type: &str, message: String) -> Value {
     serde_json::json!({
         "warning_type": warning_type,
         "message": message,
     })
+}
+
+fn log_terminal_outcome(
+    request_id: &str,
+    session_id: &str,
+    payload: &TerminalEventPayload,
+    warnings: &[Value],
+) {
+    let final_text_chars = payload
+        .final_text
+        .as_ref()
+        .map(|value| value.chars().count())
+        .unwrap_or(0);
+    let visible_text_preview = payload
+        .final_text
+        .as_ref()
+        .map(|value| value.chars().take(120).collect::<String>().replace('\n', "\\n"))
+        .unwrap_or_default();
+    let total_tokens = payload.usage.as_ref().map(|usage| {
+        usage.input_tokens
+            + usage.output_tokens
+            + usage.cache_creation_input_tokens
+            + usage.cache_read_input_tokens
+    });
+
+    log::info!(
+        "claurst_terminal_outcome request_id={} session_id={} result={} outcome={} activity_phase_at_end={} reason_code={} has_visible_text={} final_text_chars={} warnings_count={} handoff_present={} total_tokens={} final_text_preview={}",
+        request_id,
+        session_id,
+        payload.result,
+        payload.outcome,
+        payload.activity_phase_at_end,
+        payload.reason_code.unwrap_or("none"),
+        payload.has_visible_text.unwrap_or(false),
+        final_text_chars,
+        warnings.len(),
+        payload.handoff_suggestion.is_some(),
+        total_tokens.map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string()),
+        visible_text_preview
+    );
 }
 
 fn emit_usage_event(
@@ -213,38 +306,23 @@ fn emit_terminal_event(
     window: &Window,
     request_id: &str,
     session_id: &str,
-    result: &str,
-    final_phase: &str,
-    error_message: Option<&str>,
-    final_text: Option<&str>,
-    has_visible_text: Option<bool>,
-    handoff_suggestion: Option<&HandoffSuggestion>,
-    usage: Option<&UsageInfo>,
+    payload: &TerminalEventPayload,
     warnings: &[Value],
 ) {
     let now = chrono::Utc::now().timestamp_millis();
-    emit_lifecycle_event(
-        window,
-        request_id,
-        session_id,
-        final_phase,
-        status_label_for_phase(final_phase),
-        match final_phase {
-            "completed" => "outcome_end_turn",
-            "cancelled" => "outcome_cancelled",
-            _ => "outcome_error",
-        },
-    );
+    log_terminal_outcome(request_id, session_id, payload, warnings);
     let _ = window.emit("ai-request-end", serde_json::json!({
         "request_id": request_id,
         "session_id": session_id,
-        "result": result,
-        "final_phase": final_phase,
-        "error_message": error_message,
-        "final_text": final_text,
-        "has_visible_text": has_visible_text,
-        "handoffSuggestion": handoff_suggestion,
-        "usage": usage.map(usage_to_json),
+        "result": payload.result,
+        "outcome": payload.outcome,
+        "activity_phase_at_end": payload.activity_phase_at_end,
+        "reason_code": payload.reason_code,
+        "error_message": payload.error_message,
+        "final_text": payload.final_text,
+        "has_visible_text": payload.has_visible_text,
+        "handoffSuggestion": payload.handoff_suggestion,
+        "usage": payload.usage.as_ref().map(usage_to_json),
         "warnings": warnings,
         "timestamp": now,
     }));
@@ -264,6 +342,52 @@ fn take_text_from_message_content(content: &MessageContent) -> String {
     match content {
         MessageContent::Text(s) => s.trim().to_string(),
         MessageContent::Blocks(blocks) => collect_final_text_from_blocks(blocks),
+    }
+}
+
+fn summarize_message_content(content: &MessageContent) -> Value {
+    match content {
+        MessageContent::Text(text) => serde_json::json!({
+            "variant": "text",
+            "char_count": text.chars().count(),
+            "trimmed_char_count": text.trim().chars().count(),
+            "preview": text.chars().take(120).collect::<String>().replace('\n', "\\n"),
+        }),
+        MessageContent::Blocks(blocks) => {
+            let block_summaries = blocks
+                .iter()
+                .enumerate()
+                .map(|(index, block)| match block {
+                    ContentBlock::Text { text } => serde_json::json!({
+                        "index": index,
+                        "type": "text",
+                        "char_count": text.chars().count(),
+                        "trimmed_char_count": text.trim().chars().count(),
+                        "preview": text.chars().take(120).collect::<String>().replace('\n', "\\n"),
+                    }),
+                    ContentBlock::ToolUse { name, .. } => serde_json::json!({
+                        "index": index,
+                        "type": "tool_use",
+                        "name": name,
+                    }),
+                    ContentBlock::ToolResult { tool_use_id, .. } => serde_json::json!({
+                        "index": index,
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                    }),
+                    _ => serde_json::json!({
+                        "index": index,
+                        "type": "other",
+                    }),
+                })
+                .collect::<Vec<_>>();
+
+            serde_json::json!({
+                "variant": "blocks",
+                "block_count": blocks.len(),
+                "blocks": block_summaries,
+            })
+        }
     }
 }
 
@@ -291,6 +415,60 @@ fn emit_lifecycle_event(
         "source": source,
         "timestamp": timestamp,
     }));
+}
+
+// Generate a descriptive action string based on tool name and parameters
+fn generate_tool_description(tool_name: &str, input_json: &str) -> String {
+    // Try to parse the input JSON to extract useful parameters
+    if let Ok(input) = serde_json::from_str::<serde_json::Value>(input_json) {
+        match tool_name {
+            "Read" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Read {}", file_path);
+                }
+            }
+            "Edit" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Edit {}", file_path);
+                }
+            }
+            "Write" => {
+                if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
+                    return format!("Write {}", file_path);
+                }
+            }
+            "Bash" => {
+                if let Some(command) = input.get("command").and_then(|v| v.as_str()) {
+                    // Truncate long commands
+                    let truncated = if command.len() > 80 {
+                        format!("{}...", &command[..77])
+                    } else {
+                        command.to_string()
+                    };
+                    return format!("Run: {}", truncated);
+                }
+            }
+            "Glob" => {
+                if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
+                    return format!("Search files: {}", pattern);
+                }
+            }
+            "Grep" => {
+                if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
+                    return format!("Search content: {}", pattern);
+                }
+            }
+            "WebSearch" => {
+                if let Some(query) = input.get("query").and_then(|v| v.as_str()) {
+                    return format!("Web search: {}", query);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Fallback to generic description
+    format!("Executing {}", tool_name)
 }
 
 
@@ -464,7 +642,8 @@ pub struct ClaurstSession {
     api_key: String,
     model: String,
     base_url: Option<String>,
-    system_prompt: Option<String>,
+    system_prompt: Option<String>,  // 角色提示词，用于拼接到第一条用户消息前面
+    role_prompt_prepended: bool,    // 标记是否已拼接角色提示词
     client: AnthropicClient,
     config: QueryConfig,
     messages: Vec<Message>,
@@ -479,7 +658,7 @@ fn infer_phase_from_status(status: &str) -> &'static str {
     if lower.contains("tool") {
         "tool_running"
     } else if lower.contains("generat") || lower.contains("stream") || lower.contains("respond") {
-        "generating"
+        "streaming"
     } else if lower.contains("final") || lower.contains("finish") || lower.contains("complete") {
         "finalizing"
     } else {
@@ -576,21 +755,23 @@ impl ClaurstSession {
         // 4. 创建 QueryConfig
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
-        query_config.system_prompt = system_prompt.clone();
+        // 注意：不再将 system_prompt 传递给 API 的 system 参数
+        // 改为在第一条用户消息前拼接角色提示词
+        // query_config.system_prompt = system_prompt.clone();
 
         log::info!(
-            "🔍 [DIAGNOSTIC] After setting query_config.system_prompt: is_some={} length={}",
-            query_config.system_prompt.is_some(),
-            query_config.system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
+            "🔍 [ROLE_PROMPT] Role prompt will be prepended to first user message: is_some={} length={}",
+            system_prompt.is_some(),
+            system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
         );
 
         if let Some(ref prompt) = system_prompt {
             log::info!(
-                "🔍 ClaurstSession::new system_prompt length={} first_200_chars={}",
+                "🔍 [ROLE_PROMPT] Role prompt length={} first_200_chars={}",
                 prompt.len(),
                 &prompt.chars().take(200).collect::<String>()
             );
-            log::info!("📋 [FULL_SYSTEM_PROMPT_START]\n{}\n📋 [FULL_SYSTEM_PROMPT_END]", prompt);
+            log::info!("📋 [FULL_ROLE_PROMPT_START]\n{}\n📋 [FULL_ROLE_PROMPT_END]", prompt);
         }
 
         // 5. 注册工具
@@ -717,13 +898,28 @@ impl ClaurstSession {
             );
         }
 
+        // 检测是否已有用户消息，如果有则标记为已拼接角色提示词
+        // 这样可以防止重复拼接
+        // 注意：Message 是 claurst_core 的类型，我们通过检查消息内容来判断
+        let has_user_message = !messages.is_empty();
+        let role_prompt_prepended = has_user_message;
+
+        if role_prompt_prepended {
+            log::info!(
+                "🔗 [ROLE_PROMPT] Session has existing messages, marking role_prompt_prepended=true to prevent duplicate prepending: session_id={} message_count={}",
+                session_id,
+                messages.len()
+            );
+        }
+
         Ok(Self {
             session_id,
             working_dir,
             api_key,
             model: query_config.model.clone(),
             base_url: provider_base_url,
-            system_prompt: query_config.system_prompt.clone(),
+            system_prompt,  // 直接使用传入的 system_prompt，不再从 query_config 获取
+            role_prompt_prepended,  // 根据是否有消息来设置
             client,
             config: query_config,
             messages,
@@ -744,8 +940,66 @@ impl ClaurstSession {
         let task_trace = load_task_trace_context(&self.session_id);
         let task_session = task_trace.is_some();
 
-        // 1. 添加用户消息
-        self.messages.push(Message::user(message.to_string()));
+        // 检测是否为第一条用户消息，如果是则拼接角色提示词
+        let is_first_user_message = !self.role_prompt_prepended;
+
+        if is_first_user_message {
+            if self.system_prompt.is_some() {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] First user message detected, will prepend role prompt: request_id={} session_id={} has_role_prompt=true",
+                    request_id,
+                    self.session_id
+                );
+            } else {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] First user message detected, but no role prompt available: request_id={} session_id={} has_role_prompt=false",
+                    request_id,
+                    self.session_id
+                );
+            }
+        } else {
+            log::info!(
+                "🔗 [MESSAGE_PREPEND] Not first user message, skipping role prompt prepending: request_id={} session_id={} role_prompt_prepended=true",
+                request_id,
+                self.session_id
+            );
+        }
+
+        let actual_message = if is_first_user_message && self.system_prompt.is_some() {
+            let role_prompt = self.system_prompt.as_ref().unwrap();
+            let combined = format!("{}\n\n---\n\n{}", role_prompt, message);
+
+            if let Some(trace) = task_trace.as_ref() {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} task_id={} role_id={} role_name={} role_prompt_chars={} user_message_chars={} combined_chars={}",
+                    request_id,
+                    self.session_id,
+                    trace.task_id,
+                    trace.role_id,
+                    trace.role_name,
+                    role_prompt.chars().count(),
+                    message.chars().count(),
+                    combined.chars().count()
+                );
+            } else {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} role_prompt_chars={} user_message_chars={} combined_chars={}",
+                    request_id,
+                    self.session_id,
+                    role_prompt.chars().count(),
+                    message.chars().count(),
+                    combined.chars().count()
+                );
+            }
+
+            self.role_prompt_prepended = true;
+            combined
+        } else {
+            message.to_string()
+        };
+
+        // 1. 添加用户消息（使用拼接后的消息）
+        self.messages.push(Message::user(actual_message.clone()));
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
                 "claurst_request_user_message_saved request_id={} session_id={} task_id={} role_id={} role_name={} total_messages={} message_chars={}",
@@ -755,7 +1009,7 @@ impl ClaurstSession {
                 trace.role_id,
                 trace.role_name,
                 self.messages.len(),
-                message.chars().count()
+                actual_message.chars().count()
             );
         } else {
             log::info!(
@@ -763,24 +1017,24 @@ impl ClaurstSession {
                 request_id,
                 self.session_id,
                 self.messages.len(),
-                message.chars().count()
+                actual_message.chars().count()
             );
         }
 
-        // 保存用户消息到存储
+        // 保存用户消息到存储（使用拼接后的消息）
         save_message_to_file_storage(
             &self.storage,
             &self.session_id,
             StoredMessage {
                 role: "user".to_string(),
-                content: message.to_string(),
+                content: actual_message.clone(),
                 timestamp: chrono::Utc::now().timestamp(),
             },
             task_session,
             "user",
         );
 
-        // Also save to database
+        // Also save to database（使用拼接后的消息）
         if let Ok(pool) = crate::database::get_pool() {
             if let Ok(conn) = pool.get() {
                 let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
@@ -788,7 +1042,7 @@ impl ClaurstSession {
                 let _ = conn.execute(
                     "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
                      VALUES (?1, ?2, 'user', ?3, ?4, ?5, 0)",
-                    rusqlite::params![&msg_id, &self.session_id, message, &created_at, request_id],
+                    rusqlite::params![&msg_id, &self.session_id, &actual_message, &created_at, request_id],
                 );
 
                 // Update session title if this is the first user message
@@ -799,44 +1053,12 @@ impl ClaurstSession {
                 ).unwrap_or(0);
 
                 if message_count == 1 {
+                    // 使用原始消息生成标题（不包含角色提示词）
                     let title = generate_title(message);
                     let _ = conn.execute(
                         "UPDATE sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
                         rusqlite::params![&title, &created_at, &self.session_id],
                     );
-
-                    // 对于任务会话的第一条消息，合并系统提示词
-                    if task_session {
-                        if let Ok(system_prompt) = conn.query_row(
-                            "SELECT r.system_prompt_snapshot
-                             FROM sessions s
-                             JOIN roles r ON r.id = s.role_id
-                             WHERE s.id = ?1",
-                            rusqlite::params![&self.session_id],
-                            |row| row.get::<_, Option<String>>(0),
-                        ) {
-                            if let Some(prompt) = system_prompt {
-                                // 构造合并消息：系统提示词 + 衔接语句 + 用户问题
-                                let merged_message = format!(
-                                    "{}\n\n---\n\n以上是你的角色定位，现在处理用户问题：\n\n{}",
-                                    prompt,
-                                    message
-                                );
-
-                                // 修改 self.messages 中的最后一条消息（用户消息）
-                                if let Some(last_msg) = self.messages.last_mut() {
-                                    *last_msg = Message::user(merged_message);
-                                }
-
-                                log::info!(
-                                    "task_first_message_merged session_id={} original_length={} merged_length={}",
-                                    self.session_id,
-                                    message.len(),
-                                    prompt.len() + message.len()
-                                );
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -868,35 +1090,193 @@ impl ClaurstSession {
         let event_task_trace = task_trace.clone();
         let terminal_warnings = Arc::new(parking_lot::Mutex::new(Vec::<Value>::new()));
         let event_warnings = terminal_warnings.clone();
+        let first_event_logged = Arc::new(parking_lot::Mutex::new(false));
+        let event_first_event_logged = first_event_logged.clone();
+        let diagnostic_context = CompletedToolOnlyDiagnosticContext {
+            tool_sequence: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            turn_summaries: Arc::new(parking_lot::Mutex::new(Vec::new())),
+        };
+        let event_tool_sequence = diagnostic_context.tool_sequence.clone();
+        let event_turn_summaries = diagnostic_context.turn_summaries.clone();
+        let accumulated_streaming_text = Arc::new(parking_lot::Mutex::new(String::new()));
+        let event_accumulated_text = accumulated_streaming_text.clone();
+
+        // Timeline data collection
+        let timeline_items = Arc::new(parking_lot::Mutex::new(Vec::<TimelineItemData>::new()));
+        let event_timeline_items = timeline_items.clone();
         tokio::spawn(async move {
             let mut has_emitted_streaming = false;
             while let Some(event) = event_rx.recv().await {
+                let event_kind = match &event {
+                    QueryEvent::Stream(_) => "stream",
+                    QueryEvent::ToolStart { .. } => "tool_start",
+                    QueryEvent::ToolEnd { .. } => "tool_end",
+                    QueryEvent::TurnComplete { .. } => "turn_complete",
+                    QueryEvent::Status(_) => "status",
+                    QueryEvent::TokenWarning { .. } => "token_warning",
+                    QueryEvent::Error(_) => "error",
+                };
+
+                {
+                    let mut first_event_seen = event_first_event_logged.lock();
+                    if !*first_event_seen {
+                        *first_event_seen = true;
+                        if let Some(trace) = event_task_trace.as_ref() {
+                            log::info!(
+                                "claurst_request_first_event request_id={} session_id={} task_id={} role_id={} role_name={} first_event={}",
+                                event_request_id,
+                                event_session_id,
+                                trace.task_id,
+                                trace.role_id,
+                                trace.role_name,
+                                event_kind
+                            );
+                        } else {
+                            log::info!(
+                                "claurst_request_first_event request_id={} session_id={} first_event={}",
+                                event_request_id,
+                                event_session_id,
+                                event_kind
+                            );
+                        }
+                    }
+                }
+
                 match event {
                     QueryEvent::Stream(stream_event) => {
                         use claurst_api::{streaming::ContentDelta, AnthropicStreamEvent};
-                        if let AnthropicStreamEvent::ContentBlockDelta { delta, .. } = stream_event {
-                            if let ContentDelta::TextDelta { text } = delta {
-                                if !has_emitted_streaming {
-                                    has_emitted_streaming = true;
-                                    emit_lifecycle_event(
-                                        &event_window,
-                                        &event_request_id,
-                                        &event_session_id,
-                                        "streaming",
-                                        status_label_for_phase("streaming"),
-                                        "stream_first_chunk",
-                                    );
+
+                        match stream_event {
+                            AnthropicStreamEvent::ContentBlockStart { content_block, .. } => {
+                                // Handle thinking block start
+                                if let ContentBlock::Thinking { thinking, .. } = content_block {
+                                    let item = TimelineItemData {
+                                        id: format!("timeline-{}", uuid::Uuid::new_v4()),
+                                        item_type: "thinking".to_string(),
+                                        timestamp: chrono::Utc::now().timestamp_millis(),
+                                        content: Some(thinking.clone()),
+                                        tool: None,
+                                        action: None,
+                                        status: None,
+                                        result: None,
+                                        tool_use_id: None,
+                                    };
+                                    event_timeline_items.lock().push(item);
                                 }
-                                log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars",
-                                    event_request_id, text.len());
-                                let _ = event_window.emit("message-chunk", serde_json::json!({
-                                    "request_id": event_request_id.clone(),
-                                    "chunk": text,
-                                }));
                             }
+                            AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
+                                match delta {
+                                    ContentDelta::ThinkingDelta { thinking } => {
+                                        // Append to the last thinking item
+                                        let mut items = event_timeline_items.lock();
+                                        if let Some(last_item) = items.last_mut() {
+                                            if last_item.item_type == "thinking" {
+                                                if let Some(ref mut content) = last_item.content {
+                                                    content.push_str(&thinking);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ContentDelta::TextDelta { text } => {
+                                        // Filter out system-reminder tags from streaming content
+                                        let filtered_text = filter_system_tags(&text);
+
+                                        log::info!(
+                                            "🔤 [TextDelta] request_id={} original_len={} filtered_len={} filtered_chars={}",
+                                            event_request_id,
+                                            text.len(),
+                                            filtered_text.len(),
+                                            filtered_text.chars().count()
+                                        );
+
+                                        // Only emit if there's content after filtering
+                                        if !filtered_text.is_empty() {
+                                            // Accumulate streaming text
+                                            let mut acc = event_accumulated_text.lock();
+                                            let before_len = acc.len();
+                                            let before_chars = acc.chars().count();
+                                            acc.push_str(&filtered_text);
+                                            let after_len = acc.len();
+                                            let after_chars = acc.chars().count();
+                                            drop(acc);
+
+                                            log::info!(
+                                                "📝 [Accumulate] request_id={} chunk_len={} chunk_chars={} accumulated_before={} accumulated_before_chars={} accumulated_after={} accumulated_after_chars={}",
+                                                event_request_id,
+                                                filtered_text.len(),
+                                                filtered_text.chars().count(),
+                                                before_len,
+                                                before_chars,
+                                                after_len,
+                                                after_chars
+                                            );
+
+                                            if !has_emitted_streaming {
+                                                has_emitted_streaming = true;
+                                                emit_lifecycle_event(
+                                                    &event_window,
+                                                    &event_request_id,
+                                                    &event_session_id,
+                                                    "streaming",
+                                                    status_label_for_phase("streaming"),
+                                                    "stream_first_chunk",
+                                                );
+                                            }
+                                            log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars (original: {} chars)",
+                                                event_request_id, filtered_text.len(), text.len());
+                                            let _ = event_window.emit("message-chunk", serde_json::json!({
+                                                "request_id": event_request_id.clone(),
+                                                "chunk": filtered_text,
+                                            }));
+
+                                            // Collect timeline data for output
+                                            let mut items = event_timeline_items.lock();
+                                            let last_is_output = items.last()
+                                                .map(|i| i.item_type == "output")
+                                                .unwrap_or(false);
+
+                                            if last_is_output {
+                                                // Append to existing output item
+                                                if let Some(last_item) = items.last_mut() {
+                                                    if let Some(ref mut content) = last_item.content {
+                                                        content.push_str(&filtered_text);
+                                                    }
+                                                }
+                                            } else {
+                                                // Create new output item
+                                                let item = TimelineItemData {
+                                                    id: format!("timeline-{}", uuid::Uuid::new_v4()),
+                                                    item_type: "output".to_string(),
+                                                    timestamp: chrono::Utc::now().timestamp_millis(),
+                                                    content: Some(filtered_text.clone()),
+                                                    tool: None,
+                                                    action: None,
+                                                    status: None,
+                                                    result: None,
+                                                    tool_use_id: None,
+                                                };
+                                                items.push(item);
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    QueryEvent::ToolStart { tool_name, .. } => {
+                    QueryEvent::ToolStart { tool_name, tool_id, input_json } => {
+                        let tool_sequence_index = {
+                            let mut tool_sequence = event_tool_sequence.lock();
+                            tool_sequence.push(serde_json::json!({
+                                "event": "tool_start",
+                                "tool": tool_name,
+                                "success": Value::Null,
+                                "result_chars": Value::Null,
+                            }));
+                            tool_sequence.len() - 1
+                        };
+
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
                                 "claurst_tool_start request_id={} session_id={} task_id={} role_id={} role_name={} tool={}",
@@ -916,6 +1296,14 @@ impl ClaurstSession {
                             );
                         }
 
+                        log::debug!(
+                            "claurst_tool_sequence_marker request_id={} session_id={} index={} event=tool_start tool={}",
+                            event_request_id,
+                            event_session_id,
+                            tool_sequence_index,
+                            tool_name
+                        );
+
                         emit_lifecycle_event(
                             &event_window,
                             &event_request_id,
@@ -925,15 +1313,50 @@ impl ClaurstSession {
                             "tool_start",
                         );
 
-                        let description = format!("Executing {}", tool_name);
+                        // Generate a more descriptive action based on tool parameters
+                        let description = generate_tool_description(&tool_name, &input_json);
                         emit_display_status(&event_window, &event_request_id, "tool_running", &description);
                         let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
+                            "tool_use_id": tool_id,
                             "action": description,
+                            "input": input_json,
                         }));
+
+                        // Collect timeline data for tool call start
+                        let unique_id = format!("tool-{}-{}", tool_id, uuid::Uuid::new_v4());
+                        let item = TimelineItemData {
+                            id: unique_id.clone(),
+                            item_type: "tool_call".to_string(),
+                            timestamp: chrono::Utc::now().timestamp_millis(),
+                            content: None,
+                            tool: Some(tool_name.clone()),
+                            action: Some(description),
+                            status: Some("running".to_string()),
+                            result: None,
+                            tool_use_id: Some(tool_id.clone()),
+                        };
+                        event_timeline_items.lock().push(item);
                     }
-                    QueryEvent::ToolEnd { tool_name, result, is_error, .. } => {
+                    QueryEvent::ToolEnd { tool_name, tool_id, result, is_error } => {
+                        let result_chars = result.chars().count();
+                        let result_preview = result
+                            .chars()
+                            .take(120)
+                            .collect::<String>()
+                            .replace('\n', "\\n");
+                        let tool_sequence_index = {
+                            let mut tool_sequence = event_tool_sequence.lock();
+                            tool_sequence.push(serde_json::json!({
+                                "event": "tool_end",
+                                "tool": tool_name,
+                                "success": !is_error,
+                                "result_chars": result_chars,
+                                "result_preview": result_preview,
+                            }));
+                            tool_sequence.len() - 1
+                        };
 
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
@@ -945,7 +1368,7 @@ impl ClaurstSession {
                                 trace.role_name,
                                 tool_name,
                                 !is_error,
-                                result.chars().count()
+                                result_chars
                             );
                         } else {
                             log::info!(
@@ -954,9 +1377,19 @@ impl ClaurstSession {
                                 event_session_id,
                                 tool_name,
                                 !is_error,
-                                result.chars().count()
+                                result_chars
                             );
                         }
+
+                        log::debug!(
+                            "claurst_tool_sequence_marker request_id={} session_id={} index={} event=tool_end tool={} success={} result_chars={}",
+                            event_request_id,
+                            event_session_id,
+                            tool_sequence_index,
+                            tool_name,
+                            !is_error,
+                            result_chars
+                        );
 
                         if is_error {
                             log::error!("Tool '{}' failed with error: {}", tool_name, result);
@@ -967,6 +1400,7 @@ impl ClaurstSession {
                         let _ = event_window.emit("tool-call-end", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
+                            "tool_use_id": tool_id,
                             "success": !is_error,
                             "result": result,
                         }));
@@ -979,8 +1413,31 @@ impl ClaurstSession {
                             "tool_end",
                         );
                         emit_display_status(&event_window, &event_request_id, "thinking", "工具执行完成，继续处理中");
+
+                        // Update timeline data for tool call end
+                        let mut items = event_timeline_items.lock();
+                        if let Some(item) = items.iter_mut().find(|i| i.tool_use_id.as_ref() == Some(&tool_id)) {
+                            item.status = Some(if is_error { "error" } else { "success" }.to_string());
+                            item.result = Some(result.clone());
+                        }
                     }
                     QueryEvent::TurnComplete { usage, .. } => {
+                        // Log accumulated text length at turn complete
+                        let accumulated_len = event_accumulated_text.lock().len();
+                        log::info!(
+                            "🔄 [TurnComplete] request_id={} accumulated_text_len={}",
+                            event_request_id,
+                            accumulated_len
+                        );
+
+                        {
+                            let mut turn_summaries = event_turn_summaries.lock();
+                            let turn_index = turn_summaries.len();
+                            turn_summaries.push(serde_json::json!({
+                                "turn_index": turn_index,
+                                "usage_present": usage.is_some(),
+                            }));
+                        }
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
                                 "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} usage_present={}",
@@ -1068,6 +1525,18 @@ impl ClaurstSession {
                 !self.api_key.trim().is_empty(),
                 self.base_url.is_some()
             );
+            log::info!(
+                "claurst_request_run_query_loop_enter request_id={} session_id={} task_id={} role_id={} role_name={} tool_count={} message_count={} role_prompt_prepended={} config_system_prompt_chars={}",
+                request_id,
+                self.session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                self.tools.len(),
+                self.messages.len(),
+                self.role_prompt_prepended,
+                self.config.system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0)
+            );
         } else {
             log::info!(
                 "claurst_request_begin request_id={} session_id={} model={} working_dir={} prompt_chars={} prompt_preview={} history_messages={}",
@@ -1083,6 +1552,15 @@ impl ClaurstSession {
                 build_prompt_preview(self.config.system_prompt.as_deref()),
                 self.messages.len()
             );
+            log::info!(
+                "claurst_request_run_query_loop_enter request_id={} session_id={} tool_count={} message_count={} role_prompt_prepended={} config_system_prompt_chars={}",
+                request_id,
+                self.session_id,
+                self.tools.len(),
+                self.messages.len(),
+                self.role_prompt_prepended,
+                self.config.system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0)
+            );
         }
 
         let outcome = run_query_loop(
@@ -1097,6 +1575,59 @@ impl ClaurstSession {
             None,
         )
         .await;
+
+        let first_event_seen = *first_event_logged.lock();
+
+        // Log the complete message history after run_query_loop
+        log::info!(
+            "🔍 [AFTER_QUERY_LOOP] request_id={} total_messages={} messages_summary={:?}",
+            request_id,
+            self.messages.len(),
+            self.messages.iter().enumerate().map(|(i, msg)| {
+                let role = match msg.role {
+                    claurst_core::Role::User => "user",
+                    claurst_core::Role::Assistant => "assistant",
+                };
+                let content_summary = match &msg.content {
+                    claurst_core::types::MessageContent::Text(text) => {
+                        format!("Text(chars={})", text.chars().count())
+                    }
+                    claurst_core::types::MessageContent::Blocks(blocks) => {
+                        let block_details: Vec<String> = blocks.iter().map(|block| {
+                            match block {
+                                claurst_core::types::ContentBlock::Text { text } => format!("Text(chars={})", text.chars().count()),
+                                claurst_core::types::ContentBlock::ToolUse { name, .. } => format!("ToolUse({})", name),
+                                claurst_core::types::ContentBlock::ToolResult { tool_use_id, .. } => format!("ToolResult({})", tool_use_id),
+                                _ => format!("{:?}", block).split('{').next().unwrap_or("Unknown").to_string(),
+                            }
+                        }).collect();
+                        format!("Blocks(count={}, details={:?})", blocks.len(), block_details)
+                    }
+                };
+                format!("{}:{}:{}", i, role, content_summary)
+            }).collect::<Vec<_>>()
+        );
+
+        if let Some(trace) = task_trace.as_ref() {
+            log::info!(
+                "claurst_request_run_query_loop_exit request_id={} session_id={} task_id={} role_id={} role_name={} first_event_seen={} outcome_discriminant={:?}",
+                request_id,
+                self.session_id,
+                trace.task_id,
+                trace.role_id,
+                trace.role_name,
+                first_event_seen,
+                std::mem::discriminant(&outcome)
+            );
+        } else {
+            log::info!(
+                "claurst_request_run_query_loop_exit request_id={} session_id={} first_event_seen={} outcome_discriminant={:?}",
+                request_id,
+                self.session_id,
+                first_event_seen,
+                std::mem::discriminant(&outcome)
+            );
+        }
 
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
@@ -1121,91 +1652,126 @@ impl ClaurstSession {
         let warnings_snapshot = terminal_warnings.lock().clone();
         match outcome {
             QueryOutcome::EndTurn { message, usage } => {
-                // Diagnostic logging: what's in the EndTurn message?
-                match &message.content {
-                    MessageContent::Text(s) => {
-                        log::info!("🔍 [DIAGNOSTIC] EndTurn message.content is Text variant, length: {}", s.len());
+                // Log the complete message content structure
+                let content_structure = match &message.content {
+                    MessageContent::Text(text) => {
+                        format!("Text(len={}, chars={})", text.len(), text.chars().count())
                     }
                     MessageContent::Blocks(blocks) => {
-                        log::info!("🔍 [DIAGNOSTIC] EndTurn message.content is Blocks variant, block_count: {}", blocks.len());
-                        for (i, block) in blocks.iter().enumerate() {
+                        let block_details: Vec<String> = blocks.iter().map(|block| {
                             match block {
-                                claurst_core::ContentBlock::Text { text } => {
-                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: Text, length: {}", i, text.len());
-                                }
-                                claurst_core::ContentBlock::ToolUse { name, .. } => {
-                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: ToolUse, name: {}", i, name);
-                                }
-                                claurst_core::ContentBlock::ToolResult { tool_use_id, .. } => {
-                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: ToolResult, tool_use_id: {}", i, tool_use_id);
-                                }
-                                _ => {
-                                    log::info!("🔍 [DIAGNOSTIC]   Block[{}]: Other variant", i);
-                                }
+                                ContentBlock::Text { text } => format!("Text(len={}, chars={})", text.len(), text.chars().count()),
+                                ContentBlock::ToolUse { id, name, .. } => format!("ToolUse(id={}, name={})", id, name),
+                                ContentBlock::ToolResult { tool_use_id, .. } => format!("ToolResult(id={})", tool_use_id),
+                                _ => format!("{:?}", block).split('{').next().unwrap_or("Unknown").to_string(),
                             }
-                        }
+                        }).collect();
+                        format!("Blocks(count={}, details={:?})", blocks.len(), block_details)
                     }
-                }
+                };
+                log::info!(
+                    "🔍 [MessageContent] request_id={} content_structure={}",
+                    request_id_owned,
+                    content_structure
+                );
 
-                // Diagnostic logging: what's in self.messages?
-                log::info!("🔍 [DIAGNOSTIC] self.messages total count: {}", self.messages.len());
-                let assistant_messages: Vec<_> = self.messages.iter()
+                let message_content_summary = summarize_message_content(&message.content);
+                let assistant_messages = self
+                    .messages
+                    .iter()
                     .enumerate()
                     .filter(|(_, msg)| matches!(msg.role, claurst_core::Role::Assistant))
-                    .collect();
-                log::info!("🔍 [DIAGNOSTIC] Assistant messages count: {}", assistant_messages.len());
-                for (idx, msg) in assistant_messages.iter() {
-                    match &msg.content {
-                        MessageContent::Text(s) => {
-                            log::info!("🔍 [DIAGNOSTIC]   Message[{}]: Text, length: {}", idx, s.len());
-                        }
-                        MessageContent::Blocks(blocks) => {
-                            log::info!("🔍 [DIAGNOSTIC]   Message[{}]: Blocks, block_count: {}", idx, blocks.len());
-                            for (i, block) in blocks.iter().enumerate() {
-                                match block {
-                                    claurst_core::ContentBlock::Text { text } => {
-                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: Text, length: {}", i, text.len());
-                                    }
-                                    claurst_core::ContentBlock::ToolUse { name, .. } => {
-                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: ToolUse, name: {}", i, name);
-                                    }
-                                    claurst_core::ContentBlock::ToolResult { tool_use_id, .. } => {
-                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: ToolResult, tool_use_id: {}", i, tool_use_id);
-                                    }
-                                    _ => {
-                                        log::info!("🔍 [DIAGNOSTIC]     Block[{}]: Other variant", i);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                    .collect::<Vec<_>>();
+                let assistant_message_count = assistant_messages.len();
+                let last_assistant_message_summary = assistant_messages
+                    .last()
+                    .map(|(_, msg)| summarize_message_content(&msg.content));
+                let recent_assistant_message_summaries = assistant_messages
+                    .iter()
+                    .rev()
+                    .take(3)
+                    .map(|(index, msg)| serde_json::json!({
+                        "message_index": index,
+                        "summary": summarize_message_content(&msg.content),
+                    }))
+                    .collect::<Vec<_>>();
+                let recent_tool_sequence = diagnostic_context
+                    .tool_sequence
+                    .lock()
+                    .iter()
+                    .rev()
+                    .take(8)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>();
+                let turn_summaries = diagnostic_context.turn_summaries.lock().clone();
 
                 let mut text = take_text_from_message_content(&message.content);
 
-                log::info!("🔍 [DIAGNOSTIC] Extracted text from EndTurn message, length: {}", text.len());
+                // Filter out system tags from the final message content
+                text = filter_system_tags(&text);
 
-                if text.is_empty() {
-                    log::warn!("🔍 [DIAGNOSTIC] EndTurn text empty for current turn");
+                let extracted_text_before_fallback = text.clone();
+                let extracted_text_before_fallback_chars = extracted_text_before_fallback.chars().count();
+                let extracted_text_before_fallback_preview = extracted_text_before_fallback
+                    .chars()
+                    .take(120)
+                    .collect::<String>()
+                    .replace('\n', "\\n");
+                let extracted_text_was_empty = text.is_empty();
+
+                // Log accumulated text length BEFORE reading it
+                log::info!(
+                    "🔍 [BeforeRead] request_id={} accumulated_text_len_in_arc={}",
+                    request_id_owned,
+                    accumulated_streaming_text.lock().len()
+                );
+
+                // Use accumulated streaming text if available and extracted text is empty
+                let accumulated_text = accumulated_streaming_text.lock().clone();
+                log::info!(
+                    "📊 [Final] request_id={} accumulated_chars={} accumulated_bytes={} extracted_chars={} will_use_accumulated={}",
+                    request_id_owned,
+                    accumulated_text.chars().count(),
+                    accumulated_text.len(),
+                    text.chars().count(),
+                    extracted_text_was_empty && !accumulated_text.is_empty()
+                );
+                if extracted_text_was_empty && !accumulated_text.is_empty() {
+                    log::info!(
+                        "Using accumulated streaming text instead of extracted text: request_id={} accumulated_chars={} extracted_chars={}",
+                        request_id_owned,
+                        accumulated_text.chars().count(),
+                        extracted_text_before_fallback_chars
+                    );
+                    text = accumulated_text;
+                } else if extracted_text_was_empty {
+                    text = "✓ 已完成工具执行".to_string();
                 }
 
+                // has_visible_text should be based on the final text after fallback, not the original extracted text
                 let has_visible_text = !text.is_empty();
+                let fallback_visible_text_used = extracted_text_was_empty;
 
-                let parsed_handoff = if has_visible_text {
+                // Only check for handoff in task sessions
+                let parsed_handoff = if task_session && has_visible_text {
                     extract_handoff_block(&text)
                 } else {
                     None
                 };
 
                 log::debug!(
-                    "handoff_block_extracted session_id={} found={}",
+                    "handoff_block_extracted session_id={} is_task_session={} found={}",
                     self.session_id,
+                    task_session,
                     parsed_handoff.is_some()
                 );
 
-                if let Some(parsed) = parsed_handoff.as_ref() {
-                    text = parsed.visible_text.clone();
-                }
+                // IMPORTANT: Do NOT modify the text based on handoff detection
+                // We only read handoff information, not modify the original message
+                // The handoff suggestion will be handled separately by the frontend
 
                 let handoff_suggestion = parsed_handoff
                     .and_then(|parsed| resolve_handoff_suggestion(&self.session_id, parsed));
@@ -1216,9 +1782,45 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
+                let outcome = if handoff_suggestion.is_some() {
+                    "handoff_ready"
+                } else if has_visible_text {
+                    "completed"
+                } else {
+                    "completed_tool_only"
+                };
+                let reason_code = if handoff_suggestion.is_some() {
+                    Some("handoff_detected")
+                } else if has_visible_text {
+                    None
+                } else {
+                    Some("tool_only_end_turn")
+                };
+
+                if outcome == "completed_tool_only" {
+                    log::warn!(
+                        "claurst_completed_tool_only_diagnostic request_id={} session_id={} first_event_seen={} assistant_message_count={} extracted_text_before_fallback_chars={} extracted_text_before_fallback_preview={} fallback_visible_text_used={} handoff_present={} turn_count={} message_content_summary={} last_assistant_message_summary={} recent_assistant_message_summaries={} recent_tool_sequence={} turn_summaries={}",
+                        request_id_owned,
+                        self.session_id,
+                        first_event_seen,
+                        assistant_message_count,
+                        extracted_text_before_fallback_chars,
+                        extracted_text_before_fallback_preview,
+                        fallback_visible_text_used,
+                        handoff_suggestion.is_some(),
+                        turn_summaries.len(),
+                        message_content_summary,
+                        last_assistant_message_summary.clone().unwrap_or_else(|| serde_json::json!(null)),
+                        serde_json::json!(recent_assistant_message_summaries),
+                        serde_json::json!(recent_tool_sequence),
+                        serde_json::json!(turn_summaries)
+                    );
+                }
+
                 log::info!(
-                    "AI response received, length: {} chars, has_visible_text={}, handoff_found={}",
+                    "AI response received, bytes: {}, chars: {}, has_visible_text={}, handoff_found={}",
                     text.len(),
+                    text.chars().count(),
                     has_visible_text,
                     handoff_suggestion.is_some()
                 );
@@ -1232,17 +1834,60 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
+                // Save the full accumulated text to message content
+                // Timeline contains the same text split into output items for display
+                // Frontend will use timeline for display if available, content as fallback
+                let content_to_save = text.clone();
+
+                // Always save assistant message to storage and database
                 save_message_to_file_storage(
                     &self.storage,
                     &self.session_id,
                     StoredMessage {
                         role: "assistant".to_string(),
-                        content: text.clone(),
+                        content: content_to_save.clone(),
                         timestamp: chrono::Utc::now().timestamp(),
                     },
                     task_session,
                     "assistant",
                 );
+
+                // Also save to database
+                if let Ok(pool) = crate::database::get_pool() {
+                    if let Ok(conn) = pool.get() {
+                        let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                        let created_at = chrono::Utc::now().to_rfc3339();
+
+                        // Insert message
+                        let _ = conn.execute(
+                            "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                             VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
+                            rusqlite::params![&msg_id, &self.session_id, &content_to_save, &created_at, &request_id_owned],
+                        );
+
+                        // Insert timeline items
+                        let timeline_items_vec = timeline_items.lock().clone();
+                        for item in timeline_items_vec {
+                            if let Err(e) = conn.execute(
+                                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
+                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                rusqlite::params![
+                                    &item.id,
+                                    &msg_id,
+                                    &item.item_type,
+                                    &item.timestamp,
+                                    &item.content,
+                                    &item.tool,
+                                    &item.action,
+                                    &item.status,
+                                    &item.result,
+                                ],
+                            ) {
+                                log::error!("Failed to insert timeline item {}: {}", item.id, e);
+                            }
+                        }
+                    }
+                }
 
                 if let Some(trace) = task_trace.as_ref() {
                     log::info!(
@@ -1263,19 +1908,6 @@ impl ClaurstSession {
                     );
                 }
 
-                // Also save to database
-                if let Ok(pool) = crate::database::get_pool() {
-                    if let Ok(conn) = pool.get() {
-                        let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
-                        let created_at = chrono::Utc::now().to_rfc3339();
-                        let _ = conn.execute(
-                            "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
-                             VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
-                            rusqlite::params![&msg_id, &self.session_id, &text, &created_at, &request_id_owned],
-                        );
-                    }
-                }
-
                 emit_lifecycle_event(
                     &window,
                     &request_id_owned,
@@ -1286,17 +1918,34 @@ impl ClaurstSession {
                 );
                 emit_display_status(&window, &request_id_owned, "finalizing", "整理最终回答");
 
+                let terminal_payload = TerminalEventPayload {
+                    result: "success",
+                    outcome,
+                    activity_phase_at_end: "finalizing",
+                    reason_code,
+                    error_message: None,
+                    final_text: Some(text.clone()),
+                    has_visible_text: Some(has_visible_text),
+                    handoff_suggestion,
+                    usage: Some(usage),
+                };
+
+                log::info!(
+                    "claurst_terminal_payload_prepared request_id={} session_id={} outcome={} reason_code={} has_visible_text={} fallback_visible_text_used={} handoff_present={}",
+                    request_id_owned,
+                    self.session_id,
+                    terminal_payload.outcome,
+                    terminal_payload.reason_code.unwrap_or("none"),
+                    terminal_payload.has_visible_text.unwrap_or(false),
+                    fallback_visible_text_used,
+                    terminal_payload.handoff_suggestion.is_some()
+                );
+
                 emit_terminal_event(
                     &window,
                     &request_id_owned,
                     &self.session_id,
-                    "success",
-                    "completed",
-                    None,
-                    Some(&text),
-                    Some(has_visible_text),
-                    handoff_suggestion.as_ref(),
-                    Some(&usage),
+                    &terminal_payload,
                     &warnings_snapshot,
                 );
 
@@ -1334,13 +1983,17 @@ impl ClaurstSession {
                     &window,
                     &request_id_owned,
                     &self.session_id,
-                    "cancelled",
-                    "cancelled",
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    &TerminalEventPayload {
+                        result: "cancelled",
+                        outcome: "cancelled",
+                        activity_phase_at_end: "finalizing",
+                        reason_code: Some("user_cancelled"),
+                        error_message: None,
+                        final_text: None,
+                        has_visible_text: None,
+                        handoff_suggestion: None,
+                        usage: None,
+                    },
                     &warnings_snapshot,
                 );
                 Err(anyhow::anyhow!("Request cancelled"))
@@ -1379,13 +2032,17 @@ impl ClaurstSession {
                     &window,
                     &request_id_owned,
                     &self.session_id,
-                    "error",
-                    "error",
-                    Some(&e.to_string()),
-                    None,
-                    None,
-                    None,
-                    None,
+                    &TerminalEventPayload {
+                        result: "error",
+                        outcome: "error",
+                        activity_phase_at_end: "finalizing",
+                        reason_code: Some("provider_error"),
+                        error_message: Some(e.to_string()),
+                        final_text: None,
+                        has_visible_text: None,
+                        handoff_suggestion: None,
+                        usage: None,
+                    },
                     &warnings_snapshot,
                 );
                 Err(anyhow::anyhow!("API error: {}", e))
@@ -1427,13 +2084,17 @@ impl ClaurstSession {
                     &window,
                     &request_id_owned,
                     &self.session_id,
-                    "error",
-                    "error",
-                    Some(&message),
-                    None,
-                    None,
-                    None,
-                    None,
+                    &TerminalEventPayload {
+                        result: "error",
+                        outcome: "budget_exceeded",
+                        activity_phase_at_end: "finalizing",
+                        reason_code: Some("budget_limit"),
+                        error_message: Some(message.clone()),
+                        final_text: None,
+                        has_visible_text: None,
+                        handoff_suggestion: None,
+                        usage: None,
+                    },
                     &warnings_snapshot,
                 );
                 Err(anyhow::anyhow!("{}", message))
@@ -1472,13 +2133,17 @@ impl ClaurstSession {
                     &window,
                     &request_id_owned,
                     &self.session_id,
-                    "error",
-                    "error",
-                    Some(&message),
-                    Some(&partial_text),
-                    Some(!partial_text.is_empty()),
-                    None,
-                    Some(&usage),
+                    &TerminalEventPayload {
+                        result: "error",
+                        outcome: "max_tokens",
+                        activity_phase_at_end: "finalizing",
+                        reason_code: Some("context_limit"),
+                        error_message: Some(message.clone()),
+                        final_text: Some(partial_text.clone()),
+                        has_visible_text: Some(!partial_text.is_empty()),
+                        handoff_suggestion: None,
+                        usage: Some(usage),
+                    },
                     &warnings_snapshot,
                 );
                 Err(anyhow::anyhow!("Max tokens reached"))
@@ -1491,14 +2156,20 @@ impl ClaurstSession {
     }
 
     pub fn recreate(&self) -> anyhow::Result<Self> {
-        Self::new(
+        let mut new_session = Self::new(
             self.session_id.clone(),
             self.working_dir.clone(),
             self.api_key.clone(),
             self.model.clone(),
             self.base_url.clone(),
             self.system_prompt.clone(),
-        )
+        )?;
+
+        // 如果原 session 已经拼接过角色提示词，新 session 也应该标记为已拼接
+        // 因为消息历史中第一条用户消息已经包含了角色提示词
+        new_session.role_prompt_prepended = self.role_prompt_prepended;
+
+        Ok(new_session)
     }
 
 }

@@ -35,13 +35,42 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + 28px);
   font-size: var(--text-base);
   font-family: inherit;
+  line-height: 1.6;
   color: var(--text-primary);
   resize: none;
   min-height: 120px;
-  max-height: 400px;
+  max-height: 280px;
+  overflow-x: hidden;
+  overflow-y: auto;
   transition: var(--transition-all);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.72) rgba(148, 163, 184, 0.16);
+}
+
+.input-textarea::-webkit-scrollbar {
+  width: 10px;
+}
+
+.input-textarea::-webkit-scrollbar-track {
+  margin: 10px 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.input-textarea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.92), rgba(37, 99, 235, 0.88));
+  background-clip: padding-box;
+}
+
+.input-textarea::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.98), rgba(59, 130, 246, 0.94));
+  background-clip: padding-box;
 }
 
 .input-textarea:focus {

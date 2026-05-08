@@ -48,6 +48,7 @@ interface TaskModeLayoutProps {
   isInspectorCollapsed?: boolean;
   isTerminalCollapsed?: boolean;
   runState: AiRunState;
+  onRunStateChange?: (runState: AiRunState) => void;
 }
 
 function getSeatInitials(name: string) {
@@ -241,7 +242,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                         const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
 
                         return (
-                          <div
+                          <article
                             key={role.id}
                             role="button"
                             tabIndex={isDisabled ? -1 : 0}
@@ -286,7 +287,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                               <div className="task-seat-model">{role.model}</div>
                               {isPmFirst && <div className="task-seat-badge">Start here</div>}
                             </div>
-                          </div>
+                          </article>
                         );
                       })}
                       {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (
@@ -372,11 +373,16 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                 maxSize="40%"
                 style={PANEL_FILL_STYLE}
               >
-                <div className="task-mode-chat-panel">
+                <div className={`task-mode-chat-panel ${isAiWorking ? 'working' : ''}`}>
                   <div className="task-mode-chat-panel-header">
                     <div>
                       <div className="task-mode-chat-panel-label">Chat</div>
-                      <h3>{currentRoleName || props.currentSessionTitle || '当前会话'}</h3>
+                      <div className="task-mode-chat-title-row">
+                        <h3>{currentRoleName || props.currentSessionTitle || '当前会话'}</h3>
+                        {isAiWorking && currentRoleName && (
+                          <span className="task-mode-chat-working-badge">AI working</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="task-mode-chat-wrapper">
@@ -399,6 +405,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       isDraftConversation={props.isDraftConversation}
                       onEnsureSession={props.onEnsureSession}
                       onSettingsClick={props.onSettingsClick}
+                      onRunStateChange={props.onRunStateChange}
                       onHandoffSuggestion={props.onHandoffSuggestion}
                       availableRoleNames={props.currentTask?.roles.map(r => r.name) || []}
                       taskRoles={props.currentTask?.roles.map(r => ({ id: r.id, name: r.name })) || []}

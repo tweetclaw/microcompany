@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useState } from 'react';
 import { Message } from '../types';
+import { TimelineView } from './TimelineView';
 import './MessageItem.css';
 
 interface MessageItemProps {
@@ -31,12 +32,25 @@ function MessageItem({ message }: MessageItemProps) {
         {isUser ? (
           <div className="message-text">{message.content}</div>
         ) : (
-          <Suspense fallback={<div className="message-text">{message.content}</div>}>
-            <MarkdownRenderer
-              content={message.content}
-              isStreaming={message.isStreaming}
-            />
-          </Suspense>
+          <>
+            {message.timeline && message.timeline.length > 0 ? (
+              // If timeline exists: show timeline only (includes tool_call and output in chronological order)
+              // This ensures consistent display for both streaming and historical messages
+              <TimelineView timeline={message.timeline} isStreaming={message.isStreaming} />
+            ) : (
+              // No timeline: show content only (backward compatibility for old messages)
+              <>
+                {message.content && (
+                  <Suspense fallback={<div className="message-text">{message.content}</div>}>
+                    <MarkdownRenderer
+                      content={message.content}
+                      isStreaming={message.isStreaming}
+                    />
+                  </Suspense>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
       {!isUser && !message.isStreaming && (

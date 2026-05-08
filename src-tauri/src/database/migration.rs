@@ -37,6 +37,16 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "role_active_session_id",
         sql: include_str!("../../migrations/006_role_active_session_id.sql"),
     },
+    Migration {
+        version: 7,
+        name: "add_tool_calls_to_messages",
+        sql: include_str!("../../migrations/007_add_tool_calls_to_messages.sql"),
+    },
+    Migration {
+        version: 8,
+        name: "add_timeline_items",
+        sql: include_str!("../../migrations/008_add_timeline_items.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {

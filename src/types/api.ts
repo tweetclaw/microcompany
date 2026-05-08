@@ -188,6 +188,29 @@ export interface Message {
   created_at: string;
   request_id: string | null;
   is_streaming: boolean;
+  tool_calls?: ToolCallRecord[] | null;
+  timeline?: TimelineItem[] | null;
+}
+
+export interface ToolCallRecord {
+  id: string;
+  tool: string;
+  action: string;
+  status: 'running' | 'success' | 'error';
+  result?: string;
+  timestamp: number;
+}
+
+export interface TimelineItem {
+  id: string;
+  message_id: string;
+  item_type: 'thinking' | 'tool_call' | 'output';
+  timestamp: number;
+  content?: string;
+  tool?: string;
+  action?: string;
+  status?: 'running' | 'success' | 'error';
+  result?: string;
 }
 
 export interface MessageCreateRequest {

@@ -1,0 +1,87 @@
+.tool-call-item {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 13px;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-call-header:hover {
+  opacity: 0.8;
+}
+
+.tool-call-status-icon {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.tool-call-tool {
+  font-weight: 600;
+  color: #374151;
+}
+
+.tool-call-action {
+  color: #6b7280;
+  flex: 1;
+}
+
+.tool-call-expand {
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+.tool-call-result {
+  margin-top: 8px;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tool-call-result pre {
+  margin: 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-call-status-running {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.tool-call-status-running .tool-call-status-icon {
+  color: #3b82f6;
+}
+
+.tool-call-status-success {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.tool-call-status-success .tool-call-status-icon {
+  color: #10b981;
+}
+
+.tool-call-status-error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.tool-call-status-error .tool-call-status-icon {
+  color: #ef4444;
+}

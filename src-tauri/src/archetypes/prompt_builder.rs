@@ -23,8 +23,12 @@ pub fn build_role_system_prompt_v2(
 ) -> String {
     let mut prompt = String::new();
 
+    // 添加明确的开头说明
+    prompt.push_str("# 📋 角色配置和工作指南\n\n");
+    prompt.push_str("> 以下是你的角色定义和团队协作规则，请严格遵守。\n\n");
+
     // 1. 角色标题
-    prompt.push_str(&format!("# 角色：{}\n\n", role_name));
+    prompt.push_str(&format!("## 你的角色：{}\n\n", role_name));
 
     // 2. 读取角色定义文件的指令（如果提供了路径）
     if let Some(path) = role_definition_path {
@@ -43,6 +47,10 @@ pub fn build_role_system_prompt_v2(
     if let Some(dir) = working_directory {
         prompt.push_str(&format!("\n## 工作目录\n{}\n", dir));
     }
+
+    // 添加明确的结束标记
+    prompt.push_str("\n---\n\n");
+    prompt.push_str("# 💬 用户消息\n\n");
 
     prompt
 }

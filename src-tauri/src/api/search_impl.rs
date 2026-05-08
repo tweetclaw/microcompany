@@ -41,6 +41,8 @@ pub async fn search_messages(
                     created_at: row.get(4)?,
                     request_id: row.get(5)?,
                     is_streaming: row.get(6)?,
+                    tool_calls: None,
+                    timeline: None,
                 },
                 session_name: row.get(7)?,
                 session_type: row.get(8)?,

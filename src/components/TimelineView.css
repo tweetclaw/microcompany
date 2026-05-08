@@ -1,0 +1,194 @@
+.timeline-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.timeline-marker {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+
+.thinking-marker {
+  background: #f5f5f5;
+  border: 1px dashed #d1d5db;
+}
+
+.tool-marker {
+  background: var(--bg-hover);
+}
+
+.output-marker {
+  background: var(--bg-elevated);
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Thinking Item Styles */
+.timeline-thinking .timeline-content {
+  background: #f5f5f5;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.thinking-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.thinking-toggle {
+  font-size: 0.75rem;
+  color: var(--primary-blue-start);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.thinking-toggle:hover {
+  color: var(--primary-blue-end);
+}
+
+.thinking-content {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.thinking-content.collapsed {
+  max-height: 3rem;
+  overflow: hidden;
+}
+
+.thinking-content.expanded {
+  max-height: none;
+}
+
+.thinking-preview {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Tool Call Item Styles */
+.timeline-tool .timeline-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 0.875rem;
+}
+
+.tool-status {
+  font-size: 0.875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.status-running {
+  color: var(--primary-blue-start);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.status-success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.status-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tool-action {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-result {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border-default);
+  padding-top: 0.5rem;
+}
+
+.tool-result-toggle {
+  cursor: pointer;
+  color: var(--primary-blue-start);
+  font-size: 0.875rem;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tool-result-toggle:hover {
+  color: var(--primary-blue-end);
+}
+
+.tool-result-content {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+}
+
+/* Output Item Styles */
+.timeline-output .timeline-content {
+  padding: 0.5rem 0;
+}
+
+/* Smooth transitions */
+.thinking-content,
+.tool-result-content {
+  transition: max-height 0.3s ease-in-out;
+}

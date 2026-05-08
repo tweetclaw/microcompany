@@ -8,10 +8,39 @@ export interface Message {
   timestamp: number;
   isStreaming?: boolean;
   requestId?: string;
+  timeline?: TimelineItem[];
+  toolCalls?: ToolCallRecord[]; // Legacy field for backward compatibility
 }
 
-export type AiStatusPhase = 'thinking' | 'tool_running' | 'generating' | 'finalizing';
-export type AiLifecyclePhase = 'thinking' | 'tool_running' | 'streaming' | 'finalizing' | 'completed' | 'cancelled' | 'error';
+// Timeline item types
+// IMPORTANT: Keep in sync with:
+// - Backend: src-tauri/src/api/message.rs TimelineItem struct
+// - Database: src-tauri/migrations/008_add_timeline_items.sql CHECK constraint
+export interface TimelineItem {
+  id: string;
+  messageId: string;
+  type: 'thinking' | 'tool_call' | 'output';
+  timestamp: number;
+  content?: string; // For thinking and output
+  tool?: string; // For tool_call
+  action?: string; // For tool_call
+  status?: 'running' | 'success' | 'error'; // For tool_call
+  result?: string; // For tool_call
+}
+
+// Legacy structure - kept for backward compatibility during migration
+export interface ToolCallRecord {
+  id: string;
+  tool: string;
+  action: string;
+  status: 'running' | 'success' | 'error';
+  result?: string;
+  timestamp: number;
+}
+
+export type AiActivityPhase = 'thinking' | 'tool_running' | 'streaming' | 'finalizing';
+export type AiTerminalOutcome = 'completed' | 'completed_tool_only' | 'handoff_ready' | 'cancelled' | 'error' | 'max_tokens' | 'budget_exceeded';
+export type AiTerminalReasonCode = 'user_cancelled' | 'provider_error' | 'tool_only_end_turn' | 'handoff_detected' | 'context_limit' | 'budget_limit' | 'unknown';
 export type AiRequestResult = 'success' | 'cancelled' | 'error';
 
 export interface AiUsageInfo {
@@ -46,7 +75,7 @@ export interface AiRequestStartEvent {
 
 export interface AiStatusEvent {
   request_id: string;
-  phase: AiStatusPhase;
+  phase: AiActivityPhase;
   text: string;
   timestamp: number;
 }
@@ -54,7 +83,7 @@ export interface AiStatusEvent {
 export interface AiRequestLifecycleEvent {
   request_id: string;
   session_id: string;
-  phase: AiLifecyclePhase;
+  phase: AiActivityPhase;
   label?: string;
   source: string;
   timestamp: number;
@@ -81,7 +110,9 @@ export interface AiRequestEndEvent {
   request_id: string;
   session_id?: string;
   result: AiRequestResult;
-  final_phase?: 'completed' | 'cancelled' | 'error';
+  outcome: AiTerminalOutcome;
+  activity_phase_at_end: AiActivityPhase;
+  reason_code?: AiTerminalReasonCode;
   error_message?: string;
   final_text?: string;
   has_visible_text?: boolean;
@@ -99,12 +130,14 @@ export interface AiMessageChunkEvent {
 export interface AiToolStartEvent {
   request_id: string;
   tool: string;
+  tool_use_id: string;
   action: string;
 }
 
 export interface AiToolEndEvent {
   request_id: string;
   tool: string;
+  tool_use_id: string;
   success: boolean;
   result: string;
 }
@@ -115,8 +148,9 @@ export interface ProcessTimelineItem {
   kind: 'request_start' | 'status' | 'tool_start' | 'tool_end' | 'request_end' | 'error' | 'lifecycle' | 'warning';
   text: string;
   timestamp: number;
-  phase?: AiStatusPhase | AiLifecyclePhase;
+  phase?: AiActivityPhase;
   result?: AiRequestResult;
+  outcome?: AiTerminalOutcome;
   tool?: string;
   success?: boolean;
 }

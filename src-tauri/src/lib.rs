@@ -13,21 +13,19 @@ use tokio::sync::Mutex;
 use tauri::Manager;
 
 #[tauri::command]
-async fn initialize_database(app_handle: tauri::AppHandle) -> Result<(), String> {
+async fn initialize_database() -> Result<(), String> {
     println!("[initialize_database] Starting database initialization...");
 
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| {
-            let err_msg = format!("Failed to get app data directory: {}", e);
+    let home_dir = dirs::home_dir()
+        .ok_or_else(|| {
+            let err_msg = "Failed to get home directory".to_string();
             println!("[initialize_database] ERROR: {}", err_msg);
             err_msg
         })?;
 
-    println!("[initialize_database] App data directory: {:?}", app_dir);
+    println!("[initialize_database] Home directory: {:?}", home_dir);
 
-    let db_path = app_dir.join(".mc").join("data.db");
+    let db_path = home_dir.join(".microcompany").join("data.db");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     println!("[initialize_database] Database path: {}", db_path_str);
@@ -144,39 +142,23 @@ async fn get_task_statistics(task_id: String) -> Result<api::TaskStatistics, Str
 }
 
 #[tauri::command]
-async fn create_backup(app_handle: tauri::AppHandle) -> Result<api::BackupInfo, String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    api::create_backup(app_dir).await
+async fn create_backup() -> Result<api::BackupInfo, String> {
+    api::create_backup().await
 }
 
 #[tauri::command]
-async fn list_backups(app_handle: tauri::AppHandle) -> Result<Vec<api::BackupInfo>, String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    api::list_backups(app_dir).await
+async fn list_backups() -> Result<Vec<api::BackupInfo>, String> {
+    api::list_backups().await
 }
 
 #[tauri::command]
-async fn restore_backup(backup_path: String, app_handle: tauri::AppHandle) -> Result<(), String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    api::restore_backup(backup_path, app_dir).await
+async fn restore_backup(backup_path: String) -> Result<(), String> {
+    api::restore_backup(backup_path).await
 }
 
 #[tauri::command]
-async fn vacuum_database(app_handle: tauri::AppHandle) -> Result<api::VacuumResult, String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    api::vacuum_database(app_dir).await
+async fn vacuum_database() -> Result<api::VacuumResult, String> {
+    api::vacuum_database().await
 }
 
 #[tauri::command]
@@ -259,6 +241,7 @@ pub fn run() {
       commands::get_available_providers,
       commands::validate_provider_config,
       commands::extract_handoff_suggestion,
+      commands::log_from_frontend,
       initialize_database,
       create_task,
       get_task,

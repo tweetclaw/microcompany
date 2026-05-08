@@ -1,4 +1,4 @@
-import React, { useState, KeyboardEvent } from 'react';
+import React, { useState, KeyboardEvent, useEffect, useRef } from 'react';
 import './InputBox.css';
 
 interface InputBoxProps {
@@ -13,6 +13,9 @@ interface InputBoxProps {
   currentModelName?: string | null;
 }
 
+const TEXTAREA_MIN_HEIGHT = 120;
+const TEXTAREA_MAX_HEIGHT = 280;
+
 function InputBox({
   onSendMessage,
   onCancelMessage,
@@ -25,6 +28,25 @@ function InputBox({
   currentModelName,
 }: InputBoxProps) {
   const [input, setInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, TEXTAREA_MIN_HEIGHT), TEXTAREA_MAX_HEIGHT);
+    const hasOverflow = textarea.scrollHeight > TEXTAREA_MAX_HEIGHT;
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = hasOverflow ? 'auto' : 'hidden';
+
+    if (hasOverflow) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  }, [input]);
 
   const handleSend = () => {
     if (input.trim() && !isInputDisabled && !isBusy) {
@@ -57,6 +79,7 @@ function InputBox({
     <div className="input-box">
       <div className="input-container">
         <textarea
+          ref={textareaRef}
           className="input-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
