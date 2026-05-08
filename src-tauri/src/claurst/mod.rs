@@ -1181,10 +1181,35 @@ impl ClaurstSession {
                                         // Filter out system-reminder tags from streaming content
                                         let filtered_text = filter_system_tags(&text);
 
+                                        log::info!(
+                                            "🔤 [TextDelta] request_id={} original_len={} filtered_len={} filtered_chars={}",
+                                            event_request_id,
+                                            text.len(),
+                                            filtered_text.len(),
+                                            filtered_text.chars().count()
+                                        );
+
                                         // Only emit if there's content after filtering
                                         if !filtered_text.is_empty() {
                                             // Accumulate streaming text
-                                            event_accumulated_text.lock().push_str(&filtered_text);
+                                            let mut acc = event_accumulated_text.lock();
+                                            let before_len = acc.len();
+                                            let before_chars = acc.chars().count();
+                                            acc.push_str(&filtered_text);
+                                            let after_len = acc.len();
+                                            let after_chars = acc.chars().count();
+                                            drop(acc);
+
+                                            log::info!(
+                                                "📝 [Accumulate] request_id={} chunk_len={} chunk_chars={} accumulated_before={} accumulated_before_chars={} accumulated_after={} accumulated_after_chars={}",
+                                                event_request_id,
+                                                filtered_text.len(),
+                                                filtered_text.chars().count(),
+                                                before_len,
+                                                before_chars,
+                                                after_len,
+                                                after_chars
+                                            );
 
                                             if !has_emitted_streaming {
                                                 has_emitted_streaming = true;
@@ -1397,6 +1422,14 @@ impl ClaurstSession {
                         }
                     }
                     QueryEvent::TurnComplete { usage, .. } => {
+                        // Log accumulated text length at turn complete
+                        let accumulated_len = event_accumulated_text.lock().len();
+                        log::info!(
+                            "🔄 [TurnComplete] request_id={} accumulated_text_len={}",
+                            event_request_id,
+                            accumulated_len
+                        );
+
                         {
                             let mut turn_summaries = event_turn_summaries.lock();
                             let turn_index = turn_summaries.len();
@@ -1544,6 +1577,37 @@ impl ClaurstSession {
         .await;
 
         let first_event_seen = *first_event_logged.lock();
+
+        // Log the complete message history after run_query_loop
+        log::info!(
+            "🔍 [AFTER_QUERY_LOOP] request_id={} total_messages={} messages_summary={:?}",
+            request_id,
+            self.messages.len(),
+            self.messages.iter().enumerate().map(|(i, msg)| {
+                let role = match msg.role {
+                    claurst_core::Role::User => "user",
+                    claurst_core::Role::Assistant => "assistant",
+                };
+                let content_summary = match &msg.content {
+                    claurst_core::types::MessageContent::Text(text) => {
+                        format!("Text(chars={})", text.chars().count())
+                    }
+                    claurst_core::types::MessageContent::Blocks(blocks) => {
+                        let block_details: Vec<String> = blocks.iter().map(|block| {
+                            match block {
+                                claurst_core::types::ContentBlock::Text { text } => format!("Text(chars={})", text.chars().count()),
+                                claurst_core::types::ContentBlock::ToolUse { name, .. } => format!("ToolUse({})", name),
+                                claurst_core::types::ContentBlock::ToolResult { tool_use_id, .. } => format!("ToolResult({})", tool_use_id),
+                                _ => format!("{:?}", block).split('{').next().unwrap_or("Unknown").to_string(),
+                            }
+                        }).collect();
+                        format!("Blocks(count={}, details={:?})", blocks.len(), block_details)
+                    }
+                };
+                format!("{}:{}:{}", i, role, content_summary)
+            }).collect::<Vec<_>>()
+        );
+
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
                 "claurst_request_run_query_loop_exit request_id={} session_id={} task_id={} role_id={} role_name={} first_event_seen={} outcome_discriminant={:?}",
@@ -1588,6 +1652,29 @@ impl ClaurstSession {
         let warnings_snapshot = terminal_warnings.lock().clone();
         match outcome {
             QueryOutcome::EndTurn { message, usage } => {
+                // Log the complete message content structure
+                let content_structure = match &message.content {
+                    MessageContent::Text(text) => {
+                        format!("Text(len={}, chars={})", text.len(), text.chars().count())
+                    }
+                    MessageContent::Blocks(blocks) => {
+                        let block_details: Vec<String> = blocks.iter().map(|block| {
+                            match block {
+                                ContentBlock::Text { text } => format!("Text(len={}, chars={})", text.len(), text.chars().count()),
+                                ContentBlock::ToolUse { id, name, .. } => format!("ToolUse(id={}, name={})", id, name),
+                                ContentBlock::ToolResult { tool_use_id, .. } => format!("ToolResult(id={})", tool_use_id),
+                                _ => format!("{:?}", block).split('{').next().unwrap_or("Unknown").to_string(),
+                            }
+                        }).collect();
+                        format!("Blocks(count={}, details={:?})", blocks.len(), block_details)
+                    }
+                };
+                log::info!(
+                    "🔍 [MessageContent] request_id={} content_structure={}",
+                    request_id_owned,
+                    content_structure
+                );
+
                 let message_content_summary = summarize_message_content(&message.content);
                 let assistant_messages = self
                     .messages
@@ -1635,8 +1722,23 @@ impl ClaurstSession {
                     .replace('\n', "\\n");
                 let extracted_text_was_empty = text.is_empty();
 
+                // Log accumulated text length BEFORE reading it
+                log::info!(
+                    "🔍 [BeforeRead] request_id={} accumulated_text_len_in_arc={}",
+                    request_id_owned,
+                    accumulated_streaming_text.lock().len()
+                );
+
                 // Use accumulated streaming text if available and extracted text is empty
                 let accumulated_text = accumulated_streaming_text.lock().clone();
+                log::info!(
+                    "📊 [Final] request_id={} accumulated_chars={} accumulated_bytes={} extracted_chars={} will_use_accumulated={}",
+                    request_id_owned,
+                    accumulated_text.chars().count(),
+                    accumulated_text.len(),
+                    text.chars().count(),
+                    extracted_text_was_empty && !accumulated_text.is_empty()
+                );
                 if extracted_text_was_empty && !accumulated_text.is_empty() {
                     log::info!(
                         "Using accumulated streaming text instead of extracted text: request_id={} accumulated_chars={} extracted_chars={}",
@@ -1653,21 +1755,23 @@ impl ClaurstSession {
                 let has_visible_text = !text.is_empty();
                 let fallback_visible_text_used = extracted_text_was_empty;
 
-                let parsed_handoff = if has_visible_text {
+                // Only check for handoff in task sessions
+                let parsed_handoff = if task_session && has_visible_text {
                     extract_handoff_block(&text)
                 } else {
                     None
                 };
 
                 log::debug!(
-                    "handoff_block_extracted session_id={} found={}",
+                    "handoff_block_extracted session_id={} is_task_session={} found={}",
                     self.session_id,
+                    task_session,
                     parsed_handoff.is_some()
                 );
 
-                if let Some(parsed) = parsed_handoff.as_ref() {
-                    text = parsed.visible_text.clone();
-                }
+                // IMPORTANT: Do NOT modify the text based on handoff detection
+                // We only read handoff information, not modify the original message
+                // The handoff suggestion will be handled separately by the frontend
 
                 let handoff_suggestion = parsed_handoff
                     .and_then(|parsed| resolve_handoff_suggestion(&self.session_id, parsed));
@@ -1714,8 +1818,9 @@ impl ClaurstSession {
                 }
 
                 log::info!(
-                    "AI response received, length: {} chars, has_visible_text={}, handoff_found={}",
+                    "AI response received, bytes: {}, chars: {}, has_visible_text={}, handoff_found={}",
                     text.len(),
+                    text.chars().count(),
                     has_visible_text,
                     handoff_suggestion.is_some()
                 );
