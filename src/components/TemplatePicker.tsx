@@ -5,16 +5,19 @@ import './TemplatePicker.css';
 
 interface TemplatePickerProps {
   onSelectTemplate: (template: SystemTemplate | TemplateSummary) => void;
+  onCreateBlank: () => void;
   onCancel: () => void;
 }
 
-export default function TemplatePicker({ onSelectTemplate, onCancel }: TemplatePickerProps) {
+export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCancel }: TemplatePickerProps) {
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previewTemplate, setPreviewTemplate] = useState<SystemTemplate | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailTemplate, setDetailTemplate] = useState<SystemTemplate | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
     loadTemplates();
@@ -40,29 +43,48 @@ export default function TemplatePicker({ onSelectTemplate, onCancel }: TemplateP
     setSelectedId(template.id);
     if (template.source === 'system') {
       try {
-        setPreviewLoading(true);
         const detail = await getSystemTemplate(template.id);
-        setPreviewTemplate(detail);
+        if (detail) {
+          setSelectedTemplate(detail);
+        } else {
+          setSelectedTemplate(template);
+        }
       } catch {
-        // If detail not available, use summary as preview
-        setPreviewTemplate(null);
-      } finally {
-        setPreviewLoading(false);
+        setSelectedTemplate(template);
       }
     } else {
-      // For user templates, use summary for preview
-      setPreviewTemplate(null);
+      setSelectedTemplate(template);
     }
   };
 
-  const handleUseTemplate = () => {
-    if (previewTemplate) {
-      onSelectTemplate(previewTemplate);
-    } else {
-      const selected = templates.find((t) => t.id === selectedId);
-      if (selected) {
-        onSelectTemplate(selected);
+  const handleBlankClick = () => {
+    setSelectedId('blank');
+    setSelectedTemplate(null);
+  };
+
+  const handleShowDetail = async (e: React.MouseEvent, template: TemplateSummary) => {
+    e.stopPropagation();
+    if (template.source === 'system') {
+      try {
+        setLoadingDetail(true);
+        const detail = await getSystemTemplate(template.id);
+        if (detail) {
+          setDetailTemplate(detail);
+          setShowDetailModal(true);
+        }
+      } catch (err) {
+        console.error('Failed to load template detail:', err);
+      } finally {
+        setLoadingDetail(false);
       }
+    }
+  };
+
+  const handleCreateTask = () => {
+    if (selectedId === 'blank') {
+      onCreateBlank();
+    } else if (selectedTemplate) {
+      onSelectTemplate(selectedTemplate);
     }
   };
 
@@ -91,48 +113,65 @@ export default function TemplatePicker({ onSelectTemplate, onCancel }: TemplateP
   return (
     <div className="template-picker">
       <div className="template-picker-header">
-        <h2>Choose a Template</h2>
-        <p>Start from a template to quickly set up a task with pre-configured roles.</p>
+        <button className="template-picker-back" onClick={onCancel}>
+          ✕ Close
+        </button>
+        <h3>Create New Task</h3>
+        <p>Choose a template or start from scratch</p>
       </div>
 
-      <div className="template-picker-body">
-        <div className="template-picker-list">
-          {templates.length === 0 && (
-            <div className="template-picker-empty">
-              <p>No templates available yet.</p>
-              <p>Create a task first, then save it as a template to reuse it here.</p>
+      <div className="template-picker-content">
+        {/* System Templates with Blank Card as first item */}
+        <div className="template-section">
+          <h3 className="template-section-title">Templates</h3>
+          <div className="template-picker-grid">
+            {/* Blank Creation Card - First in grid */}
+            <div
+              className={`template-card blank-card ${selectedId === 'blank' ? 'selected' : ''}`}
+              onClick={handleBlankClick}
+            >
+              <div className="template-card-blank-icon">➕</div>
+              <div className="template-card-content">
+                <div className="template-card-name">Blank Task</div>
+                <div className="template-card-desc">Start from scratch</div>
+              </div>
             </div>
-          )}
 
-          {systemTemplates.length > 0 && (
-            <div className="template-section">
-              <h3 className="template-section-title">System Templates</h3>
-              {systemTemplates.map((tpl) => (
-                <div
-                  key={tpl.id}
-                  className={`template-card ${selectedId === tpl.id ? 'selected' : ''}`}
-                  onClick={() => handleTemplateClick(tpl)}
-                >
-                  <div className="template-card-icon">{tpl.icon || '📋'}</div>
-                  <div className="template-card-content">
-                    <div className="template-card-name">{tpl.name}</div>
-                    <div className="template-card-desc">{tpl.description}</div>
-                    <div className="template-card-meta">
-                      <span className="template-card-source system">System</span>
-                      <span className="template-card-role-count">{tpl.role_count} roles</span>
-                      {tpl.tags && tpl.tags.map((tag) => (
-                        <span key={tag} className="template-card-tag">{tag}</span>
-                      ))}
-                    </div>
+            {/* System Templates */}
+            {systemTemplates.map((tpl) => (
+              <div
+                key={tpl.id}
+                className={`template-card ${selectedId === tpl.id ? 'selected' : ''}`}
+                onClick={() => handleTemplateClick(tpl)}
+              >
+                <div className="template-card-icon">{tpl.icon || '📋'}</div>
+                <div className="template-card-content">
+                  <div className="template-card-name">{tpl.name}</div>
+                  <div className="template-card-desc">{tpl.description}</div>
+                  <div className="template-card-meta">
+                    <span className="template-card-source system">System</span>
+                    <span className="template-card-role-count">{tpl.role_count} roles</span>
+                    {tpl.tags && tpl.tags.map((tag) => (
+                      <span key={tag} className="template-card-tag">{tag}</span>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                <button 
+                  className="template-card-detail-btn"
+                  onClick={(e) => handleShowDetail(e, tpl)}
+                  disabled={loadingDetail}
+                >
+                  ℹ️ Details
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          {userTemplates.length > 0 && (
-            <div className="template-section">
-              <h3 className="template-section-title">Your Templates</h3>
+        {userTemplates.length > 0 && (
+          <div className="template-section">
+            <h3 className="template-section-title">Your Templates</h3>
+            <div className="template-picker-grid">
               {userTemplates.map((tpl) => (
                 <div
                   key={tpl.id}
@@ -154,72 +193,67 @@ export default function TemplatePicker({ onSelectTemplate, onCancel }: TemplateP
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <div className="template-picker-preview">
-          {previewLoading ? (
-            <div className="template-preview-loading">Loading preview...</div>
-          ) : previewTemplate ? (
-            <div className="template-preview">
-              <h3>{previewTemplate.name}</h3>
-              <p className="template-preview-desc">{previewTemplate.description}</p>
-              <div className="template-preview-roles">
-                <h4>Roles ({previewTemplate.roles.length})</h4>
-                {previewTemplate.roles.map((role, idx) => (
-                  <div key={idx} className="template-preview-role-card">
-                    <div className="template-preview-role-header">
-                      <span className="template-preview-role-name">{role.name}</span>
-                      <span className="template-preview-role-identity">{role.identity}</span>
+      {/* Create Task Button */}
+      <div className="template-picker-footer">
+        <button 
+          className="template-picker-create-btn"
+          onClick={handleCreateTask}
+          disabled={!selectedId}
+        >
+          {selectedId === 'blank' ? 'Create Blank Task' : 'Continue with Template'}
+        </button>
+      </div>
+
+      {/* Detail Modal */}
+      {showDetailModal && detailTemplate && (
+        <div className="template-detail-modal-overlay" onClick={() => setShowDetailModal(false)}>
+          <div className="template-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="template-detail-header">
+              <div className="template-detail-title">
+                <span className="template-detail-icon">{detailTemplate.icon || '📋'}</span>
+                <h3>{detailTemplate.name}</h3>
+              </div>
+              <button className="template-detail-close" onClick={() => setShowDetailModal(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="template-detail-content">
+              <p className="template-detail-desc">{detailTemplate.description}</p>
+              <div className="template-detail-roles">
+                <h4>Roles ({detailTemplate.roles.length})</h4>
+                {detailTemplate.roles.map((role, idx) => (
+                  <div key={idx} className="template-detail-role-card">
+                    <div className="template-detail-role-header">
+                      <span className="template-detail-role-name">{role.name}</span>
+                      <span className="template-detail-role-identity">{role.identity}</span>
                     </div>
-                    <div className="template-preview-role-details">
+                    <div className="template-detail-role-info">
                       {role.archetype_id && (
-                        <span className="template-role-detail">Archetype: {role.archetype_id}</span>
+                        <span className="template-detail-role-item">
+                          <strong>Archetype:</strong> {role.archetype_id}
+                        </span>
                       )}
-                      <span className="template-role-detail">Provider: {role.provider}</span>
-                      <span className="template-role-detail">Model: {role.model}</span>
-                      <span className="template-role-detail">
-                        Handoff: {role.handoff_enabled ? 'Enabled' : 'Disabled'}
+                      <span className="template-detail-role-item">
+                        <strong>Provider:</strong> {role.provider || 'Not set'}
+                      </span>
+                      <span className="template-detail-role-item">
+                        <strong>Model:</strong> {role.model || 'Not set'}
+                      </span>
+                      <span className="template-detail-role-item">
+                        <strong>Handoff:</strong> {role.handoff_enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
                   </div>
                 ))}
               </div>
-              <button
-                className="template-preview-use-btn"
-                onClick={handleUseTemplate}
-              >
-                Use This Template
-              </button>
             </div>
-          ) : selectedId ? (
-            <div className="template-preview">
-              <h3>Template Preview</h3>
-              <p className="template-preview-placeholder">
-                Select a system template to see a detailed preview.
-                <br />
-                For user templates, you'll go directly to the confirmation page.
-              </p>
-              <button
-                className="template-preview-use-btn"
-                onClick={handleUseTemplate}
-              >
-                Use This Template
-              </button>
-            </div>
-          ) : (
-            <div className="template-preview-empty">
-              <p>Select a template to preview</p>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
-
-      <div className="template-picker-footer">
-        <button className="template-picker-cancel-btn" onClick={onCancel}>
-          Back
-        </button>
-      </div>
+      )}
     </div>
   );
 }

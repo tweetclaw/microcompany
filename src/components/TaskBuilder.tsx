@@ -37,7 +37,7 @@ function TaskBuilder({
   const [pmFirstWorkflow, setPmFirstWorkflow] = useState(true);
   
   // Template flow state
-  const [creationMode, setCreationMode] = useState<'choose' | 'from-scratch' | 'from-template' | 'template-picker'>('choose');
+  const [creationMode, setCreationMode] = useState<'from-scratch' | 'from-template' | 'template-picker'>('template-picker');
   const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
 
   const sortedRoles = useMemo(
@@ -140,64 +140,18 @@ function TaskBuilder({
     onTaskCreated(taskRequest);
   };
 
-  const handleBackToChoice = () => {
-    setCreationMode('choose');
-    setSelectedTemplate(null);
-    setTaskName('');
-    setRoles([]);
-  };
-
   const handleBackToTemplatePicker = () => {
     setCreationMode('template-picker');
     setSelectedTemplate(null);
   };
 
-  // Render mode selection screen
-  if (creationMode === 'choose') {
-    return (
-      <div className="task-builder-overlay" onClick={onCancel}>
-        <div className="task-builder-modal task-builder-mode-select" onClick={(e) => e.stopPropagation()}>
-          <div className="task-builder-header">
-            <h2>Create New Task</h2>
-            <button className="task-builder-close" onClick={onCancel} aria-label="Close task builder">✕</button>
-          </div>
-
-          <div className="task-builder-content">
-            <div className="task-builder-mode-options">
-              <button 
-                className="task-builder-mode-option"
-                onClick={() => setCreationMode('template-picker')}
-              >
-                <div className="task-builder-mode-icon">📋</div>
-                <div className="task-builder-mode-info">
-                  <h3>From Template</h3>
-                  <p>Start with a pre-configured team template</p>
-                </div>
-              </button>
-
-              <button 
-                className="task-builder-mode-option"
-                onClick={() => setCreationMode('from-scratch')}
-              >
-                <div className="task-builder-mode-icon">✨</div>
-                <div className="task-builder-mode-info">
-                  <h3>From Scratch</h3>
-                  <p>Build a custom task with your own roles</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render template picker
+  // Render template picker (now the default entry point)
   if (creationMode === 'template-picker') {
     return (
       <TemplatePicker
         onSelectTemplate={handleTemplateSelected}
-        onCancel={handleBackToChoice}
+        onCreateBlank={() => setCreationMode('from-scratch')}
+        onCancel={onCancel}
       />
     );
   }
@@ -220,7 +174,7 @@ function TaskBuilder({
       <div className="task-builder-overlay" onClick={onCancel}>
         <div className="task-builder-modal" onClick={(e) => e.stopPropagation()}>
           <div className="task-builder-header">
-            <button className="task-builder-back" onClick={handleBackToChoice} aria-label="Back">
+            <button className="task-builder-back" onClick={handleBackToTemplatePicker} aria-label="Back">
               ← Back
             </button>
             <h2>New Task</h2>

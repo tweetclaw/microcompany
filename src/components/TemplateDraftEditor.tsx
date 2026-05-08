@@ -55,7 +55,6 @@ export default function TemplateDraftEditor({
   template,
   onConfirm,
   onBack,
-  onCancel,
 }: TemplateDraftEditorProps) {
   const templateId = template.id;
   const templateSource = 'source' in template ? template.source : 'system';
@@ -144,169 +143,157 @@ export default function TemplateDraftEditor({
   };
 
   return (
-    <div className="draft-editor-overlay" onClick={onCancel}>
-      <div className="draft-editor-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="draft-editor-header">
-          <button className="draft-editor-back" onClick={onBack} aria-label="Back to templates">
-            ← Back
-          </button>
-          <h2>Confirm Template</h2>
-          <button className="draft-editor-close" onClick={onCancel} aria-label="Cancel">
-            ✕
-          </button>
+    <div className="template-draft-editor">
+      <div className="template-draft-header">
+        <button className="template-draft-back" onClick={onBack}>
+          ← Back
+        </button>
+        <h3>Confirm Task Configuration</h3>
+        <p>Review and customize the template before creating your task</p>
+      </div>
+
+      <div className="template-draft-content">
+        {/* Task Name */}
+        <div className="template-draft-section">
+          <h3 className="template-draft-section-title">Task Details</h3>
+          <div className="template-draft-field">
+            <label htmlFor="draft-task-name">Task Name</label>
+            <input
+              id="draft-task-name"
+              type="text"
+              value={taskName}
+              onChange={(e) => setTaskName(e.target.value)}
+              placeholder="Enter task name"
+            />
+          </div>
         </div>
 
-        <div className="draft-editor-content">
-          {/* Task-level editing */}
-          <div className="draft-section">
-            <div className="draft-field">
-              <label htmlFor="draft-task-name">Task Name</label>
-              <input
-                id="draft-task-name"
-                type="text"
-                value={taskName}
-                onChange={(e) => setTaskName(e.target.value)}
-                placeholder="Enter task name"
-                className="draft-task-name-input"
-              />
-            </div>
-            <div className="draft-field">
-              <label>Template</label>
-              <div className="draft-template-info">
-                <span className="draft-template-icon">{template.icon || '📋'}</span>
-                <span className="draft-template-name">{template.name}</span>
-                <span className={`draft-template-source ${templateSource}`}>
-                  {templateSource === 'system' ? 'System' : 'User'}
+        {/* Warnings */}
+        {resolvedWarnings.length > 0 && (
+          <div className="template-draft-warnings">
+            {resolvedWarnings.map((warning, idx) => (
+              <div
+                key={idx}
+                className={`template-draft-warning ${warning.blocking ? 'error' : 'warning'}`}
+              >
+                <span className="template-draft-warning-icon">
+                  {warning.blocking ? '🚫' : '⚠️'}
                 </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Warnings section */}
-          {resolvedWarnings.length > 0 && (
-            <div className="draft-section draft-warnings-section">
-              <h3 className="draft-section-title">⚠ Warnings</h3>
-              {blockingWarnings.length > 0 && (
-                <div className="draft-warning-banner blocking">
-                  {blockingWarnings.length} blocking issue{blockingWarnings.length > 1 ? 's' : ''} must be resolved before creating the task.
+                <div className="template-draft-warning-content">
+                  <p className="template-draft-warning-message">{warning.message}</p>
                 </div>
-              )}
-              <div className="draft-warnings-list">
-                {resolvedWarnings.map((warning, idx) => (
-                  <div
-                    key={idx}
-                    className={`draft-warning-item ${warning.blocking ? 'blocking' : 'info'}`}
-                  >
-                    <span className="draft-warning-icon">
-                      {warning.blocking ? '🚫' : 'ℹ️'}
-                    </span>
-                    <span className="draft-warning-text">{warning.message}</span>
-                  </div>
-                ))}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        )}
 
-          {/* Roles section */}
-          <div className="draft-section">
-            <h3 className="draft-section-title">
-              Roles ({resolvedRoles.length})
-            </h3>
-            <p className="draft-section-hint">
-              You can adjust the provider and model for each role before creating.
-              {/* TODO: role name and archetype editing pending backend contract support
-                  See handoff notes for bob/alice alignment */}
-            </p>
-            <div className="draft-roles-list">
-              {resolvedRoles.map((role, idx) => {
-                const hasProviderWarning = !role.provider || role.provider.trim() === '';
-                const hasModelWarning = !role.model || role.model.trim() === '';
-                return (
-                  <div key={idx} className="draft-role-card">
-                    <div className="draft-role-card-header">
-                      <div className="draft-role-name">{role.name}</div>
-                      <div className="draft-role-identity">{role.identity}</div>
-                      {role.archetype_id && (
-                        <span className="draft-role-archetype-badge">
-                          {role.archetype_id}
-                        </span>
-                      )}
-                    </div>
-                    <div className="draft-role-card-body">
-                      <div className="draft-role-field">
-                        <label>Provider</label>
-                        <select
-                          className={`draft-role-select ${hasProviderWarning ? 'draft-role-warning-field' : ''}`}
-                          value={role.provider}
-                          onChange={(e) =>
-                            updateRoleOverride(idx, { provider: e.target.value })
-                          }
-                        >
-                          <option value="">Select provider...</option>
-                          <option value="anthropic">Anthropic</option>
-                          <option value="openai">OpenAI</option>
-                          <option value="ollama">Ollama</option>
-                          <option value="openrouter">OpenRouter</option>
-                        </select>
-                        {hasProviderWarning && (
-                          <span className="draft-role-field-warning">Required</span>
-                        )}
-                      </div>
-                      <div className="draft-role-field">
-                        <label>Model</label>
-                        <select
-                          className={`draft-role-select ${hasModelWarning ? 'draft-role-warning-field' : ''}`}
-                          value={role.model}
-                          onChange={(e) =>
-                            updateRoleOverride(idx, { model: e.target.value })
-                          }
-                        >
-                          <option value="">Select model...</option>
-                          <option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</option>
-                          <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
-                          <option value="gpt-4o">gpt-4o</option>
-                          <option value="gpt-4o-mini">gpt-4o-mini</option>
-                          <option value="llama3.2">llama3.2</option>
-                        </select>
-                        {hasModelWarning && (
-                          <span className="draft-role-field-warning">Required</span>
-                        )}
-                      </div>
-                      <div className="draft-role-field readonly">
-                        <label>Handoff</label>
-                        <span className="draft-role-readonly-value">
-                          {role.handoff_enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </div>
-                      {/* Pending backend support: role name & archetype editing
-                      <div className="draft-role-field">
-                        <label>Role Name</label>
-                        <input type="text" value={role.name} disabled />
-                        <span className="draft-role-field-note">Editing not yet supported</span>
-                      </div>
-                      */}
+        {/* Roles */}
+        <div className="template-draft-section">
+          <h3 className="template-draft-section-title">
+            Roles Configuration ({resolvedRoles.length})
+          </h3>
+          <div className="template-draft-roles">
+            {resolvedRoles.map((role, idx) => {
+              const hasProviderWarning = !role.provider || role.provider.trim() === '';
+              const hasModelWarning = !role.model || role.model.trim() === '';
+              return (
+                <div key={idx} className="template-draft-role-card">
+                  <div className="template-draft-role-header">
+                    <div className="template-draft-role-info">
+                      <h4 className="template-draft-role-name">{role.name}</h4>
+                      <p className="template-draft-role-identity">{role.identity}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="template-draft-role-overrides">
+                    <div className="template-draft-role-override-field">
+                      <label>Provider {hasProviderWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
+                      <select
+                        value={role.provider}
+                        onChange={(e) =>
+                          updateRoleOverride(idx, { provider: e.target.value })
+                        }
+                      >
+                        <option value="">Select provider...</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="ollama">Ollama</option>
+                        <option value="openrouter">OpenRouter</option>
+                      </select>
+                    </div>
+                    <div className="template-draft-role-override-field">
+                      <label>Model {hasModelWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
+                      <select
+                        value={role.model}
+                        onChange={(e) =>
+                          updateRoleOverride(idx, { model: e.target.value })
+                        }
+                      >
+                        <option value="">Select model...</option>
+                        <option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</option>
+                        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="llama3.2">llama3.2</option>
+                      </select>
+                    </div>
+                    {role.archetype_id && (
+                      <div className="template-draft-role-override-field">
+                        <label>Archetype</label>
+                        <div className="template-draft-role-default">{role.archetype_id}</div>
+                      </div>
+                    )}
+                    <div className="template-draft-role-override-field">
+                      <label>Handoff</label>
+                      <div className="template-draft-role-default">
+                        {role.handoff_enabled ? 'Enabled' : 'Disabled'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="draft-editor-footer">
-          <button className="draft-editor-cancel" onClick={onBack}>
-            ← Choose Another Template
-          </button>
-          <button
-            className="draft-editor-create"
-            onClick={handleCreate}
-            disabled={!taskName.trim() || hasBlockingWarnings}
-          >
-            {hasBlockingWarnings
-              ? `Resolve ${blockingWarnings.length} Issue${blockingWarnings.length > 1 ? 's' : ''}`
-              : 'Create Task'}
-          </button>
+        {/* Summary */}
+        <div className="template-draft-summary">
+          <h3 className="template-draft-summary-title">Summary</h3>
+          <div className="template-draft-summary-grid">
+            <div className="template-draft-summary-item">
+              <p className="template-draft-summary-label">Template</p>
+              <p className="template-draft-summary-value">{template.name}</p>
+            </div>
+            <div className="template-draft-summary-item">
+              <p className="template-draft-summary-label">Roles</p>
+              <p className="template-draft-summary-value">{resolvedRoles.length}</p>
+            </div>
+            <div className="template-draft-summary-item">
+              <p className="template-draft-summary-label">Source</p>
+              <p className="template-draft-summary-value">{templateSource === 'system' ? 'System' : 'User'}</p>
+            </div>
+            <div className="template-draft-summary-item">
+              <p className="template-draft-summary-label">Status</p>
+              <p className="template-draft-summary-value">
+                {hasBlockingWarnings ? '⚠️ Issues' : '✓ Ready'}
+              </p>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="template-draft-actions">
+        <button className="template-draft-cancel-btn" onClick={onBack}>
+          ← Back to Templates
+        </button>
+        <button
+          className="template-draft-create-btn"
+          onClick={handleCreate}
+          disabled={!taskName.trim() || hasBlockingWarnings}
+        >
+          {hasBlockingWarnings
+            ? `Resolve ${blockingWarnings.length} Issue${blockingWarnings.length > 1 ? 's' : ''}`
+            : 'Create Task'}
+        </button>
       </div>
     </div>
   );
