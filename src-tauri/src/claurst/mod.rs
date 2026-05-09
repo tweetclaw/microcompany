@@ -207,6 +207,7 @@ struct TerminalEventPayload {
     has_visible_text: Option<bool>,
     handoff_suggestion: Option<HandoffSuggestion>,
     usage: Option<UsageInfo>,
+    timeline: Option<Vec<TimelineItemData>>,
 }
 
 #[derive(Debug, Clone)]
@@ -324,6 +325,20 @@ fn emit_terminal_event(
         "handoffSuggestion": payload.handoff_suggestion,
         "usage": payload.usage.as_ref().map(usage_to_json),
         "warnings": warnings,
+        "timeline": payload.timeline.as_ref().map(|items| {
+            items.iter().map(|item| {
+                serde_json::json!({
+                    "id": item.id,
+                    "type": item.item_type,
+                    "timestamp": item.timestamp,
+                    "content": item.content,
+                    "tool": item.tool,
+                    "action": item.action,
+                    "status": item.status,
+                    "result": item.result,
+                })
+            }).collect::<Vec<_>>()
+        }),
         "timestamp": now,
     }));
 }
@@ -1983,6 +1998,22 @@ impl ClaurstSession {
                 );
                 emit_display_status(&window, &request_id_owned, "finalizing", "整理最终回答");
 
+                // Add final AI response to timeline as "output" type
+                if !text.is_empty() {
+                    let output_item = TimelineItemData {
+                        id: format!("output-{}", uuid::Uuid::new_v4()),
+                        item_type: "output".to_string(),
+                        timestamp: chrono::Utc::now().timestamp_millis(),
+                        content: Some(text.clone()),
+                        tool: None,
+                        action: None,
+                        status: None,
+                        result: None,
+                        tool_use_id: None,
+                    };
+                    timeline_items.lock().push(output_item);
+                }
+
                 let terminal_payload = TerminalEventPayload {
                     result: "success",
                     outcome,
@@ -1993,6 +2024,7 @@ impl ClaurstSession {
                     has_visible_text: Some(has_visible_text),
                     handoff_suggestion,
                     usage: Some(usage),
+                    timeline: Some(timeline_items.lock().clone()),
                 };
 
                 log::info!(
@@ -2058,6 +2090,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2107,6 +2140,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2159,6 +2193,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2208,6 +2243,7 @@ impl ClaurstSession {
                         has_visible_text: Some(!partial_text.is_empty()),
                         handoff_suggestion: None,
                         usage: Some(usage),
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
