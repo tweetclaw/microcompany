@@ -1,6 +1,7 @@
 import React from 'react';
 import { listNormalSessions, deleteSession } from '../api';
 import { SessionSummary } from '../types/api';
+import { ProviderConfig } from '../types/settings';
 import './SessionList.css';
 
 interface SessionListProps {
@@ -9,11 +10,18 @@ interface SessionListProps {
   refreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
   onSessionDeleted?: (sessionId: string) => void;
+  availableProviders?: ProviderConfig[];
 }
 
-function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected, onSessionDeleted }: SessionListProps) {
+function SessionList({ workingDirectory, currentSessionId, refreshKey, onSessionSelected, onSessionDeleted, availableProviders = [] }: SessionListProps) {
   const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  // Helper function to get provider display name
+  const getProviderDisplayName = (providerId: string): string => {
+    const provider = availableProviders.find(p => p.id === providerId);
+    return provider?.name || providerId;
+  };
 
   React.useEffect(() => {
     loadSessions();
@@ -106,13 +114,12 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
           <div className="session-info">
             <div className="session-name">{session.name}</div>
             <div className="session-meta">
-              <span className="session-time">{formatTime(session.updated_at)}</span>
-              <span className="session-count">{session.message_count} 条消息</span>
               {session.provider && (
                 <span className="session-provider">
-                  {session.provider} · {session.model}
+                  {getProviderDisplayName(session.provider)}
                 </span>
               )}
+              <span className="session-time">{formatTime(session.updated_at)}</span>
             </div>
           </div>
           <button

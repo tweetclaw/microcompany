@@ -18,9 +18,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailTemplate, setDetailTemplate] = useState<SystemTemplate | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<SystemTemplate | UserTemplate | null>(null);
   const [fullTemplates, setFullTemplates] = useState<Map<string, SystemTemplate | UserTemplate>>(new Map());
@@ -66,22 +63,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const handleBlankClick = () => {
     setSelectedId('blank');
     setSelectedTemplate(null);
-  };
-
-  const handleShowDetail = async (e: React.MouseEvent, template: TemplateSummary) => {
-    e.stopPropagation();
-    try {
-      setLoadingDetail(true);
-      const detail = await getSystemTemplate(template.id);
-      if (detail) {
-        setDetailTemplate(detail);
-        setShowDetailModal(true);
-      }
-    } catch (err) {
-      console.error('Failed to load template detail:', err);
-    } finally {
-      setLoadingDetail(false);
-    }
   };
 
   const handleEditTemplate = async (e: React.MouseEvent, template: TemplateSummary) => {
@@ -202,11 +183,11 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                     )}
                   </div>
                   <button 
-                    className="template-card-detail-btn"
-                    onClick={(e) => handleShowDetail(e, tpl)}
-                    disabled={loadingDetail}
+                    className="template-card-edit-btn"
+                    onClick={(e) => handleEditTemplate(e, tpl)}
+                    title="View and edit template"
                   >
-                    ℹ️ Details
+                    ✏️ Edit
                   </button>
                 </div>
               );
@@ -246,22 +227,13 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                         </div>
                       )}
                     </div>
-                    <div className="template-card-actions">
-                      <button 
-                        className="template-card-edit-btn"
-                        onClick={(e) => handleEditTemplate(e, tpl)}
-                        title="Edit template"
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button 
-                        className="template-card-detail-btn"
-                        onClick={(e) => handleShowDetail(e, tpl)}
-                        disabled={loadingDetail}
-                      >
-                        ℹ️ Details
-                      </button>
-                    </div>
+                    <button 
+                      className="template-card-edit-btn"
+                      onClick={(e) => handleEditTemplate(e, tpl)}
+                      title="Edit template"
+                    >
+                      ✏️ Edit
+                    </button>
                   </div>
                 );
               })}
@@ -280,53 +252,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
           {selectedId === 'blank' ? 'Create Blank Task' : 'Continue with Template'}
         </button>
       </div>
-
-      {/* Detail Modal */}
-      {showDetailModal && detailTemplate && (
-        <div className="template-detail-modal-overlay" onClick={() => setShowDetailModal(false)}>
-          <div className="template-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="template-detail-header">
-              <div className="template-detail-title">
-                <span className="template-detail-icon">{detailTemplate.icon || '📋'}</span>
-                <h3>{detailTemplate.name}</h3>
-              </div>
-              <button className="template-detail-close" onClick={() => setShowDetailModal(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="template-detail-content">
-              <p className="template-detail-desc">{detailTemplate.description}</p>
-              <div className="template-detail-roles">
-                <h4>Roles ({detailTemplate.roles.length})</h4>
-                {detailTemplate.roles.map((role, idx) => {
-                  const provider = availableProviders.find(p => p.id === role.provider);
-                  return (
-                    <div key={idx} className="template-detail-role-card">
-                      <div className="template-detail-role-header">
-                        <span className="template-detail-role-name">{role.name}</span>
-                        <span className="template-detail-role-identity">{role.identity}</span>
-                      </div>
-                      <div className="template-detail-role-info">
-                        {role.archetype_id && (
-                          <span className="template-detail-role-item">
-                            <strong>Archetype:</strong> {role.archetype_id}
-                          </span>
-                        )}
-                        <span className="template-detail-role-item">
-                          <strong>AI Provider:</strong> {provider ? `${provider.name} (${provider.model})` : (role.provider || 'Not configured')}
-                        </span>
-                        <span className="template-detail-role-item">
-                          <strong>Handoff:</strong> {role.handoff_enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Template Modal */}
       {showEditModal && editingTemplate && (
