@@ -1,7 +1,7 @@
 # 测试手册 - Team Templates 功能
 
 **测试日期**: 2026-05-09  
-**测试范围**: Phase 1-3 核心功能  
+**测试范围**: Phase 1-3 核心功能 + 本轮模板持久化/编辑验证  
 **预计时间**: 15-20 分钟
 
 ---
@@ -9,12 +9,119 @@
 ## 准备工作
 
 1. 启动开发服务器：`npm run dev`
-2. 打开浏览器：`http://localhost:1420`
-3. 打开浏览器控制台（F12）查看日志
+2. 启动桌面端（如本项目使用 Tauri，请按当前开发方式启动）
+3. 打开界面后进入 Task / Template 相关页面
+4. 打开开发者控制台，方便查看前端日志
 
 ---
 
-## Phase 1: 模板系统 ✅ 已测试
+## 本轮新增重点测试：Task Template 初始化、展示、编辑、保存
+
+### 测试 A1: 默认 3 个模板初始化并显示
+
+**操作步骤**:
+1. 启动应用
+2. 进入模板选择/模板列表页面
+3. 观察系统默认模板是否显示
+
+**预期效果**:
+- ✅ 能看到默认 3 个系统模板
+- ✅ 模板可以正常打开详情或进入编辑
+- ✅ 模板数据来自数据库，不是空列表
+
+---
+
+### 测试 A2: 默认模板初始状态正确
+
+**操作步骤**:
+1. 在模板列表中观察默认 3 个模板卡片右上角状态
+2. 不做任何编辑，直接检查初始显示
+
+**预期效果**:
+- ✅ 默认模板**不应显示绿色 `✅`**
+- ✅ 因为默认 role 的 `provider` 初始为空，所以应显示“未配置 / 可编辑”一类的非完成态
+- ✅ 不应误判为已完成模板
+
+---
+
+### 测试 A3: 点击 Edit 后可以修改 provider 并保存
+
+**操作步骤**:
+1. 在任意默认模板卡片上点击 `Edit`
+2. 修改一个 role 的 `provider`
+3. 如界面允许，也可顺手修改名称或描述
+4. 点击保存
+5. 关闭编辑界面
+
+**预期效果**:
+- ✅ Edit 页面不是只读
+- ✅ 可以修改 `provider`
+- ✅ 点击保存后没有报错
+- ✅ 返回列表后能看到状态或内容已更新
+
+---
+
+### 测试 A4: Edit 保存后列表和详情即时刷新
+
+**操作步骤**:
+1. 选中一个默认模板
+2. 点击 `Edit`
+3. 修改 `provider` 或模板字段并保存
+4. 保存后不刷新页面，直接观察当前界面
+
+**预期效果**:
+- ✅ 模板列表即时刷新
+- ✅ 当前选中的模板详情即时刷新
+- ✅ 卡片右上角状态即时刷新
+- ✅ 不需要手动关闭页面或重进才能看到新值
+
+---
+
+### 测试 A5: 重开模板后数据仍然存在
+
+**操作步骤**:
+1. 编辑并保存某个默认模板
+2. 关闭当前编辑界面
+3. 重新打开同一个模板详情或编辑页
+
+**预期效果**:
+- ✅ 刚才设置的 `provider` 仍然存在
+- ✅ 模板名称/描述等修改项仍然存在（如果有修改）
+- ✅ 说明数据已写入数据库，而不是只存在前端内存
+
+---
+
+### 测试 A6: 重启应用后模板修改仍保留
+
+**操作步骤**:
+1. 先完成一次模板编辑并保存
+2. 完全退出应用
+3. 重新启动应用
+4. 再次进入模板列表并打开刚才修改的模板
+
+**预期效果**:
+- ✅ 之前保存的 `provider` 仍然存在
+- ✅ 模板状态与上次保存后一致
+- ✅ 说明模板修改已成功持久化到 SQLite
+
+---
+
+### 测试 A7: Save task as template 写入数据库
+
+**操作步骤**:
+1. 打开一个已有 Task
+2. 点击 `保存为模板`
+3. 输入模板名称和描述
+4. 保存后回到模板列表
+
+**预期效果**:
+- ✅ 能看到新建的 user template
+- ✅ 新模板可打开详情
+- ✅ 重新进入后仍然存在
+
+---
+
+## Phase 1: 模板系统
 
 ### 测试 1.1: 从模板创建 Task
 
@@ -22,177 +129,97 @@
 1. 点击"新建 Task"按钮
 2. 应该直接显示模板选择界面（不是选择对话框）
 3. 点击任意系统模板卡片（如 "Full-Stack Development"）
-4. 卡片应该显示蓝色边框（选中状态）
-5. 点击底部"Continue with Template"按钮
+4. 卡片应该显示选中状态
+5. 点击底部继续按钮
 6. 进入草稿编辑器，显示模板的角色列表
 
 **预期效果**:
-- ✅ 模板卡片网格布局，第一个是"Blank Task"
+- ✅ 模板卡片正常显示
 - ✅ 点击卡片显示选中状态
-- ✅ 草稿编辑器显示所有角色配置
-- ✅ 控制台显示日志：`[templates] listAllTemplateSummaries`
+- ✅ 草稿编辑器显示模板角色配置
 
 ### 测试 1.2: 查看模板详情
 
 **操作步骤**:
-1. 在模板选择界面，点击任意模板的"ℹ️ Details"按钮
+1. 在模板选择界面，点击任意模板的详情按钮
 2. 弹出模态框显示模板详细信息
 
 **预期效果**:
-- ✅ 显示模板名称、描述、所有角色配置
-- ✅ 控制台显示日志：`[templates] getSystemTemplate`
+- ✅ 显示模板名称、描述、角色配置
+- ✅ 默认模板若未配置 provider，应能看出未完成状态
 
 ### 测试 1.3: 空白创建 Task
 
 **操作步骤**:
 1. 点击"新建 Task"
-2. 点击"Blank Task"卡片（第一个，带 ➕ 号）
-3. 点击"Create Blank Task"按钮
+2. 点击"Blank Task"卡片
+3. 点击创建按钮
 
 **预期效果**:
 - ✅ 进入空白 Task 创建流程
-- ✅ 不显示草稿编辑器
+- ✅ 不显示模板草稿内容
 
 ### 测试 1.4: 保存为模板
 
 **操作步骤**:
 1. 创建或打开一个 Task
-2. 点击右上角"💾 保存为模板"按钮
+2. 点击右上角"保存为模板"
 3. 输入模板名称和描述
-4. 点击"Save Template"
+4. 点击保存
 
 **预期效果**:
 - ✅ 显示成功提示
-- ✅ 控制台显示日志：`[TaskModeLayout] handleSaveAsTemplate`
-- ✅ 下次创建 Task 时，在"User Templates"分组中看到新模板
+- ✅ 在模板列表中能看到新模板
 
 ---
 
-## Phase 2: 动态角色管理 🔄 待测试
+## Phase 2: 动态角色管理（按需测试）
 
 ### 测试 2.1: 添加角色
 
 **操作步骤**:
 1. 打开一个 Task
-2. 点击"➕ 添加成员"按钮
-3. 填写表单：
-   - 角色名称：`Alice`
-   - 角色身份：`Frontend Developer`
-   - Archetype：选择 `assistant`
-   - Provider：选择第一个可用的
-   - Model：选择默认的
-4. 点击"Add Role"
+2. 点击添加成员
+3. 填写角色名称、身份、provider、model
+4. 点击保存
 
 **预期效果**:
-- ✅ 显示成功提示
-- ✅ 角色列表中出现新角色"Alice"
-- ✅ 控制台显示日志：`[TaskModeLayout] handleAddRole: Adding role "Alice"`
-- ✅ 控制台显示日志：`[api] addTaskRole: Adding role to task`
-
-**失败情况**:
-- ❌ 如果后端未实现 `add_task_role` 命令，会显示错误
-- ❌ 检查控制台是否有 `Command add_task_role not found` 错误
+- ✅ 角色列表中出现新角色
+- ✅ 无明显报错
 
 ### 测试 2.2: 编辑角色
 
 **操作步骤**:
-1. 在角色卡片上点击"✏️"按钮
-2. 修改角色名称为 `Alice Updated`
-3. 修改角色身份为 `Senior Frontend Developer`
-4. 点击"Save Changes"
+1. 在角色卡片上点击编辑
+2. 修改角色名称或身份
+3. 点击保存
 
 **预期效果**:
-- ✅ 显示成功提示
-- ✅ 角色卡片显示更新后的信息
-- ✅ 控制台显示日志：`[TaskModeLayout] handleUpdateRole: Updating role`
-- ✅ 控制台显示日志：`[api] updateTaskRole: Updating role`
+- ✅ 角色信息更新成功
 
 ### 测试 2.3: 删除角色
 
 **操作步骤**:
-1. 在角色卡片上点击"🗑️"按钮
-2. 在确认对话框中点击"Delete Role"
+1. 在角色卡片上点击删除
+2. 在确认对话框中确认删除
 
 **预期效果**:
-- ✅ 显示成功提示
 - ✅ 角色从列表中消失
-- ✅ 控制台显示日志：`[TaskModeLayout] handleDeleteRole: Deleting role`
-- ✅ 控制台显示日志：`[api] deleteTaskRole: Deleting role`
-
-**边界测试**:
-- 尝试删除最后一个角色，应该被阻止（按钮禁用）
 
 ---
 
-## Phase 3: 拖拽排序 🔄 待测试
+## Phase 3: 拖拽排序（按需测试）
 
 ### 测试 3.1: 拖拽角色排序
 
 **操作步骤**:
-1. 打开一个有 3+ 角色的 Task
-2. 鼠标悬停在角色卡片上，应该看到"⋮⋮"拖拽手柄
-3. 按住拖拽手柄，拖动角色到新位置
-4. 松开鼠标
+1. 打开一个有多个角色的 Task
+2. 拖动角色顺序
+3. 松开鼠标
 
 **预期效果**:
-- ✅ 拖拽时卡片半透明、有阴影
-- ✅ 松开后角色顺序立即更新（乐观更新）
-- ✅ 控制台显示日志：`[TaskModeLayout] handleDragEnd: Drag ended`
-- ✅ 控制台显示日志：`[TaskModeLayout] handleDragEnd: Reordering roles`
-- ✅ 控制台显示日志：`[api] reorderTaskRoles: Reordering roles`
-
-**失败情况**:
-- ❌ 如果后端保存失败，角色顺序会回滚
-- ❌ 控制台显示日志：`[TaskModeLayout] handleDragEnd: Failed to save order, rolling back`
-
----
-
-## 关键日志检查点
-
-在测试过程中，控制台应该显示以下关键日志：
-
-### Phase 1 日志
-```
-[templates] listAllTemplateSummaries: Fetching all templates
-[templates] getSystemTemplate: Finding template "xxx"
-[TaskModeLayout] handleSaveAsTemplate: Saving task as template
-```
-
-### Phase 2 日志
-```
-[TaskModeLayout] handleAddRole: Adding role "Alice" to task xxx
-[api] addTaskRole: Adding role to task xxx with config: {...}
-[TaskModeLayout] handleUpdateRole: Updating role "Alice" in task xxx
-[api] updateTaskRole: Updating role "Alice" in task xxx
-[TaskModeLayout] handleDeleteRole: Deleting role "Alice" from task xxx
-[api] deleteTaskRole: Deleting role "Alice" from task xxx
-```
-
-### Phase 3 日志
-```
-[TaskModeLayout] handleDragEnd: Drag ended, from index X to Y
-[TaskModeLayout] handleDragEnd: Reordering roles: [...]
-[api] reorderTaskRoles: Reordering roles in task xxx
-[TaskModeLayout] handleDragEnd: Roles reordered successfully
-```
-
----
-
-## 后端依赖检查
-
-如果测试失败，检查后端是否实现了以下命令：
-
-```bash
-# 搜索后端命令
-grep -r "add_task_role" src-tauri/
-grep -r "update_task_role" src-tauri/
-grep -r "delete_task_role" src-tauri/
-grep -r "reorder_task_roles" src-tauri/
-```
-
-**如果命令不存在**:
-- Phase 2 和 Phase 3 功能无法正常工作
-- 需要等待后端实现相应的命令
+- ✅ 角色顺序立即更新
+- ✅ 无明显报错
 
 ---
 
@@ -200,6 +227,13 @@ grep -r "reorder_task_roles" src-tauri/
 
 | 功能 | 状态 | 备注 |
 |------|------|------|
+| A1 默认模板初始化显示 | ⬜ 未测试 | |
+| A2 默认模板初始状态 | ⬜ 未测试 | |
+| A3 Edit 修改 provider 并保存 | ⬜ 未测试 | |
+| A4 保存后 UI 即时刷新 | ⬜ 未测试 | |
+| A5 重开模板后数据保留 | ⬜ 未测试 | |
+| A6 重启应用后数据保留 | ⬜ 未测试 | |
+| A7 Save task as template | ⬜ 未测试 | |
 | 1.1 从模板创建 | ⬜ 未测试 | |
 | 1.2 查看模板详情 | ⬜ 未测试 | |
 | 1.3 空白创建 | ⬜ 未测试 | |
@@ -210,7 +244,7 @@ grep -r "reorder_task_roles" src-tauri/
 | 3.1 拖拽排序 | ⬜ 未测试 | |
 
 **状态说明**:
-- ✅ 通��
+- ✅ 通过
 - ❌ 失败
 - ⚠️ 部分通过
 - ⬜ 未测试
@@ -219,22 +253,21 @@ grep -r "reorder_task_roles" src-tauri/
 
 ## 常见问题
 
-### Q1: 点击"新建 Task"没有反应
-- 检查控制台是否有 JavaScript 错误
-- 检查开发服务器是否正常运行
+### Q1: 模板列表为空
+- 检查应用是否正确启动数据库初始化
+- 检查是否成功插入默认 3 个模板
+- 检查前端是否成功调用模板查询接口
 
-### Q2: 模板列表为空
-- 检查后端是否返回了模板数据
-- 查看控制台日志：`[templates] listAllTemplateSummaries`
+### Q2: Edit 保存后看不到变化
+- 检查保存是否成功
+- 检查列表与详情是否有刷新
+- 关闭后重新打开同一模板再次确认
 
-### Q3: Phase 2/3 功能报错
-- 检查后端是否实现了相应的命令
-- 查看控制台错误信息
-
-### Q4: 拖拽不工作
-- 检查是否安装了 `@dnd-kit` 依赖
-- 检查控制台是否有错误
+### Q3: 重启后模板修改丢失
+- 说明可能还没有真正写入 SQLite
+- 需要重点检查模板更新接口与数据库 update 逻辑
 
 ---
 
-**测试完成后，请更新文档中的测试状态！**
+**测试完成后，请直接在表格中更新状态和备注。**
+

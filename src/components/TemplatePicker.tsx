@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listAllTemplateSummaries, getSystemTemplate, isTemplateComplete } from '../api/templates';
+import { listAllTemplateSummaries, getSystemTemplate, listUserTemplates, isTemplateComplete } from '../api/templates';
 import type { TemplateSummary, SystemTemplate, UserTemplate } from '../types/template';
 import type { ProviderConfig } from '../types/settings';
 import EditTemplateModal from './EditTemplateModal';
@@ -18,16 +18,45 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailTemplate, setDetailTemplate] = useState<SystemTemplate | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<SystemTemplate | UserTemplate | null>(null);
   const [fullTemplates, setFullTemplates] = useState<Map<string, SystemTemplate | UserTemplate>>(new Map());
 
   useEffect(() => {
     loadTemplates();
+    loadFullTemplates();
   }, []);
+
+  const loadFullTemplates = async () => {
+    try {
+      const [summaries, systemDetails, userDetails] = await Promise.all([
+        listAllTemplateSummaries(),
+        Promise.all((await listAllTemplateSummaries())
+          .filter((t) => t.source === 'system')
+          .map(async (t) => [t.id, await getSystemTemplate(t.id)] as const)),
+        listUserTemplates(),
+      ]);
+
+      const next = new Map<string, SystemTemplate | UserTemplate>();
+      systemDetails.forEach(([id, detail]) => {
+        if (detail) next.set(id, detail);
+      });
+      userDetails.forEach((detail) => {
+        next.set(detail.id, detail);
+      });
+
+      summaries.forEach((summary) => {
+        if (!next.has(summary.id) && summary.source === 'user') {
+          const found = userDetails.find((item) => item.id === summary.id);
+          if (found) next.set(summary.id, found);
+        }
+      });
+
+      setFullTemplates(next);
+    } catch (err) {
+      console.error('[TemplatePicker] Failed to preload full templates:', err);
+    }
+  };
 
   const loadTemplates = async () => {
     try {
@@ -35,6 +64,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
       setError(null);
       const data = await listAllTemplateSummaries();
       setTemplates(data);
+      await loadFullTemplates();
     } catch (err) {
       console.error('Failed to load templates:', err);
       setError('Failed to load templates. Using mock data for preview.');
@@ -68,28 +98,19 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
     setSelectedTemplate(null);
   };
 
-  const handleShowDetail = async (e: React.MouseEvent, template: TemplateSummary) => {
-    e.stopPropagation();
-    try {
-      setLoadingDetail(true);
-      const detail = await getSystemTemplate(template.id);
-      if (detail) {
-        setDetailTemplate(detail);
-        setShowDetailModal(true);
-      }
-    } catch (err) {
-      console.error('Failed to load template detail:', err);
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
   const handleEditTemplate = async (e: React.MouseEvent, template: TemplateSummary) => {
     e.stopPropagation();
     console.log('[TemplatePicker] handleEditTemplate: Opening edit modal for template:', template.id);
     
     try {
-      const detail = await getSystemTemplate(template.id);
+      let detail: SystemTemplate | UserTemplate | null = null;
+      if (template.source === 'system') {
+        detail = await getSystemTemplate(template.id);
+      } else {
+        const userTemplates = await listUserTemplates();
+        detail = userTemplates.find((t) => t.id === template.id) ?? null;
+      }
+
       if (detail) {
         setEditingTemplate(detail);
         setShowEditModal(true);
@@ -109,8 +130,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const getTemplateStatus = (template: TemplateSummary): 'complete' | 'incomplete' => {
     const fullTemplate = fullTemplates.get(template.id);
     if (!fullTemplate) {
-      // If we don't have the full template loaded, assume incomplete for user templates
-      return template.source === 'user' ? 'incomplete' : 'complete';
+      return 'incomplete';
     }
     return isTemplateComplete(fullTemplate) ? 'complete' : 'incomplete';
   };
@@ -181,8 +201,8 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                   className={`template-card ${selectedId === tpl.id ? 'selected' : ''} ${status === 'incomplete' ? 'incomplete' : 'complete'}`}
                   onClick={() => handleTemplateClick(tpl)}
                 >
-                  <div className="template-card-status-badge">
-                    {status === 'complete' ? '✅' : '⚠️'}
+                  <div className="template-card-status-badge" title={status === 'complete' ? 'Ready' : 'Editable - provider required'}>
+                    {status === 'complete' ? '✅' : '✏️'}
                   </div>
                   <div className="template-card-icon">{tpl.icon || '📋'}</div>
                   <div className="template-card-content">
@@ -197,16 +217,16 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                     </div>
                     {status === 'incomplete' && (
                       <div className="template-card-warning">
-                        ⚠️ Needs AI Provider configuration
+                        ✏️ Editable - AI Provider required
                       </div>
                     )}
                   </div>
                   <button 
-                    className="template-card-detail-btn"
-                    onClick={(e) => handleShowDetail(e, tpl)}
-                    disabled={loadingDetail}
+                    className="template-card-edit-btn"
+                    onClick={(e) => handleEditTemplate(e, tpl)}
+                    title="View and edit template"
                   >
-                    ℹ️ Details
+                    ✏️ Edit
                   </button>
                 </div>
               );
@@ -242,26 +262,17 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                       </div>
                       {status === 'incomplete' && (
                         <div className="template-card-warning">
-                          ⚠️ Needs AI Provider configuration
+                          ✏️ Editable - AI Provider required
                         </div>
                       )}
                     </div>
-                    <div className="template-card-actions">
-                      <button 
-                        className="template-card-edit-btn"
-                        onClick={(e) => handleEditTemplate(e, tpl)}
-                        title="Edit template"
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button 
-                        className="template-card-detail-btn"
-                        onClick={(e) => handleShowDetail(e, tpl)}
-                        disabled={loadingDetail}
-                      >
-                        ℹ️ Details
-                      </button>
-                    </div>
+                    <button 
+                      className="template-card-edit-btn"
+                      onClick={(e) => handleEditTemplate(e, tpl)}
+                      title="Edit template"
+                    >
+                      ✏️ Edit
+                    </button>
                   </div>
                 );
               })}
@@ -280,53 +291,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
           {selectedId === 'blank' ? 'Create Blank Task' : 'Continue with Template'}
         </button>
       </div>
-
-      {/* Detail Modal */}
-      {showDetailModal && detailTemplate && (
-        <div className="template-detail-modal-overlay" onClick={() => setShowDetailModal(false)}>
-          <div className="template-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="template-detail-header">
-              <div className="template-detail-title">
-                <span className="template-detail-icon">{detailTemplate.icon || '📋'}</span>
-                <h3>{detailTemplate.name}</h3>
-              </div>
-              <button className="template-detail-close" onClick={() => setShowDetailModal(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="template-detail-content">
-              <p className="template-detail-desc">{detailTemplate.description}</p>
-              <div className="template-detail-roles">
-                <h4>Roles ({detailTemplate.roles.length})</h4>
-                {detailTemplate.roles.map((role, idx) => {
-                  const provider = availableProviders.find(p => p.id === role.provider);
-                  return (
-                    <div key={idx} className="template-detail-role-card">
-                      <div className="template-detail-role-header">
-                        <span className="template-detail-role-name">{role.name}</span>
-                        <span className="template-detail-role-identity">{role.identity}</span>
-                      </div>
-                      <div className="template-detail-role-info">
-                        {role.archetype_id && (
-                          <span className="template-detail-role-item">
-                            <strong>Archetype:</strong> {role.archetype_id}
-                          </span>
-                        )}
-                        <span className="template-detail-role-item">
-                          <strong>AI Provider:</strong> {provider ? `${provider.name} (${provider.model})` : (role.provider || 'Not configured')}
-                        </span>
-                        <span className="template-detail-role-item">
-                          <strong>Handoff:</strong> {role.handoff_enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Template Modal */}
       {showEditModal && editingTemplate && (
