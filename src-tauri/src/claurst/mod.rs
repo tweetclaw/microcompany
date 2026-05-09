@@ -439,9 +439,9 @@ fn generate_tool_description(tool_name: &str, input_json: &str) -> String {
             }
             "Bash" => {
                 if let Some(command) = input.get("command").and_then(|v| v.as_str()) {
-                    // Truncate long commands
-                    let truncated = if command.len() > 80 {
-                        format!("{}...", &command[..77])
+                    // Truncate long commands at char boundary
+                    let truncated = if command.chars().count() > 80 {
+                        command.chars().take(77).collect::<String>() + "..."
                     } else {
                         command.to_string()
                     };
