@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listAllTemplateSummaries, getSystemTemplate, isTemplateComplete } from '../api/templates';
+import { listAllTemplateSummaries, getSystemTemplate, listUserTemplates, isTemplateComplete } from '../api/templates';
 import type { TemplateSummary, SystemTemplate, UserTemplate } from '../types/template';
 import type { ProviderConfig } from '../types/settings';
 import EditTemplateModal from './EditTemplateModal';
@@ -24,7 +24,39 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
 
   useEffect(() => {
     loadTemplates();
+    loadFullTemplates();
   }, []);
+
+  const loadFullTemplates = async () => {
+    try {
+      const [summaries, systemDetails, userDetails] = await Promise.all([
+        listAllTemplateSummaries(),
+        Promise.all((await listAllTemplateSummaries())
+          .filter((t) => t.source === 'system')
+          .map(async (t) => [t.id, await getSystemTemplate(t.id)] as const)),
+        listUserTemplates(),
+      ]);
+
+      const next = new Map<string, SystemTemplate | UserTemplate>();
+      systemDetails.forEach(([id, detail]) => {
+        if (detail) next.set(id, detail);
+      });
+      userDetails.forEach((detail) => {
+        next.set(detail.id, detail);
+      });
+
+      summaries.forEach((summary) => {
+        if (!next.has(summary.id) && summary.source === 'user') {
+          const found = userDetails.find((item) => item.id === summary.id);
+          if (found) next.set(summary.id, found);
+        }
+      });
+
+      setFullTemplates(next);
+    } catch (err) {
+      console.error('[TemplatePicker] Failed to preload full templates:', err);
+    }
+  };
 
   const loadTemplates = async () => {
     try {
@@ -32,6 +64,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
       setError(null);
       const data = await listAllTemplateSummaries();
       setTemplates(data);
+      await loadFullTemplates();
     } catch (err) {
       console.error('Failed to load templates:', err);
       setError('Failed to load templates. Using mock data for preview.');
@@ -70,7 +103,14 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
     console.log('[TemplatePicker] handleEditTemplate: Opening edit modal for template:', template.id);
     
     try {
-      const detail = await getSystemTemplate(template.id);
+      let detail: SystemTemplate | UserTemplate | null = null;
+      if (template.source === 'system') {
+        detail = await getSystemTemplate(template.id);
+      } else {
+        const userTemplates = await listUserTemplates();
+        detail = userTemplates.find((t) => t.id === template.id) ?? null;
+      }
+
       if (detail) {
         setEditingTemplate(detail);
         setShowEditModal(true);
@@ -90,8 +130,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const getTemplateStatus = (template: TemplateSummary): 'complete' | 'incomplete' => {
     const fullTemplate = fullTemplates.get(template.id);
     if (!fullTemplate) {
-      // If we don't have the full template loaded, assume incomplete for user templates
-      return template.source === 'user' ? 'incomplete' : 'complete';
+      return 'incomplete';
     }
     return isTemplateComplete(fullTemplate) ? 'complete' : 'incomplete';
   };
@@ -162,8 +201,8 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                   className={`template-card ${selectedId === tpl.id ? 'selected' : ''} ${status === 'incomplete' ? 'incomplete' : 'complete'}`}
                   onClick={() => handleTemplateClick(tpl)}
                 >
-                  <div className="template-card-status-badge">
-                    {status === 'complete' ? '✅' : '⚠️'}
+                  <div className="template-card-status-badge" title={status === 'complete' ? 'Ready' : 'Editable - provider required'}>
+                    {status === 'complete' ? '✅' : '✏️'}
                   </div>
                   <div className="template-card-icon">{tpl.icon || '📋'}</div>
                   <div className="template-card-content">
@@ -178,7 +217,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                     </div>
                     {status === 'incomplete' && (
                       <div className="template-card-warning">
-                        ⚠️ Needs AI Provider configuration
+                        ✏️ Editable - AI Provider required
                       </div>
                     )}
                   </div>
@@ -223,7 +262,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                       </div>
                       {status === 'incomplete' && (
                         <div className="template-card-warning">
-                          ⚠️ Needs AI Provider configuration
+                          ✏️ Editable - AI Provider required
                         </div>
                       )}
                     </div>

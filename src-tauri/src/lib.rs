@@ -162,6 +162,41 @@ async fn vacuum_database() -> Result<api::VacuumResult, String> {
 }
 
 #[tauri::command]
+async fn list_system_templates() -> Result<Vec<api::SystemTemplate>, String> {
+    api::list_system_templates().await
+}
+
+#[tauri::command]
+async fn get_system_template(template_id: String) -> Result<Option<api::SystemTemplate>, String> {
+    api::get_system_template(template_id).await
+}
+
+#[tauri::command]
+async fn list_user_templates() -> Result<Vec<api::UserTemplate>, String> {
+    api::list_user_templates().await
+}
+
+#[tauri::command]
+async fn update_template(template_id: String, updates: api::UpdateTemplateRequest) -> Result<api::UserTemplate, String> {
+    api::update_template(template_id, updates).await
+}
+
+#[tauri::command]
+async fn save_task_as_template(request: api::SaveTemplateRequest) -> Result<api::UserTemplate, String> {
+    api::save_task_as_template(request).await
+}
+
+#[tauri::command]
+async fn list_all_template_summaries() -> Result<Vec<api::TemplateSummary>, String> {
+    api::list_all_template_summaries().await
+}
+
+#[tauri::command]
+async fn resolve_template_draft(request: api::CreateFromTemplateRequest) -> Result<api::TemplateDraft, String> {
+    api::resolve_template_draft(request).await
+}
+
+#[tauri::command]
 async fn list_role_archetypes() -> Result<Vec<archetypes::RoleArchetype>, String> {
     archetypes::list_role_archetypes()
 }
@@ -264,6 +299,13 @@ pub fn run() {
       list_backups,
       restore_backup,
       vacuum_database,
+      list_system_templates,
+      get_system_template,
+      list_user_templates,
+      update_template,
+      save_task_as_template,
+      list_all_template_summaries,
+      resolve_template_draft,
       list_role_archetypes,
       resize_window_for_main_view,
     ])
