@@ -214,6 +214,68 @@
   cursor: not-allowed;
 }
 
+.task-seat-edit-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.task-seat-edit-button:hover:not(:disabled),
+.task-seat-edit-button:focus-visible:not(:disabled) {
+  border-color: rgba(124, 58, 237, 0.5);
+  background: rgba(124, 58, 237, 0.2);
+  color: #ffffff;
+}
+
+.task-seat-edit-button:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.42);
+  outline-offset: 2px;
+}
+
+.task-seat-edit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.task-seat-delete-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 107, 107, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.task-seat-delete-button:hover:not(:disabled),
+.task-seat-delete-button:focus-visible:not(:disabled) {
+  border-color: rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.2);
+  color: #ffffff;
+}
+
+.task-seat-delete-button:focus-visible {
+  outline: 2px solid rgba(255, 107, 107, 0.42);
+  outline-offset: 2px;
+}
+
+.task-seat-delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .task-seat-card.disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -753,4 +815,101 @@
   .task-seat-card::before {
     display: none;
   }
+}
+
+/* Task Room Header Actions */
+.task-mode-room-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.task-mode-add-member-button,
+.task-mode-save-template-button {
+  padding: 8px 16px;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(91, 33, 182, 0.1) 100%);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.task-mode-add-member-button:hover:not(:disabled),
+.task-mode-save-template-button:hover:not(:disabled) {
+  border-color: rgba(124, 58, 237, 0.5);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(91, 33, 182, 0.2) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+
+.task-mode-add-member-button:active:not(:disabled),
+.task-mode-save-template-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.task-mode-add-member-button:disabled,
+.task-mode-save-template-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .task-mode-room-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-mode-room-header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .task-mode-add-member-button,
+  .task-mode-save-template-button {
+    width: 100%;
+  }
+}
+
+/* Drag and Drop Styles */
+.task-seat-drag-handle {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: grab;
+  font-size: 14px;
+  padding: 4px 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.task-seat-card:hover .task-seat-drag-handle {
+  opacity: 1;
+}
+
+.task-seat-drag-handle:hover {
+  color: var(--vscode-foreground);
+}
+
+.task-seat-drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-seat-drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.task-seat-card.dragging {
+  opacity: 0.5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05);
+  z-index: 1000;
+}
+
+.task-seat-card.dragging .task-seat-card-actions {
+  opacity: 0;
 }

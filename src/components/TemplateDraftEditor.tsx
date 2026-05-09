@@ -1,5 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { SystemTemplate, TemplateSummary, TemplateRole, TemplateWarning, CreateFromTemplateRequest, TemplateDraft } from '../types/template';
+import type { ProviderConfig, SettingsData } from '../types/settings';
+import { normalizeSettingsData } from '../types/settings';
 import { resolveTemplateDraft } from '../api/templates';
 import './TemplateDraftEditor.css';
 
@@ -12,7 +15,6 @@ interface TemplateDraftEditorProps {
 
 type RoleOverride = {
   provider?: string;
-  model?: string;
 };
 
 function buildDraftFromTemplate(template: SystemTemplate | TemplateSummary, taskName: string): TemplateDraft {
@@ -21,21 +23,13 @@ function buildDraftFromTemplate(template: SystemTemplate | TemplateSummary, task
   const warnings: TemplateWarning[] = [];
 
   roles.forEach((role, idx) => {
-    if (!role.provider || role.provider.trim() === '') {
+    const hasProvider = role.provider;
+    if (!hasProvider || (typeof hasProvider === 'string' && hasProvider.trim() === '')) {
       warnings.push({
         type: 'missing_provider',
         role_index: idx,
         role_name: role.name,
-        message: `Role "${role.name}" is missing a provider. Please select one before creating.`,
-        blocking: true,
-      });
-    }
-    if (!role.model || role.model.trim() === '') {
-      warnings.push({
-        type: 'missing_model',
-        role_index: idx,
-        role_name: role.name,
-        message: `Role "${role.name}" is missing a model. Please select one before creating.`,
+        message: `Role "${role.name}" is missing a Provider. Please select one before creating.`,
         blocking: true,
       });
     }
@@ -61,6 +55,26 @@ export default function TemplateDraftEditor({
   const initialTaskName = template.name;
 
   const [taskName, setTaskName] = useState(initialTaskName);
+  const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
+
+  console.log('[TemplateDraftEditor] Initializing with template:', template.name);
+
+  // Load AI Providers from system settings
+  useEffect(() => {
+    const loadProviders = async () => {
+      try {
+        console.log('[TemplateDraftEditor] Loading AI Providers from system settings...');
+        const rawConfig = await invoke('get_config');
+        const config = normalizeSettingsData(rawConfig);
+        const enabledProviders = config.providers.filter(p => p.enabled);
+        console.log('[TemplateDraftEditor] Loaded AI Providers:', enabledProviders.map(p => ({ id: p.id, name: p.name })));
+        setAvailableProviders(enabledProviders);
+      } catch (error) {
+        console.error('[TemplateDraftEditor] Failed to load AI Providers:', error);
+      }
+    };
+    loadProviders();
+  }, []);
 
   // Derive the draft from the template
   const draft = useMemo(
@@ -72,6 +86,7 @@ export default function TemplateDraftEditor({
   const [overrides, setOverrides] = useState<Record<number, RoleOverride>>({});
 
   const updateRoleOverride = (roleIndex: number, patch: Partial<RoleOverride>) => {
+    console.log('[TemplateDraftEditor] Updating role override:', { roleIndex, patch });
     setOverrides((prev) => ({
       ...prev,
       [roleIndex]: {
@@ -83,32 +98,26 @@ export default function TemplateDraftEditor({
 
   // Compute final role state with overrides applied
   const resolvedRoles = useMemo(() => {
-    return draft.roles.map((role, idx) => ({
-      ...role,
-      provider: overrides[idx]?.provider ?? role.provider,
-      model: overrides[idx]?.model ?? role.model,
-    }));
+    return draft.roles.map((role, idx) => {
+      const provider = overrides[idx]?.provider ?? role.provider;
+      return {
+        ...role,
+        provider: provider,
+      };
+    });
   }, [draft.roles, overrides]);
 
   // Re-check warnings after overrides
   const resolvedWarnings = useMemo(() => {
     const warnings: TemplateWarning[] = [];
     resolvedRoles.forEach((role, idx) => {
-      if (!role.provider || role.provider.trim() === '') {
+      const provider = role.provider;
+      if (!provider || provider.trim() === '') {
         warnings.push({
           type: 'missing_provider',
           role_index: idx,
           role_name: role.name,
-          message: `Role "${role.name}" is missing a provider. Please select one before creating.`,
-          blocking: true,
-        });
-      }
-      if (!role.model || role.model.trim() === '') {
-        warnings.push({
-          type: 'missing_model',
-          role_index: idx,
-          role_name: role.name,
-          message: `Role "${role.name}" is missing a model. Please select one before creating.`,
+          message: `Role "${role.name}" is missing a Provider. Please select one before creating.`,
           blocking: true,
         });
       }
@@ -120,14 +129,19 @@ export default function TemplateDraftEditor({
   const hasBlockingWarnings = blockingWarnings.length > 0;
 
   const handleCreate = () => {
+    console.log('[TemplateDraftEditor] Creating task from template:', {
+      templateId,
+      taskName: taskName.trim(),
+      overrides,
+    });
+
     // Build role_overrides record keyed by role name
-    const roleOverrides: Record<string, { provider?: string; model?: string }> = {};
+    const roleOverrides: Record<string, { provider?: string }> = {};
     Object.entries(overrides).forEach(([idx, override]) => {
       const roleName = draft.roles[Number(idx)]?.name;
-      if (roleName && (override.provider || override.model)) {
+      if (roleName && override.provider) {
         roleOverrides[roleName] = {
-          ...(override.provider ? { provider: override.provider } : {}),
-          ...(override.model ? { model: override.model } : {}),
+          provider: override.provider,
         };
       }
     });
@@ -139,6 +153,7 @@ export default function TemplateDraftEditor({
       role_overrides: Object.keys(roleOverrides).length > 0 ? roleOverrides : undefined,
     };
 
+    console.log('[TemplateDraftEditor] Sending create request:', request);
     onConfirm(request);
   };
 
@@ -194,8 +209,8 @@ export default function TemplateDraftEditor({
           </h3>
           <div className="template-draft-roles">
             {resolvedRoles.map((role, idx) => {
-              const hasProviderWarning = !role.provider || role.provider.trim() === '';
-              const hasModelWarning = !role.model || role.model.trim() === '';
+              const provider = role.provider;
+              const hasProviderWarning = !provider || provider.trim() === '';
               return (
                 <div key={idx} className="template-draft-role-card">
                   <div className="template-draft-role-header">
@@ -206,35 +221,33 @@ export default function TemplateDraftEditor({
                   </div>
                   <div className="template-draft-role-overrides">
                     <div className="template-draft-role-override-field">
-                      <label>Provider {hasProviderWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
+                      <label>AI Provider {hasProviderWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
                       <select
-                        value={role.provider}
+                        value={role.provider || ''}
                         onChange={(e) =>
                           updateRoleOverride(idx, { provider: e.target.value })
                         }
                       >
-                        <option value="">Select provider...</option>
-                        <option value="anthropic">Anthropic</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="ollama">Ollama</option>
-                        <option value="openrouter">OpenRouter</option>
+                        <option value="">Select AI Provider...</option>
+                        {availableProviders.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name} ({provider.model})
+                          </option>
+                        ))}
                       </select>
-                    </div>
-                    <div className="template-draft-role-override-field">
-                      <label>Model {hasModelWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
-                      <select
-                        value={role.model}
-                        onChange={(e) =>
-                          updateRoleOverride(idx, { model: e.target.value })
-                        }
-                      >
-                        <option value="">Select model...</option>
-                        <option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</option>
-                        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="llama3.2">llama3.2</option>
-                      </select>
+                      {availableProviders.length === 0 && (
+                        <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
+                          No AI Providers configured. Please configure in Settings.
+                        </p>
+                      )}
+                      {(() => {
+                        const selectedProvider = availableProviders.find(p => p.id === role.provider);
+                        return selectedProvider ? (
+                          <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
+                            💡 使用 {selectedProvider.name} 的 {selectedProvider.model} 模型
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                     {role.archetype_id && (
                       <div className="template-draft-role-override-field">

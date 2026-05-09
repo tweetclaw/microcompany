@@ -52,6 +52,113 @@ export async function listRoleArchetypes(): Promise<RoleArchetype[]> {
   return invoke('list_role_archetypes');
 }
 
+export async function addTaskRole(
+  taskId: string,
+  roleName: string,
+  identity: string,
+  archetypeId: string | null,
+  provider: string,
+  displayOrder?: number
+): Promise<Task> {
+  console.log(`[api/index.ts] addTaskRole: Adding role "${roleName}" to task ${taskId}`);
+  console.log(`[api/index.ts] addTaskRole: Role config:`, {
+    roleName,
+    identity,
+    archetypeId,
+    provider,
+    displayOrder: displayOrder ?? 'auto',
+  });
+  
+  try {
+    const result = await invoke<Task>('add_task_role', {
+      taskId,
+      roleName,
+      identity,
+      archetypeId,
+      provider,
+      displayOrder: displayOrder ?? null,
+    });
+    console.log(`[api/index.ts] addTaskRole: Role added successfully`);
+    return result;
+  } catch (error) {
+    console.error(`[api/index.ts] addTaskRole: Failed to add role:`, error);
+    throw error;
+  }
+}
+
+export async function updateTaskRole(
+  taskId: string,
+  roleId: string,
+  updates: {
+    name?: string;
+    identity?: string;
+    archetypeId?: string | null;
+    provider?: string;
+    model?: string;
+    displayOrder?: number;
+  }
+): Promise<Task> {
+  console.log(`[api/index.ts] updateTaskRole: Updating role ${roleId} in task ${taskId}`);
+  console.log(`[api/index.ts] updateTaskRole: Updates:`, updates);
+  
+  try {
+    const result = await invoke<Task>('update_task_role', {
+      taskId,
+      roleId,
+      name: updates.name ?? null,
+      identity: updates.identity ?? null,
+      archetypeId: updates.archetypeId ?? null,
+      provider: updates.provider ?? null,
+      model: updates.model ?? null,
+      displayOrder: updates.displayOrder ?? null,
+    });
+    console.log(`[api/index.ts] updateTaskRole: Role updated successfully`);
+    return result;
+  } catch (error) {
+    console.error(`[api/index.ts] updateTaskRole: Failed to update role:`, error);
+    throw error;
+  }
+}
+
+export async function deleteTaskRole(
+  taskId: string,
+  roleId: string
+): Promise<Task> {
+  console.log(`[api/index.ts] deleteTaskRole: Deleting role ${roleId} from task ${taskId}`);
+  
+  try {
+    const result = await invoke<Task>('delete_task_role', {
+      taskId,
+      roleId,
+    });
+    console.log(`[api/index.ts] deleteTaskRole: Role deleted successfully`);
+    return result;
+  } catch (error) {
+    console.error(`[api/index.ts] deleteTaskRole: Failed to delete role:`, error);
+    throw error;
+  }
+}
+
+export async function reorderTaskRoles(
+  taskId: string,
+  roleOrders: Array<{ roleId: string; displayOrder: number }>
+): Promise<Task> {
+  console.log(`[api/index.ts] reorderTaskRoles: Reordering ${roleOrders.length} roles in task ${taskId}`);
+  console.log(`[api/index.ts] reorderTaskRoles: New order:`, roleOrders);
+  
+  try {
+    const result = await invoke<Task>('reorder_task_roles', {
+      taskId,
+      roleOrders,
+    });
+    console.log(`[api/index.ts] reorderTaskRoles: Roles reordered successfully`);
+    return result;
+  } catch (error) {
+    console.error(`[api/index.ts] reorderTaskRoles: Failed to reorder roles:`, error);
+    throw error;
+  }
+}
+
 // Session Management APIs
 export async function createNormalSession(
   name: string,

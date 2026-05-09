@@ -112,11 +112,12 @@ function TaskBuilder({
     // Apply role overrides if provided
     const finalRoles = roles.map((role) => {
       const override = request.role_overrides?.[role.name];
+      const provider = override?.provider || role.provider;
       return {
         name: role.name,
         identity: role.identity,
-        provider: override?.provider || role.provider,
-        model: override?.model || role.model,
+        provider: provider, // Backend expects 'provider' field (Provider ID)
+        model: provider, // Backend expects 'model' field (will be resolved by backend)
         archetype_id: role.archetype_id || undefined,
         handoff_enabled: role.handoff_enabled,
         system_prompt_append: role.system_prompt_append || undefined,
@@ -152,6 +153,7 @@ function TaskBuilder({
         onSelectTemplate={handleTemplateSelected}
         onCreateBlank={() => setCreationMode('from-scratch')}
         onCancel={onCancel}
+        availableProviders={availableProviders}
       />
     );
   }
