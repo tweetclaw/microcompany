@@ -326,8 +326,21 @@ function App() {
 
       setCurrentSessionId(sessionId);
       setCurrentSessionTitle(session.name);
-      setCurrentProviderName(session.provider);
-      setCurrentModelName(session.model);
+      
+      // Debug: Log session provider and model
+      console.log('[App.tsx] handleSessionSelected: session.provider =', session.provider);
+      console.log('[App.tsx] handleSessionSelected: session.model =', session.model);
+      console.log('[App.tsx] handleSessionSelected: availableProviders =', availableProviders.map(p => ({ id: p.id, name: p.name, model: p.model })));
+      
+      // Find provider by ID to get the friendly name
+      const provider = availableProviders.find((p) => p.id === session.provider || `${p.id}::${p.model}` === `${session.provider}::${session.model}`);
+      console.log('[App.tsx] handleSessionSelected: found provider =', provider ? { id: provider.id, name: provider.name, model: provider.model } : null);
+      
+      setCurrentProviderName(provider?.name || session.provider);
+      setCurrentModelName(provider?.model || session.model);
+      console.log('[App.tsx] handleSessionSelected: displaying providerName =', provider?.name || session.provider);
+      console.log('[App.tsx] handleSessionSelected: displaying modelName =', provider?.model || session.model);
+      
       setSelectedProviderValue(`${session.provider}::${session.model}`);
       setMessages(loadedMessages);
       setHasActiveSession(true);

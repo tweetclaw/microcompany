@@ -96,6 +96,92 @@
   font-size: 14px;
 }
 
+/* Template status badge */
+.template-card-status-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 16px;
+  z-index: 1;
+}
+
+/* Template card states */
+.template-card.complete {
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.template-card.incomplete {
+  border-color: rgba(255, 204, 0, 0.3);
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.03) 0%, rgba(255, 149, 0, 0.03) 100%);
+}
+
+.template-card.complete:hover {
+  border-color: rgba(52, 199, 89, 0.5);
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.15);
+}
+
+.template-card.incomplete:hover {
+  border-color: rgba(255, 204, 0, 0.5);
+  box-shadow: 0 8px 24px rgba(255, 204, 0, 0.15);
+}
+
+/* Template card warning */
+.template-card-warning {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 204, 0, 0.15);
+  border: 1px solid rgba(255, 204, 0, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #ffd60a;
+  font-weight: 500;
+}
+
+/* Template card actions */
+.template-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.template-card-edit-btn,
+.template-card-detail-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(138, 43, 226, 0.15);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 6px;
+  color: #bf5af2;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.template-card-edit-btn:hover {
+  background: rgba(138, 43, 226, 0.25);
+  border-color: rgba(138, 43, 226, 0.5);
+  transform: translateY(-1px);
+}
+
+.template-card-detail-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #818cf8;
+}
+
+.template-card-detail-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+}
+
+.template-card-detail-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Template Grid - 网格布局，充分利用横向空间 */
 .template-picker-grid {
   display: grid;

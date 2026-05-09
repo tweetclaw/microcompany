@@ -187,8 +187,6 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const handleSaveAsTemplate = async (name: string, description: string) => {
     if (!props.currentTask) return;
 
-    console.log(`[TaskModeLayout] handleSaveAsTemplate: Saving task "${props.currentTask.name}" as template "${name}"`);
-
     try {
       setSaveTemplateError(null);
       await saveTaskAsTemplate({
@@ -198,20 +196,16 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         source_task_id: props.currentTask.id,
       });
       setShowSaveTemplateModal(false);
-      console.log(`[TaskModeLayout] handleSaveAsTemplate: Template saved successfully`);
       // TODO: 可以添加成功提示
       alert('模板保存成功！');
     } catch (error) {
-      console.error('[TaskModeLayout] handleSaveAsTemplate: Failed to save template:', error);
+      console.error('Failed to save template:', error);
       setSaveTemplateError(error instanceof Error ? error.message : '保存模板失败');
     }
   };
 
   const handleAddRole = async (config: RoleConfig) => {
     if (!props.currentTask || isAddingRole) return;
-
-    console.log(`[TaskModeLayout] handleAddRole: Adding role "${config.name}" to task ${props.currentTask.id}`);
-    console.log(`[TaskModeLayout] handleAddRole: Role config:`, config);
 
     setIsAddingRole(true);
     try {
@@ -222,10 +216,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         config.identity,
         config.archetypeId,
         config.provider,
+        config.model,
         config.displayOrder
       );
-
-      console.log(`[TaskModeLayout] handleAddRole: Role added successfully, refreshing task`);
 
       // 刷新任务列表以显示新角色
       // 通过重新选择当前任务来触发刷新
@@ -245,10 +238,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
       props.onTaskSelected(taskSummary);
 
       setShowAddRoleModal(false);
-      console.log(`[TaskModeLayout] handleAddRole: Task refreshed, modal closed`);
       alert(`成功添加角色：${config.name}`);
     } catch (error) {
-      console.error('[TaskModeLayout] handleAddRole: Failed to add role:', error);
+      console.error('Failed to add role:', error);
       throw error; // 让 Modal 处理错误显示
     } finally {
       setIsAddingRole(false);
@@ -258,15 +250,10 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const handleUpdateRole = async (roleId: string, updates: RoleUpdateConfig) => {
     if (!props.currentTask || isUpdatingRole) return;
 
-    console.log(`[TaskModeLayout] handleUpdateRole: Updating role ${roleId} in task ${props.currentTask.id}`);
-    console.log(`[TaskModeLayout] handleUpdateRole: Updates:`, updates);
-
     setIsUpdatingRole(true);
     try {
       // 调用后端 API 更新角色
       await updateTaskRole(props.currentTask.id, roleId, updates);
-
-      console.log(`[TaskModeLayout] handleUpdateRole: Role updated successfully, refreshing task`);
 
       // 刷新任务以显示更新后的角色
       const taskSummary: TaskSummary = {
@@ -286,10 +273,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
 
       setShowEditRoleModal(false);
       setEditingRole(null);
-      console.log(`[TaskModeLayout] handleUpdateRole: Task refreshed, modal closed`);
       alert(`成功更新角色配置`);
     } catch (error) {
-      console.error('[TaskModeLayout] handleUpdateRole: Failed to update role:', error);
+      console.error('Failed to update role:', error);
       throw error; // 让 Modal 处理错误显示
     } finally {
       setIsUpdatingRole(false);
@@ -309,14 +295,10 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const handleDeleteRole = async () => {
     if (!props.currentTask || !deletingRole || isDeletingRole) return;
 
-    console.log(`[TaskModeLayout] handleDeleteRole: Deleting role "${deletingRole.name}" (${deletingRole.id}) from task ${props.currentTask.id}`);
-
     setIsDeletingRole(true);
     try {
       // 调用后端 API 删除角色
       await deleteTaskRole(props.currentTask.id, deletingRole.id);
-
-      console.log(`[TaskModeLayout] handleDeleteRole: Role deleted successfully, refreshing task`);
 
       // 刷新任务以显示更新后的角色列表
       const taskSummary: TaskSummary = {
@@ -336,10 +318,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
 
       setShowDeleteRoleModal(false);
       setDeletingRole(null);
-      console.log(`[TaskModeLayout] handleDeleteRole: Task refreshed, modal closed`);
       alert(`成功删除角色：${deletingRole.name}`);
     } catch (error) {
-      console.error('[TaskModeLayout] handleDeleteRole: Failed to delete role:', error);
+      console.error('Failed to delete role:', error);
       alert(`删除角色失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsDeletingRole(false);
@@ -349,16 +330,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     
-    console.log(`[TaskModeLayout] handleDragEnd: Drag ended`, { activeId: active.id, overId: over?.id });
-    
     if (!over || active.id === over.id || !props.currentTask || isReorderingRoles) {
-      if (!over) {
-        console.log(`[TaskModeLayout] handleDragEnd: No drop target, ignoring`);
-      } else if (active.id === over.id) {
-        console.log(`[TaskModeLayout] handleDragEnd: Dropped on same position, ignoring`);
-      } else if (isReorderingRoles) {
-        console.log(`[TaskModeLayout] handleDragEnd: Already reordering, ignoring`);
-      }
       return;
     }
 
@@ -366,16 +338,12 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
     const newIndex = localRoles.findIndex(r => r.id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) {
-      console.warn(`[TaskModeLayout] handleDragEnd: Invalid indices`, { oldIndex, newIndex });
       return;
     }
-
-    console.log(`[TaskModeLayout] handleDragEnd: Moving role from index ${oldIndex} to ${newIndex}`);
 
     // 乐观更新 UI
     const newRoles = arrayMove(localRoles, oldIndex, newIndex);
     setLocalRoles(newRoles);
-    console.log(`[TaskModeLayout] handleDragEnd: UI updated optimistically`);
 
     // 调用后端 API 保存新顺序
     setIsReorderingRoles(true);
@@ -385,10 +353,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         displayOrder: index,
       }));
 
-      console.log(`[TaskModeLayout] handleDragEnd: Saving new order to backend`, roleOrders);
       await reorderTaskRoles(props.currentTask.id, roleOrders);
-
-      console.log(`[TaskModeLayout] handleDragEnd: Order saved successfully, refreshing task`);
 
       // 刷新任务以确保数据同步
       const taskSummary: TaskSummary = {
@@ -405,11 +370,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
       };
       
       props.onTaskSelected(taskSummary);
-      console.log(`[TaskModeLayout] handleDragEnd: Task refreshed successfully`);
     } catch (error) {
-      console.error('[TaskModeLayout] handleDragEnd: Failed to reorder roles:', error);
+      console.error('Failed to reorder roles:', error);
       // 回滚到原来的顺序
-      console.log(`[TaskModeLayout] handleDragEnd: Rolling back to original order`);
       setLocalRoles([...props.currentTask.roles].sort((a, b) => a.display_order - b.display_order));
       alert(`调整角色顺序失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
@@ -493,58 +456,110 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                   </div>
                 )}
 
+                <div className="task-mode-seat-grid">
+                  {seatRows.map((row, rowIndex) => (
+                    <div className="task-mode-seat-row" key={`row-${rowIndex}`}>
+                      {row.map((role) => {
+                        const isActive = props.currentTaskRoleId === role.id;
+                        const isWorking = isAiWorking && isActive;
+                        const isDisabled = isAiWorking && !isActive;
+                        const isPmFirst = props.currentTask?.pm_first_workflow && pmRole?.id === role.id;
+                        const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
 
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext items={localRoles.map(r => r.id)} strategy={rectSortingStrategy}>
-                    <div className="task-mode-seat-grid">
-                      {seatRows.map((row, rowIndex) => (
-                        <div className="task-mode-seat-row" key={`row-${rowIndex}`}>
-                          {row.map((role) => {
-                            const isActive = props.currentTaskRoleId === role.id;
-                            const isWorking = isAiWorking && isActive;
-                            const isDisabled = isAiWorking && !isActive;
-                            const isPmFirst = Boolean(props.currentTask?.pm_first_workflow && pmRole?.id === role.id);
-                            const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
-
-                            return (
-                              <SortableRoleCard
-                                key={role.id}
-                                role={role}
-                                isActive={isActive}
-                                isWorking={isWorking}
-                                isDisabled={isDisabled}
-                                isPmFirst={isPmFirst}
-                                disabledReason={disabledReason}
-                                onRoleSelected={props.onTaskRoleSelected}
-                                onEditClick={handleEditRoleClick}
-                                onDeleteClick={handleDeleteRoleClick}
-                                onRestartClick={props.onTaskRoleRestart}
-                                isAiWorking={isAiWorking}
-                                totalRoles={localRoles.length}
-                                getSeatInitials={getSeatInitials}
-                                getRoleArchetypeLabel={getRoleArchetypeLabel}
-                              />
-                            );
-                          })}
-                          {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (
-                            <div
-                              key={`row-${rowIndex}-empty-${emptyIndex}`}
-                              className="task-seat-card task-seat-card-empty"
-                              aria-hidden="true"
-                            >
-                              <div className="task-seat-empty-dot" />
-                              <div className="task-seat-empty-label">Empty seat</div>
+                        return (
+                          <article
+                            key={role.id}
+                            role="button"
+                            tabIndex={isDisabled ? -1 : 0}
+                            className={`task-seat-card ${isActive ? 'active' : ''} ${isWorking ? 'working' : ''} ${isDisabled ? 'disabled' : ''} ${isPmFirst ? 'pm-first' : ''}`}
+                            onClick={() => {
+                              if (!isDisabled) {
+                                props.onTaskRoleSelected(role.id);
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (isDisabled) return;
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                props.onTaskRoleSelected(role.id);
+                              }
+                            }}
+                            title={disabledReason}
+                            aria-disabled={isDisabled}
+                            aria-label={isDisabled ? `${role.name}，当前有角色处理中，暂时无法切换` : role.name}
+                          >
+                            <div className="task-seat-card-actions">
+                              <button
+                                type="button"
+                                className="task-seat-edit-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEditRoleClick(role);
+                                }}
+                                disabled={isAiWorking}
+                                aria-label={`编辑 ${role.name}`}
+                                title={isAiWorking ? 'AI 处理中时暂时不能编辑' : '编辑角色配置'}
+                              >
+                                ✏️ 编辑
+                              </button>
+                              <button
+                                type="button"
+                                className="task-seat-delete-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteRoleClick(role);
+                                }}
+                                disabled={isAiWorking || props.currentTask!.roles.length <= 1}
+                                aria-label={`删除 ${role.name}`}
+                                title={
+                                  isAiWorking 
+                                    ? 'AI 处理中时暂时不能删除' 
+                                    : props.currentTask!.roles.length <= 1
+                                    ? '至少需要保留一个角色'
+                                    : '删除角色'
+                                }
+                              >
+                                🗑️ 删除
+                              </button>
+                              <button
+                                type="button"
+                                className="task-seat-restart-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  props.onTaskRoleRestart(role.id);
+                                }}
+                                disabled={isAiWorking}
+                                aria-label={`为 ${role.name} 新开 session`}
+                                title={isAiWorking ? 'AI 处理中时暂时不能新开 session' : '为该角色新开 session'}
+                              >
+                                新开 session
+                              </button>
                             </div>
-                          ))}
+                            <div className="task-seat-avatar" aria-hidden="true">
+                              {getSeatInitials(role.name)}
+                            </div>
+                            <div className="task-seat-body">
+                              <div className="task-seat-name">{role.name}</div>
+                              <div className="task-seat-meta">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
+                              <div className="task-seat-model">{role.model}</div>
+                              {isPmFirst && <div className="task-seat-badge">Start here</div>}
+                            </div>
+                          </article>
+                        );
+                      })}
+                      {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (
+                        <div
+                          key={`row-${rowIndex}-empty-${emptyIndex}`}
+                          className="task-seat-card task-seat-card-empty"
+                          aria-hidden="true"
+                        >
+                          <div className="task-seat-empty-dot" />
+                          <div className="task-seat-empty-label">Empty seat</div>
                         </div>
                       ))}
                     </div>
-                  </SortableContext>
-                </DndContext>
+                  ))}
+                </div>
 
                 {props.currentTeamBrief && (
                   <section className="task-team-brief" aria-label="Team Brief">
