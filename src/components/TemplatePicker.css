@@ -101,8 +101,18 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  font-size: 16px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
   z-index: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Template card states */
@@ -110,9 +120,21 @@
   border-color: rgba(52, 199, 89, 0.3);
 }
 
+.template-card.complete .template-card-status-badge {
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.14);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
 .template-card.incomplete {
-  border-color: rgba(255, 204, 0, 0.3);
-  background: linear-gradient(135deg, rgba(255, 204, 0, 0.03) 0%, rgba(255, 149, 0, 0.03) 100%);
+  border-color: rgba(255, 159, 10, 0.35);
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.04) 0%, rgba(255, 99, 71, 0.03) 100%);
+}
+
+.template-card.incomplete .template-card-status-badge {
+  color: #ff9f0a;
+  background: rgba(255, 159, 10, 0.14);
+  border-color: rgba(255, 159, 10, 0.3);
 }
 
 .template-card.complete:hover {
@@ -121,8 +143,8 @@
 }
 
 .template-card.incomplete:hover {
-  border-color: rgba(255, 204, 0, 0.5);
-  box-shadow: 0 8px 24px rgba(255, 204, 0, 0.15);
+  border-color: rgba(255, 159, 10, 0.55);
+  box-shadow: 0 8px 24px rgba(255, 159, 10, 0.16);
 }
 
 /* Template card warning */

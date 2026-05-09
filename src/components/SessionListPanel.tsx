@@ -90,6 +90,7 @@ export default function SessionListPanel({
         refreshKey={sessionListRefreshKey}
         onSessionSelected={onSessionSelected}
         onSessionDeleted={onSessionDeleted}
+        availableProviders={availableProviders}
       />
     </div>
   );

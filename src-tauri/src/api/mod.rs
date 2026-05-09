@@ -2,6 +2,9 @@ pub mod task;
 mod task_impl;
 mod task_queries;
 
+pub mod template;
+mod template_impl;
+
 pub mod message;
 mod message_impl;
 
@@ -30,6 +33,25 @@ pub use task::{
 };
 pub use task_impl::{create_task, restart_task_role_session};
 pub use task_queries::{delete_task, get_task, get_team_brief, list_tasks, update_task};
+
+pub use template::{
+    CreateFromTemplateRequest,
+    SaveTemplateRequest,
+    SystemTemplate,
+    TemplateDraft,
+    TemplateSummary,
+    UpdateTemplateRequest,
+    UserTemplate,
+};
+pub use template_impl::{
+    get_system_template,
+    list_all_template_summaries,
+    list_system_templates,
+    list_user_templates,
+    resolve_template_draft,
+    save_task_as_template,
+    update_template,
+};
 
 pub use message::{Message, MessageCreateRequest};
 pub use message_impl::{get_messages, save_message, update_message_content};

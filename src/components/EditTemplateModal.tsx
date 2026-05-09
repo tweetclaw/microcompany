@@ -62,12 +62,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
   const handleSave = async () => {
     console.log('[EditTemplateModal] handleSave: Starting save process');
 
-    if (isSystemTemplate) {
-      setError('System templates cannot be edited');
-      console.error('[EditTemplateModal] handleSave: Attempted to edit system template');
-      return;
-    }
-
     // Validation
     if (!templateName.trim()) {
       setError('Template name is required');
@@ -125,7 +119,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
         <div className="edit-template-modal-content">
           {isSystemTemplate && (
             <div className="edit-template-warning">
-              ⚠️ System templates are read-only. You can only view their configuration.
+              ℹ️ This built-in template is editable here. Configure providers and save your changes.
             </div>
           )}
 
@@ -137,7 +131,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
               type="text"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              disabled={isSystemTemplate}
               placeholder="Enter template name"
             />
           </div>
@@ -147,7 +140,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
             <textarea
               value={templateDescription}
               onChange={(e) => setTemplateDescription(e.target.value)}
-              disabled={isSystemTemplate}
               placeholder="Enter template description"
               rows={3}
             />
@@ -168,7 +160,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                       type="text"
                       value={role.name}
                       onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
-                      disabled={isSystemTemplate}
                       placeholder="e.g., Alice"
                     />
                   </div>
@@ -179,7 +170,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                       type="text"
                       value={role.identity}
                       onChange={(e) => handleRoleChange(index, 'identity', e.target.value)}
-                      disabled={isSystemTemplate}
                       placeholder="e.g., Product Manager"
                     />
                   </div>
@@ -189,7 +179,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                     <select
                       value={role.provider || ''}
                       onChange={(e) => handleRoleChange(index, 'provider', e.target.value)}
-                      disabled={isSystemTemplate}
                     >
                       <option value="">-- Select Provider --</option>
                       {props.availableProviders.map((p) => (
@@ -217,15 +206,13 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
           <button className="edit-template-cancel-btn" onClick={props.onClose}>
             Cancel
           </button>
-          {!isSystemTemplate && (
-            <button
-              className="edit-template-save-btn"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save Template'}
-            </button>
-          )}
+          <button
+            className="edit-template-save-btn"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Template'}
+          </button>
         </div>
       </div>
     </div>
