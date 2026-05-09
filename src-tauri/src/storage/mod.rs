@@ -7,6 +7,26 @@ pub struct StoredMessage {
     pub role: String,
     pub content: String,
     pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeline: Option<Vec<StoredTimelineItem>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredTimelineItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

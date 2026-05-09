@@ -139,8 +139,11 @@ fn generate_title(first_message: &str) -> String {
     } else {
         // Find the last space before max_length to avoid cutting words
         let truncated: String = trimmed.chars().take(max_length).collect();
-        if let Some(last_space) = truncated.rfind(' ') {
-            format!("{}...", &truncated[..last_space])
+        if let Some(last_space_pos) = truncated.rfind(' ') {
+            // Use character slicing instead of byte slicing to avoid UTF-8 boundary panic
+            let chars_before_space = truncated[..last_space_pos].chars().count();
+            let result: String = trimmed.chars().take(chars_before_space).collect();
+            format!("{}...", result)
         } else {
             format!("{}...", truncated)
         }
@@ -1083,6 +1086,7 @@ impl ClaurstSession {
                 role: "user".to_string(),
                 content: actual_message.clone(),
                 timestamp: chrono::Utc::now().timestamp(),
+                timeline: None, // User messages don't have timeline
             },
             task_session,
             "user",
@@ -1916,6 +1920,21 @@ impl ClaurstSession {
 
                 // Only save assistant message if content is not empty
                 if !content_to_save.trim().is_empty() {
+                    // Convert timeline items to storage format
+                    let timeline_items_vec = timeline_items.lock().clone();
+                    let stored_timeline: Vec<crate::storage::StoredTimelineItem> = timeline_items_vec.iter().map(|item| {
+                        crate::storage::StoredTimelineItem {
+                            id: item.id.clone(),
+                            item_type: item.item_type.clone(),
+                            timestamp: item.timestamp,
+                            content: item.content.clone(),
+                            tool: item.tool.clone(),
+                            action: item.action.clone(),
+                            status: item.status.clone(),
+                            result: item.result.clone(),
+                        }
+                    }).collect();
+
                     // Save assistant message to storage and database
                     save_message_to_file_storage(
                         &self.storage,
@@ -1924,6 +1943,7 @@ impl ClaurstSession {
                             role: "assistant".to_string(),
                             content: content_to_save.clone(),
                             timestamp: chrono::Utc::now().timestamp(),
+                            timeline: Some(stored_timeline),
                         },
                         task_session,
                         "assistant",

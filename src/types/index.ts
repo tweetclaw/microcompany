@@ -119,6 +119,7 @@ export interface AiRequestEndEvent {
   handoffSuggestion?: HandoffSuggestion;
   usage?: AiUsageInfo;
   warnings?: AiWarningInfo[];
+  timeline?: TimelineItem[];
   timestamp: number;
 }
 

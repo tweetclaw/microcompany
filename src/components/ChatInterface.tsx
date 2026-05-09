@@ -280,7 +280,7 @@ function ChatInterface({
   const finalizeStreamingMessage = (
     requestId?: string | null,
     finalText?: string,
-    options?: { hasVisibleText?: boolean },
+    options?: { hasVisibleText?: boolean; timeline?: any[] },
   ) => {
     onMessagesChangeRef.current((prev: Message[]) => {
       const targetIndex = [...prev]
@@ -290,8 +290,8 @@ function ChatInterface({
 
       const hasVisibleText = options?.hasVisibleText ?? Boolean(finalText?.trim());
 
-      // Get timeline for this request
-      const timeline = requestId ? timelineForRequestRef.current.get(requestId) : undefined;
+      // Use backend timeline if provided, otherwise fall back to frontend timeline
+      const timeline = options?.timeline ?? (requestId ? timelineForRequestRef.current.get(requestId) : undefined);
 
       // Legacy: Get tool calls for backward compatibility
       const toolCalls = requestId ? toolCallsForRequestRef.current.get(requestId) : undefined;
@@ -860,11 +860,12 @@ function ChatInterface({
           shouldShowToolOnlyNotice,
           activeRequestId: activeRequestIdRef.current,
           timelineLength: processTimelineRef.current.length,
+          backendTimelineLength: payload.timeline?.length ?? 0,
           outcome: payload.outcome,
           terminalRunState,
         });
 
-        finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText });
+        finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText, timeline: payload.timeline });
         setCurrentUsage(resolvedUsage ?? null);
         setTokenWarnings(resolvedWarnings.map((warning) => ({
           request_id: payload.request_id,

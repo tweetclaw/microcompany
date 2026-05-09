@@ -317,6 +317,7 @@ pub async fn forward_message(
         role: "user".to_string(),
         content: message_content.clone(),
         timestamp: now,
+        timeline: None, // Forwarded messages don't have timeline
     };
 
     // Ignore errors for file storage - task sessions may not have file storage
