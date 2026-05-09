@@ -24,16 +24,20 @@ pub async fn get_messages(
         return Err(format!("Session not found: {}", session_id));
     }
 
-    let limit = limit.unwrap_or(100);
+    let limit = limit.unwrap_or(500);
     let offset = offset.unwrap_or(0);
 
     let mut messages = {
         let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, created_at, request_id, is_streaming, tool_calls
-             FROM messages
-             WHERE session_id = ?1
-             ORDER BY created_at ASC
-             LIMIT ?2 OFFSET ?3"
+             FROM (
+                 SELECT id, session_id, role, content, created_at, request_id, is_streaming, tool_calls
+                 FROM messages
+                 WHERE session_id = ?1
+                 ORDER BY created_at DESC
+                 LIMIT ?2 OFFSET ?3
+             )
+             ORDER BY created_at ASC"
         ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
         let rows = stmt.query_map(params![&session_id, limit, offset], |row| {
