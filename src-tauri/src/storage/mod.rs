@@ -64,13 +64,18 @@ impl ConversationStorage {
         let max_length = 30;
         let trimmed = first_message.trim();
 
-        if trimmed.len() <= max_length {
+        // Use character count instead of byte length to avoid UTF-8 boundary issues
+        let char_count = trimmed.chars().count();
+        if char_count <= max_length {
             trimmed.to_string()
         } else {
-            // Find the last space before max_length to avoid cutting words
-            let truncated = &trimmed[..max_length];
-            if let Some(last_space) = truncated.rfind(' ') {
-                format!("{}...", &trimmed[..last_space])
+            // Truncate at character boundary, not byte boundary
+            let truncated: String = trimmed.chars().take(max_length).collect();
+            if let Some(last_space_pos) = truncated.rfind(' ') {
+                // Find character position of last space
+                let chars_before_space = truncated[..last_space_pos].chars().count();
+                let result: String = trimmed.chars().take(chars_before_space).collect();
+                format!("{}...", result)
             } else {
                 format!("{}...", truncated)
             }

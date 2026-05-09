@@ -1784,22 +1784,27 @@ impl ClaurstSession {
                     accumulated_streaming_text.lock().len()
                 );
 
-                // Use accumulated streaming text if available and extracted text is empty
+                // Use accumulated streaming text if it has more content than extracted text
                 let accumulated_text = accumulated_streaming_text.lock().clone();
+                let accumulated_char_count = accumulated_text.chars().count();
+                let extracted_char_count = text.chars().count();
+                let should_use_accumulated = accumulated_char_count > extracted_char_count;
+
                 log::info!(
                     "📊 [Final] request_id={} accumulated_chars={} accumulated_bytes={} extracted_chars={} will_use_accumulated={}",
                     request_id_owned,
-                    accumulated_text.chars().count(),
+                    accumulated_char_count,
                     accumulated_text.len(),
-                    text.chars().count(),
-                    extracted_text_was_empty && !accumulated_text.is_empty()
+                    extracted_char_count,
+                    should_use_accumulated
                 );
-                if extracted_text_was_empty && !accumulated_text.is_empty() {
+
+                if should_use_accumulated {
                     log::info!(
-                        "Using accumulated streaming text instead of extracted text: request_id={} accumulated_chars={} extracted_chars={}",
+                        "Using accumulated streaming text (has more content): request_id={} accumulated_chars={} extracted_chars={}",
                         request_id_owned,
-                        accumulated_text.chars().count(),
-                        extracted_text_before_fallback_chars
+                        accumulated_char_count,
+                        extracted_char_count
                     );
                     text = accumulated_text;
                 } else if extracted_text_was_empty {
