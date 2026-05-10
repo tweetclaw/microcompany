@@ -206,7 +206,9 @@ Team Templates 是第二阶段能力，建立在第一阶段的基础之上：
 - **会话历史不保存** - 只保存团队结构，不保存对话内容
 - **可以重复保存** - 同一个 task 可以多次保存为不同的模板
 
-### 3.3 动态管理团队成员
+### 3.3 动态管理团队成员 ⚠️ 开发中
+
+> **⚠️ 当前状态**：本节描述的功能前端 UI 已完成，但后端 handler（`add_task_role`、`update_task_role`、`delete_task_role`、`reorder_task_roles`）尚未实现，**运行时动态添加/删除/编辑/排序角色的操作暂时不可用**。模板编辑模式（编辑用户模板中的角色）可以正常工作。
 
 在 task 运行时，用户可以动态调整团队组成，无需重新创建 task。
 
@@ -439,32 +441,37 @@ src-tauri/resources/task-templates/
 
 为了避免把范围做炸，建议严格按下面顺序推进：
 
-**Step 1：系统模板只读读取能力**
+**Step 1：系统模板只读读取能力** ✅ 已完成
 - 建立模板数据结构
 - 实现系统模板 loader
 - 提供模板列表查询接口
 
-**Step 2：模板列表与预览**
+**Step 2：模板列表与预览** ✅ 已完成
 - 模板列表 UI
 - 系统模板/用户模板分组
 - 模板详情预览 UI
 
-**Step 3：Template → Task Draft**
+**Step 3：Template → Task Draft** ✅ 已完成
 - 从模板生成 task draft
 - 保留推荐 archetype
 - 保留可选 provider/model
 
-**Step 4：创建前确认与缺失配置校验**
+**Step 4：创建前确认与缺失配置校验** ✅ 已完成
 - 创建前确认界面
 - provider/model 缺失阻断
 - 配置补全流程
 
-**Step 5：保存当前 Task 为用户模板**
-- 从 task 提取模板信息
+**Step 5：保存当前 Task 为用户模板** ✅ 已完成
+- 从 task 提取模板信息（含 provider/model）
 - 保存用户模板接口
-- 模板管理界面
+- 模板管理界面（编辑/删除用户模板，含 provider 字段）
 
-**Step 6：补完整测试与文档收口**
+**Step 6：动态角色管理（运行时）** 🔴 后端开发中
+- 前端 UI 组件已完成（AddRoleMember / EditRoleMember / DeleteRoleMember / 拖拽排序）
+- 后端 `add_task_role`、`update_task_role`、`delete_task_role`、`reorder_task_roles` 命令未实现
+- **当前不可用**
+
+**Step 7：补完整测试与文档收口** ⏳ 待完成
 - 端到端测试
 - 边界情况测试
 - 用户体验优化
@@ -537,10 +544,11 @@ src-tauri/resources/task-templates/
 1. ✅ 用户能从系统模板创建 task
 2. ✅ 用户能在创建前统一检查并修改 role 配置
 3. ✅ 不完整模型配置不能误创建 task
-4. ✅ 用户能把当前 task 保存为模板
-5. ✅ 用户能动态添加/删除/更新团队成员
-6. ✅ 模板创建出来的 task 仍能正常进入 Team Brief + handoff 的运行时流程
-7. ✅ 当前 app 可以继续用真实 task 团队推进模板相关迭代
+4. ✅ 用户能把当前 task 保存为模板（含 provider/model）
+5. ✅ 用户能编辑用户模板的角色配置（含 provider/model）
+6. ❌ 用户能运行时动态添加/删除/更新团队成员 — **后端缺失，不可用**
+7. ❌ 用户能拖拽排序运行时任务的角色 — **后端 `reorder_task_roles` 缺失，不可用**
+8. ✅ 模板创建出来的 task 仍能正常进入 Team Brief + handoff 的运行时流程
 
 ---
 
@@ -638,8 +646,10 @@ Team Templates 是 MicroCompany 的核心能力，让用户能够：
 
 1. **复用团队结构** - 不必每次重新添加角色
 2. **沉淀协作经验** - 把有效的团队配置变成长期资产
-3. **灵活调整团队** - 动态添加/删除/更新角色成员
+3. **编辑模板** - 编辑用户模板的角色配置（含 provider/model），保存到数据库
 4. **保持用户控制** - 创建前确认，用户始终保留最终决策权
+
+> **⚠️ 运行时动态调整团队（添加/删除/编辑/排序运行中任务的角色）目前不可用，请参考 [Section 3.3](#33-动态管理团队成员-%EF%B8%8F-开发中)。**
 
 **核心价值**：
 
