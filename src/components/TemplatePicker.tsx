@@ -6,7 +6,7 @@ import EditTemplateModal from './EditTemplateModal';
 import './TemplatePicker.css';
 
 interface TemplatePickerProps {
-  onSelectTemplate: (template: SystemTemplate | TemplateSummary) => void;
+  onSelectTemplate: (template: SystemTemplate | UserTemplate | TemplateSummary) => void;
   onCreateBlank: () => void;
   onCancel: () => void;
   availableProviders: ProviderConfig[];
@@ -17,23 +17,21 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | UserTemplate | TemplateSummary | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<SystemTemplate | UserTemplate | null>(null);
   const [fullTemplates, setFullTemplates] = useState<Map<string, SystemTemplate | UserTemplate>>(new Map());
 
   useEffect(() => {
     loadTemplates();
-    loadFullTemplates();
   }, []);
 
-  const loadFullTemplates = async () => {
+  const loadFullTemplates = async (summaries?: TemplateSummary[]) => {
     try {
-      const [summaries, systemDetails, userDetails] = await Promise.all([
-        listAllTemplateSummaries(),
-        Promise.all((await listAllTemplateSummaries())
-          .filter((t) => t.source === 'system')
-          .map(async (t) => [t.id, await getSystemTemplate(t.id)] as const)),
+      const templateSummaries = summaries ?? await listAllTemplateSummaries();
+      const systemIds = templateSummaries.filter((t) => t.source === 'system');
+      const [systemDetails, userDetails] = await Promise.all([
+        Promise.all(systemIds.map(async (t) => [t.id, await getSystemTemplate(t.id)] as const)),
         listUserTemplates(),
       ]);
 
@@ -45,16 +43,11 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
         next.set(detail.id, detail);
       });
 
-      summaries.forEach((summary) => {
-        if (!next.has(summary.id) && summary.source === 'user') {
-          const found = userDetails.find((item) => item.id === summary.id);
-          if (found) next.set(summary.id, found);
-        }
-      });
-
       setFullTemplates(next);
+      return next;
     } catch (err) {
       console.error('[TemplatePicker] Failed to preload full templates:', err);
+      return new Map<string, SystemTemplate | UserTemplate>();
     }
   };
 
@@ -64,11 +57,10 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
       setError(null);
       const data = await listAllTemplateSummaries();
       setTemplates(data);
-      await loadFullTemplates();
+      await loadFullTemplates(data);
     } catch (err) {
       console.error('Failed to load templates:', err);
       setError('Failed to load templates. Using mock data for preview.');
-      // Mock fallback data for offline development
       setTemplates(getMockTemplates());
     } finally {
       setLoading(false);
@@ -89,7 +81,8 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
         setSelectedTemplate(template);
       }
     } else {
-      setSelectedTemplate(template);
+      const fullTemplate = fullTemplates.get(template.id);
+      setSelectedTemplate(fullTemplate ?? template);
     }
   };
 
@@ -99,9 +92,10 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
   };
 
   const handleEditTemplate = async (e: React.MouseEvent, template: TemplateSummary) => {
+    e.preventDefault();
     e.stopPropagation();
     console.log('[TemplatePicker] handleEditTemplate: Opening edit modal for template:', template.id);
-    
+
     try {
       let detail: SystemTemplate | UserTemplate | null = null;
       if (template.source === 'system') {
@@ -111,20 +105,44 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
         detail = userTemplates.find((t) => t.id === template.id) ?? null;
       }
 
-      if (detail) {
-        setEditingTemplate(detail);
-        setShowEditModal(true);
+      if (!detail) {
+        console.warn('[TemplatePicker] handleEditTemplate: Template detail not found:', template.id);
+        setError('Failed to load template details');
+        return;
       }
+
+      console.log('[TemplatePicker] handleEditTemplate: Detail loaded, opening modal:', detail.id);
+      setEditingTemplate(detail);
+      setShowEditModal(true);
     } catch (err) {
       console.error('[TemplatePicker] handleEditTemplate: Failed to load template:', err);
+      setError('Failed to open template editor');
     }
   };
 
-  const handleEditSaved = () => {
+  const handleEditSaved = async () => {
     console.log('[TemplatePicker] handleEditSaved: Template saved, reloading templates');
     setShowEditModal(false);
     setEditingTemplate(null);
-    loadTemplates();
+
+    try {
+      const data = await listAllTemplateSummaries();
+      setTemplates(data);
+      const fullMap = await loadFullTemplates(data);
+
+      if (selectedId && selectedId !== 'blank') {
+        const selectedSummary = data.find((item) => item.id === selectedId) ?? null;
+        if (selectedSummary?.source === 'system') {
+          const detail = await getSystemTemplate(selectedSummary.id);
+          setSelectedTemplate(detail ?? selectedSummary);
+        } else if (selectedSummary) {
+          setSelectedTemplate(fullMap.get(selectedSummary.id) ?? selectedSummary);
+        }
+      }
+    } catch (err) {
+      console.error('[TemplatePicker] handleEditSaved: Failed to reload templates after save:', err);
+      setError('Template saved, but failed to refresh the list. Please reopen the picker.');
+    }
   };
 
   const getTemplateStatus = (template: TemplateSummary): 'complete' | 'incomplete' => {
@@ -176,11 +194,9 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
       </div>
 
       <div className="template-picker-content">
-        {/* System Templates with Blank Card as first item */}
         <div className="template-section">
           <h3 className="template-section-title">Templates</h3>
           <div className="template-picker-grid">
-            {/* Blank Creation Card - First in grid */}
             <div
               className={`template-card blank-card ${selectedId === 'blank' ? 'selected' : ''}`}
               onClick={handleBlankClick}
@@ -192,7 +208,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
               </div>
             </div>
 
-            {/* System Templates */}
             {systemTemplates.map((tpl) => {
               const status = getTemplateStatus(tpl);
               return (
@@ -201,8 +216,8 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                   className={`template-card ${selectedId === tpl.id ? 'selected' : ''} ${status === 'incomplete' ? 'incomplete' : 'complete'}`}
                   onClick={() => handleTemplateClick(tpl)}
                 >
-                  <div className="template-card-status-badge" title={status === 'complete' ? 'Ready' : 'Editable - provider required'}>
-                    {status === 'complete' ? '✅' : '✏️'}
+                  <div className="template-card-status-badge" title={status === 'complete' ? 'Ready' : 'Provider required'}>
+                    {status === 'complete' ? '✅' : '⚠️'}
                   </div>
                   <div className="template-card-icon">{tpl.icon || '📋'}</div>
                   <div className="template-card-content">
@@ -217,17 +232,20 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                     </div>
                     {status === 'incomplete' && (
                       <div className="template-card-warning">
-                        ✏️ Editable - AI Provider required
+                        AI Provider required before use
                       </div>
                     )}
                   </div>
-                  <button 
-                    className="template-card-edit-btn"
-                    onClick={(e) => handleEditTemplate(e, tpl)}
-                    title="View and edit template"
-                  >
-                    ✏️ Edit
-                  </button>
+                  <div className="template-card-actions">
+                    <button
+                      type="button"
+                      className="template-card-edit-btn"
+                      onClick={(e) => handleEditTemplate(e, tpl)}
+                      title="Edit template"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -246,7 +264,7 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                     className={`template-card ${selectedId === tpl.id ? 'selected' : ''} ${status === 'incomplete' ? 'incomplete' : 'complete'}`}
                     onClick={() => handleTemplateClick(tpl)}
                   >
-                    <div className="template-card-status-badge">
+                    <div className="template-card-status-badge" title={status === 'complete' ? 'Ready' : 'Provider required'}>
                       {status === 'complete' ? '✅' : '⚠️'}
                     </div>
                     <div className="template-card-icon">{tpl.icon || '📋'}</div>
@@ -262,17 +280,20 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
                       </div>
                       {status === 'incomplete' && (
                         <div className="template-card-warning">
-                          ✏️ Editable - AI Provider required
+                          AI Provider required before use
                         </div>
                       )}
                     </div>
-                    <button 
-                      className="template-card-edit-btn"
-                      onClick={(e) => handleEditTemplate(e, tpl)}
-                      title="Edit template"
-                    >
-                      ✏️ Edit
-                    </button>
+                    <div className="template-card-actions">
+                      <button
+                        type="button"
+                        className="template-card-edit-btn"
+                        onClick={(e) => handleEditTemplate(e, tpl)}
+                        title="Edit template"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -281,9 +302,8 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
         )}
       </div>
 
-      {/* Create Task Button */}
       <div className="template-picker-footer">
-        <button 
+        <button
           className="template-picker-create-btn"
           onClick={handleCreateTask}
           disabled={!selectedId}
@@ -292,7 +312,6 @@ export default function TemplatePicker({ onSelectTemplate, onCreateBlank, onCanc
         </button>
       </div>
 
-      {/* Edit Template Modal */}
       {showEditModal && editingTemplate && (
         <EditTemplateModal
           template={editingTemplate}
