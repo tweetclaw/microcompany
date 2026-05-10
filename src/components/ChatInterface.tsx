@@ -21,15 +21,15 @@ import {
   AiRequestUsageEvent,
   AiRunState,
   AiStatusEvent,
-  AiTerminalOutcome,
+  AiThinkingChunkEvent,
   AiTokenWarningEvent,
   AiToolEndEvent,
   AiToolStartEvent,
+  AiTerminalOutcome,
   Message,
   ProcessTimelineItem,
   TimelineItem,
   ToolCall,
-  ToolCallRecord,
 } from '../types';
 import { ProviderConfig } from '../types/settings';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
@@ -239,7 +239,6 @@ function ChatInterface({
   const processTimelineRef = useRef(processTimeline);
   const currentRoleNameRef = useRef<string | null>(currentRoleName ?? null);
   const terminalRequestIdsRef = useRef<Set<string>>(new Set());
-  const toolCallsForRequestRef = useRef<Map<string, ToolCallRecord[]>>(new Map());
   const timelineForRequestRef = useRef<Map<string, TimelineItem[]>>(new Map());
 
   useEffect(() => {
@@ -277,6 +276,63 @@ function ChatInterface({
     setProcessTimeline((prev) => [...prev, item]);
   };
 
+  const getRequestTimeline = (requestId: string) => timelineForRequestRef.current.get(requestId) || [];
+
+  const setRequestTimeline = (requestId: string, timeline: TimelineItem[]) => {
+    timelineForRequestRef.current.set(requestId, timeline);
+  };
+
+  const clearRequestTimeline = (requestId?: string | null) => {
+    if (!requestId) return;
+    timelineForRequestRef.current.delete(requestId);
+  };
+
+  const buildMessageContentFromTimeline = (timeline?: TimelineItem[]) => (
+    (timeline || [])
+      .filter((item) => item.type === 'output')
+      .map((item) => item.content || '')
+      .join('')
+  );
+
+  const normalizeTimeline = (timeline?: TimelineItem[]) => {
+    if (!timeline) {
+      return undefined;
+    }
+
+    return timeline.map((item) => ({
+      ...item,
+      toolUseId: item.toolUseId,
+    }));
+  };
+
+  const updateStreamingAssistantMessage = (requestId: string, timeline: TimelineItem[], fallbackContent = '') => {
+    const derivedContent = buildMessageContentFromTimeline(timeline) || fallbackContent;
+
+    onMessagesChangeRef.current((currentMessages: Message[]) => {
+      const last = currentMessages[currentMessages.length - 1];
+
+      if (last && last.role === 'assistant' && last.requestId === requestId) {
+        return [
+          ...currentMessages.slice(0, -1),
+          { ...last, content: derivedContent, timeline: [...timeline], isStreaming: true },
+        ];
+      }
+
+      return [
+        ...currentMessages,
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          role: 'assistant',
+          content: derivedContent,
+          timestamp: Date.now(),
+          isStreaming: true,
+          requestId,
+          timeline: [...timeline],
+        },
+      ];
+    });
+  };
+
   const finalizeStreamingMessage = (
     requestId?: string | null,
     finalText?: string,
@@ -291,10 +347,7 @@ function ChatInterface({
       const hasVisibleText = options?.hasVisibleText ?? Boolean(finalText?.trim());
 
       // Use backend timeline if provided, otherwise fall back to frontend timeline
-      const timeline = options?.timeline ?? (requestId ? timelineForRequestRef.current.get(requestId) : undefined);
-
-      // Legacy: Get tool calls for backward compatibility
-      const toolCalls = requestId ? toolCallsForRequestRef.current.get(requestId) : undefined;
+      const timeline = normalizeTimeline(options?.timeline) ?? (requestId ? getRequestTimeline(requestId) : undefined);
 
       if (targetIndex === undefined) {
         frontendLogger.info('[ChatInterface] finalizeStreamingMessage missing target', {
@@ -313,7 +366,6 @@ function ChatInterface({
               isStreaming: false,
               requestId: requestId || undefined,
               timeline: timeline,
-              toolCalls: toolCalls, // Legacy field
             },
           ];
         }
@@ -322,8 +374,8 @@ function ChatInterface({
 
       const targetMessage = prev[targetIndex];
       const trimmedFinalText = finalText?.trim() ?? '';
-      const nextContent = hasVisibleText && trimmedFinalText && targetMessage.content.includes('[HANDOFF]')
-        ? trimmedFinalText || targetMessage.content
+      const nextContent = hasVisibleText && trimmedFinalText
+        ? trimmedFinalText
         : targetMessage.content;
       const contentReplaced = nextContent !== targetMessage.content;
 
@@ -342,7 +394,7 @@ function ChatInterface({
       if (!hasVisibleText) {
         return [
           ...prev.slice(0, targetIndex),
-          { ...targetMessage, isStreaming: false, timeline: timeline, toolCalls: toolCalls },
+          { ...targetMessage, isStreaming: false, timeline: timeline },
           ...prev.slice(targetIndex + 1),
         ];
       }
@@ -350,7 +402,7 @@ function ChatInterface({
       // 默认保持前端已累积的完整文本，只在需要移除机器可读后缀时用 final_text 覆盖
       return [
         ...prev.slice(0, targetIndex),
-        { ...targetMessage, content: nextContent, isStreaming: false, timeline: timeline, toolCalls: toolCalls },
+        { ...targetMessage, content: nextContent, isStreaming: false, timeline: timeline },
         ...prev.slice(targetIndex + 1),
       ];
     });
@@ -388,6 +440,7 @@ function ChatInterface({
     setProcessTimeline([]);
     setIsRequestDispatching(false);
     terminalRequestIdsRef.current.clear();
+    timelineForRequestRef.current.clear();
     activeRequestIdRef.current = null;
     setActiveRequestId(null);
     console.log('[ChatInterface] resetConversationRunState', {
@@ -422,6 +475,7 @@ function ChatInterface({
 
   useEffect(() => {
     let unlistenChunk: (() => void) | null = null;
+    let unlistenThinkingChunk: (() => void) | null = null;
     let unlistenToolStart: (() => void) | null = null;
     let unlistenToolEnd: (() => void) | null = null;
     let unlistenRequestStart: (() => void) | null = null;
@@ -452,6 +506,7 @@ function ChatInterface({
         setCurrentUsage(null);
         setTokenWarnings([]);
         setProcessTimeline([]);
+        clearRequestTimeline(payload.request_id);
         appendTimeline({
           id: `${payload.request_id}-${payload.timestamp}-start`,
           requestId: payload.request_id,
@@ -588,48 +643,63 @@ function ChatInterface({
 
         console.log('📥 [ChatInterface] Received message-chunk, request_id:', payload.request_id, 'chunk_len:', payload.chunk.length);
 
-        // Add to timeline - track text output
-        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
-        const lastItem = timeline[timeline.length - 1];
+        const timeline = getRequestTimeline(payload.request_id);
+        const updatedTimeline = timeline.map((item) =>
+          item.id === payload.item_id && item.type === 'output'
+            ? { ...item, content: (item.content || '') + payload.chunk }
+            : item,
+        );
 
-        if (lastItem && lastItem.type === 'output') {
-          // Append to existing output item
-          lastItem.content = (lastItem.content || '') + payload.chunk;
-        } else {
-          // Create new output item
-          timeline.push({
-            id: `output-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            messageId: '',
-            type: 'output',
-            timestamp: Date.now(),
-            content: payload.chunk,
-          });
-        }
-        timelineForRequestRef.current.set(payload.request_id, timeline);
-
-        onMessagesChangeRef.current((currentMessages: Message[]) => {
-          const last = currentMessages[currentMessages.length - 1];
-
-          if (last && last.role === 'assistant' && last.requestId === payload.request_id) {
-            return [
-              ...currentMessages.slice(0, -1),
-              { ...last, content: last.content + payload.chunk, timeline: [...timeline], isStreaming: true },
+        const nextTimeline: TimelineItem[] = updatedTimeline.some((item) => item.id === payload.item_id)
+          ? updatedTimeline
+          : [
+              ...timeline,
+              {
+                id: payload.item_id,
+                messageId: '',
+                type: 'output',
+                timestamp: payload.timestamp,
+                content: payload.chunk,
+              },
             ];
-          }
 
-          return [
-            ...currentMessages,
-            {
-              id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              role: 'assistant',
-              content: payload.chunk,
-              timestamp: Date.now(),
-              isStreaming: true,
-              requestId: payload.request_id,
-              timeline: [...timeline],
-            },
-          ];
-        });
+        setRequestTimeline(payload.request_id, nextTimeline);
+        updateStreamingAssistantMessage(payload.request_id, nextTimeline, payload.chunk);
+      });
+
+      unlistenThinkingChunk = await listen<AiThinkingChunkEvent>('thinking-chunk', (event) => {
+        const payload = event.payload;
+
+        if (terminalRequestIdsRef.current.has(payload.request_id)) {
+          return;
+        }
+
+        if (payload.request_id !== activeRequestIdRef.current) {
+          return;
+        }
+
+        const timeline = getRequestTimeline(payload.request_id);
+        const updatedTimeline = timeline.map((item) =>
+          item.id === payload.item_id && item.type === 'thinking'
+            ? { ...item, content: (item.content || '') + payload.chunk }
+            : item,
+        );
+
+        const nextTimeline: TimelineItem[] = updatedTimeline.some((item) => item.id === payload.item_id)
+          ? updatedTimeline
+          : [
+              ...timeline,
+              {
+                id: payload.item_id,
+                messageId: '',
+                type: 'thinking',
+                timestamp: payload.timestamp,
+                content: payload.chunk,
+              },
+            ];
+
+        setRequestTimeline(payload.request_id, nextTimeline);
+        updateStreamingAssistantMessage(payload.request_id, nextTimeline);
       });
 
       unlistenToolStart = await listen<AiToolStartEvent>('tool-call-start', (event) => {
@@ -644,44 +714,22 @@ function ChatInterface({
         }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        // Add to timeline
-        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
-        timeline.push({
-          id: payload.tool_use_id, // Use tool_use_id as unique identifier
-          messageId: '', // Will be set when message is created
-          type: 'tool_call',
-          timestamp: Date.now(),
-          tool: payload.tool,
-          action: payload.action,
-          status: 'running',
-        });
-        timelineForRequestRef.current.set(payload.request_id, timeline);
-
-        // Update message with timeline in real-time
-        onMessagesChangeRef.current((currentMessages: Message[]) => {
-          const lastMsg = currentMessages[currentMessages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.requestId === payload.request_id) {
-            return [
-              ...currentMessages.slice(0, -1),
-              { ...lastMsg, timeline: [...timeline] },
-            ];
-          }
-          return currentMessages;
-        });
-
-        // Legacy: Collect tool call record for backward compatibility
-        const toolCall: ToolCallRecord = {
-          id: payload.tool_use_id,
-          tool: payload.tool,
-          action: payload.action,
-          status: 'running',
-          timestamp: Date.now(),
-        };
-
-        if (!toolCallsForRequestRef.current.has(payload.request_id)) {
-          toolCallsForRequestRef.current.set(payload.request_id, []);
-        }
-        toolCallsForRequestRef.current.get(payload.request_id)!.push(toolCall);
+        const timeline = getRequestTimeline(payload.request_id);
+        const nextTimeline: TimelineItem[] = [
+          ...timeline,
+          {
+            id: payload.item_id,
+            messageId: '',
+            type: 'tool_call',
+            timestamp: payload.timestamp,
+            tool: payload.tool,
+            action: payload.action,
+            status: 'running',
+            toolUseId: payload.tool_use_id,
+          },
+        ];
+        setRequestTimeline(payload.request_id, nextTimeline);
+        updateStreamingAssistantMessage(payload.request_id, nextTimeline);
 
         setCurrentToolCall({
           tool: payload.tool,
@@ -689,11 +737,11 @@ function ChatInterface({
           status: 'running',
         });
         appendTimeline({
-          id: `${payload.request_id}-${payload.tool}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          id: `${payload.request_id}-${payload.tool}-${payload.timestamp}-${Math.random().toString(36).slice(2, 9)}`,
           requestId: payload.request_id,
           kind: 'tool_start',
           text: payload.action,
-          timestamp: Date.now(),
+          timestamp: payload.timestamp,
           tool: payload.tool,
         });
       });
@@ -710,38 +758,20 @@ function ChatInterface({
         }
         if (payload.request_id !== activeRequestIdRef.current) return;
 
-        // Update timeline item with result
-        const timeline = timelineForRequestRef.current.get(payload.request_id) || [];
-        const toolItem = timeline.find(item =>
-          item.type === 'tool_call' && item.id === payload.tool_use_id
-        );
-        if (toolItem) {
-          toolItem.status = payload.success ? 'success' : 'error';
-          toolItem.result = payload.result;
-        }
-        timelineForRequestRef.current.set(payload.request_id, timeline);
-
-        // Update message with timeline in real-time
-        onMessagesChangeRef.current((currentMessages: Message[]) => {
-          const lastMsg = currentMessages[currentMessages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.requestId === payload.request_id) {
-            return [
-              ...currentMessages.slice(0, -1),
-              { ...lastMsg, timeline: [...timeline] },
-            ];
+        const timeline = getRequestTimeline(payload.request_id);
+        const updatedTimeline: TimelineItem[] = timeline.map(item => {
+          if (item.type === 'tool_call' && item.toolUseId === payload.tool_use_id) {
+            return {
+              ...item,
+              id: payload.item_id,
+              status: payload.success ? 'success' : 'error',
+              result: payload.result,
+            };
           }
-          return currentMessages;
+          return item;
         });
-
-        // Legacy: Update tool call record with result
-        const calls = toolCallsForRequestRef.current.get(payload.request_id);
-        if (calls && calls.length > 0) {
-          const lastCall = calls[calls.length - 1];
-          if (lastCall.tool === payload.tool) {
-            lastCall.status = payload.success ? 'success' : 'error';
-            lastCall.result = payload.result;
-          }
-        }
+        setRequestTimeline(payload.request_id, updatedTimeline);
+        updateStreamingAssistantMessage(payload.request_id, updatedTimeline);
 
         setCurrentToolCall({
           tool: payload.tool,
@@ -750,11 +780,11 @@ function ChatInterface({
           result: payload.result,
         });
         appendTimeline({
-          id: `${payload.request_id}-${Date.now()}-tool-end`,
+          id: `${payload.request_id}-${payload.timestamp}-tool-end`,
           requestId: payload.request_id,
           kind: 'tool_end',
           text: payload.success ? `${payload.tool} 执行成功` : `${payload.tool} 执行失败`,
-          timestamp: Date.now(),
+          timestamp: payload.timestamp,
           tool: payload.tool,
           success: payload.success,
         });
@@ -865,7 +895,7 @@ function ChatInterface({
           terminalRunState,
         });
 
-        finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText, timeline: payload.timeline });
+        finalizeStreamingMessage(payload.request_id, finalText, { hasVisibleText, timeline: normalizeTimeline(payload.timeline as TimelineItem[] | undefined) });
         setCurrentUsage(resolvedUsage ?? null);
         setTokenWarnings(resolvedWarnings.map((warning) => ({
           request_id: payload.request_id,
@@ -1076,6 +1106,7 @@ function ChatInterface({
 
     return () => {
       if (unlistenChunk) unlistenChunk();
+      if (unlistenThinkingChunk) unlistenThinkingChunk();
       if (unlistenToolStart) unlistenToolStart();
       if (unlistenToolEnd) unlistenToolEnd();
       if (unlistenRequestStart) unlistenRequestStart();

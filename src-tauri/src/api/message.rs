@@ -23,6 +23,8 @@ pub struct TimelineItem {
     pub action: Option<String>,
     pub status: Option<String>,
     pub result: Option<String>,
+    #[serde(rename = "toolUseId", skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
 }
 
 #[derive(Deserialize)]

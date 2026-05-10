@@ -27,6 +27,8 @@ pub struct StoredTimelineItem {
     pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
+    #[serde(rename = "toolUseId", skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +161,96 @@ impl ConversationStorage {
 
     /// Load all messages for a session
     pub fn load_messages(&self, session_id: &str) -> anyhow::Result<Vec<StoredMessage>> {
+        // Try to load from database first (includes timeline data)
+        let pool = crate::database::get_pool();
+        if let Ok(pool) = pool {
+            if let Ok(conn) = pool.get() {
+                // Load messages from database
+                let mut stmt = conn.prepare(
+                    "SELECT id, role, content, created_at FROM messages WHERE session_id = ?1 ORDER BY created_at"
+                )?;
+
+                let messages: Result<Vec<(String, String, String, String)>, _> = stmt.query_map(
+                    rusqlite::params![session_id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )?
+                .collect();
+
+                if let Ok(messages) = messages {
+                    let mut result = Vec::new();
+                    for (msg_id, role, content, created_at) in messages {
+                        // Parse timestamp
+                        let timestamp = chrono::DateTime::parse_from_rfc3339(&created_at)
+                            .map(|dt| dt.timestamp())
+                            .unwrap_or(0);
+
+                        // Load timeline items for this message
+                        let mut timeline_stmt = conn.prepare(
+                            "SELECT id, type, timestamp, content, tool, action, status, result, tool_use_id
+                             FROM timeline_items
+                             WHERE message_id = ?1
+                             ORDER BY timestamp"
+                        )?;
+
+                        let timeline_items: Vec<StoredTimelineItem> = timeline_stmt.query_map(
+                            rusqlite::params![&msg_id],
+                            |row| {
+                                Ok(StoredTimelineItem {
+                                    id: row.get(0)?,
+                                    item_type: row.get(1)?,
+                                    timestamp: row.get(2)?,
+                                    content: row.get(3)?,
+                                    tool: row.get(4)?,
+                                    action: row.get(5)?,
+                                    status: row.get(6)?,
+                                    result: row.get(7)?,
+                                    tool_use_id: row.get(8)?,
+                                })
+                            },
+                        )?
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                        // Reconstruct content from timeline if current content is fallback text
+                        let reconstructed_content = if content == "✓ 已完成工具执行" || content.trim().is_empty() {
+                            // Extract thinking and output content from timeline
+                            let mut parts = Vec::new();
+                            for item in &timeline_items {
+                                if item.item_type == "thinking" {
+                                    if let Some(ref thinking_content) = item.content {
+                                        if !thinking_content.trim().is_empty() {
+                                            parts.push(thinking_content.clone());
+                                        }
+                                    }
+                                } else if item.item_type == "output" {
+                                    if let Some(ref output_content) = item.content {
+                                        if !output_content.trim().is_empty() {
+                                            parts.push(output_content.clone());
+                                        }
+                                    }
+                                }
+                            }
+                            if parts.is_empty() {
+                                content.clone()
+                            } else {
+                                parts.join("\n\n")
+                            }
+                        } else {
+                            content.clone()
+                        };
+
+                        result.push(StoredMessage {
+                            role,
+                            content: reconstructed_content,
+                            timestamp,
+                            timeline: if timeline_items.is_empty() { None } else { Some(timeline_items) },
+                        });
+                    }
+                    return Ok(result);
+                }
+            }
+        }
+
+        // Fallback to file storage if database is not available
         let file_path = self.get_session_file(session_id);
 
         if !file_path.exists() {

@@ -5,23 +5,25 @@ import './TimelineView.css';
 
 interface TimelineViewProps {
   timeline: TimelineItem[];
-  isStreaming?: boolean;
 }
 
-export const TimelineView: React.FC<TimelineViewProps> = ({ timeline, isStreaming }) => {
+export const TimelineView: React.FC<TimelineViewProps> = ({ timeline }) => {
   if (!timeline || timeline.length === 0) {
     return null;
   }
 
+  // Sort timeline items by timestamp to ensure chronological order
+  const sortedTimeline = [...timeline].sort((a, b) => a.timestamp - b.timestamp);
+
   return (
     <div className="timeline-view">
-      {timeline.map((item) => {
+      {sortedTimeline.map((item) => {
         if (item.type === 'thinking') {
           return <ThinkingItem key={item.id} item={item} />;
         }
 
         if (item.type === 'tool_call') {
-          return <ToolCallItem key={item.id} item={item} isStreaming={isStreaming} />;
+          return <ToolCallItem key={item.id} item={item} />;
         }
 
         if (item.type === 'output') {
@@ -40,7 +42,7 @@ const ThinkingItem: React.FC<{ item: TimelineItem }> = ({ item }) => {
   if (!item.content || item.content.trim() === '') {
     return (
       <div className="timeline-item timeline-thinking">
-        <div className="timeline-marker thinking-marker">💭</div>
+        <div className="timeline-marker thinking-marker" aria-hidden="true">思</div>
         <div className="timeline-content">
           <div className="thinking-label">AI 正在思考...</div>
         </div>
@@ -53,16 +55,21 @@ const ThinkingItem: React.FC<{ item: TimelineItem }> = ({ item }) => {
 
   return (
     <div className="timeline-item timeline-thinking">
-      <div className="timeline-marker thinking-marker">💭</div>
+      <div className="timeline-marker thinking-marker" aria-hidden="true">思</div>
       <div className="timeline-content">
-        <div className="thinking-header" onClick={() => hasMore && setIsExpanded(!isExpanded)}>
+        <button
+          type="button"
+          className="thinking-header"
+          onClick={() => hasMore && setIsExpanded(!isExpanded)}
+          disabled={!hasMore}
+        >
           <span className="thinking-label">AI 思考</span>
           {hasMore && (
             <span className="thinking-toggle">
               {isExpanded ? '▼' : '▶'} {isExpanded ? '收起' : '展开'}
             </span>
           )}
-        </div>
+        </button>
         <div className={`thinking-content ${isExpanded ? 'expanded' : 'collapsed'}`}>
           {isExpanded ? (
             <MarkdownRenderer content={item.content} />
@@ -75,30 +82,31 @@ const ThinkingItem: React.FC<{ item: TimelineItem }> = ({ item }) => {
   );
 };
 
-const ToolCallItem: React.FC<{ item: TimelineItem; isStreaming?: boolean }> = ({ item }) => {
+const ToolCallItem: React.FC<{ item: TimelineItem }> = ({ item }) => {
   const [isResultExpanded, setIsResultExpanded] = useState(false);
 
   return (
     <div className="timeline-item timeline-tool">
-      <div className="timeline-marker tool-marker">🔧</div>
+      <div className="timeline-marker tool-marker" aria-hidden="true">工</div>
       <div className="timeline-content">
         <div className="tool-header">
           <span className="tool-name">{item.tool}</span>
           <span className={`tool-status status-${item.status}`}>
-            {item.status === 'running' && '⏳ 执行中'}
-            {item.status === 'success' && '✓ 成功'}
-            {item.status === 'error' && '✗ 失败'}
+            {item.status === 'running' && '执行中'}
+            {item.status === 'success' && '成功'}
+            {item.status === 'error' && '失败'}
           </span>
         </div>
         {item.action && <div className="tool-action">{item.action}</div>}
         {item.result && item.status !== 'running' && (
           <div className="tool-result">
-            <div
+            <button
+              type="button"
               className="tool-result-toggle"
               onClick={() => setIsResultExpanded(!isResultExpanded)}
             >
               {isResultExpanded ? '▼' : '▶'} 查看结果
-            </div>
+            </button>
             {isResultExpanded && (
               <pre className="tool-result-content">{item.result}</pre>
             )}

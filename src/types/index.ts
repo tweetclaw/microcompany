@@ -26,6 +26,7 @@ export interface TimelineItem {
   action?: string; // For tool_call
   status?: 'running' | 'success' | 'error'; // For tool_call
   result?: string; // For tool_call
+  toolUseId?: string;
 }
 
 // Legacy structure - kept for backward compatibility during migration
@@ -125,6 +126,15 @@ export interface AiRequestEndEvent {
 
 export interface AiMessageChunkEvent {
   request_id: string;
+  item_id: string;
+  timestamp: number;
+  chunk: string;
+}
+
+export interface AiThinkingChunkEvent {
+  request_id: string;
+  item_id: string;
+  timestamp: number;
   chunk: string;
 }
 
@@ -132,15 +142,19 @@ export interface AiToolStartEvent {
   request_id: string;
   tool: string;
   tool_use_id: string;
+  item_id: string;
   action: string;
+  timestamp: number;
 }
 
 export interface AiToolEndEvent {
   request_id: string;
   tool: string;
   tool_use_id: string;
+  item_id: string;
   success: boolean;
   result: string;
+  timestamp: number;
 }
 
 export interface ProcessTimelineItem {
