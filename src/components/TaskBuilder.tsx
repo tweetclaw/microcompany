@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { TaskCreateRequest, RoleConfig } from '../types';
 import { ProviderConfig } from '../types/settings';
-import type { SystemTemplate, TemplateSummary, CreateFromTemplateRequest } from '../types/template';
+import type { SystemTemplate, TemplateSummary, CreateFromTemplateRequest, UserTemplate } from '../types/template';
 import AddRoleModal from './AddRoleModal';
 import TemplatePicker from './TemplatePicker';
 import TemplateDraftEditor from './TemplateDraftEditor';
@@ -38,7 +38,7 @@ function TaskBuilder({
   
   // Template flow state
   const [creationMode, setCreationMode] = useState<'from-scratch' | 'from-template' | 'template-picker'>('template-picker');
-  const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | TemplateSummary | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<SystemTemplate | UserTemplate | TemplateSummary | null>(null);
 
   const sortedRoles = useMemo(
     () => [...roles].sort((left, right) => left.display_order - right.display_order),
@@ -93,7 +93,7 @@ function TaskBuilder({
     setShowAddRoleModal(false);
   };
 
-  const handleTemplateSelected = (template: SystemTemplate | TemplateSummary) => {
+  const handleTemplateSelected = (template: SystemTemplate | UserTemplate | TemplateSummary) => {
     setSelectedTemplate(template);
     setCreationMode('from-template');
   };
