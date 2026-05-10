@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { SystemTemplate, TemplateSummary, TemplateRole, TemplateWarning, CreateFromTemplateRequest, TemplateDraft } from '../types/template';
+import type { SystemTemplate, TemplateSummary, TemplateRole, TemplateWarning, CreateFromTemplateRequest, TemplateDraft, UserTemplate } from '../types/template';
 import type { ProviderConfig, SettingsData } from '../types/settings';
 import { normalizeSettingsData } from '../types/settings';
 import { resolveTemplateDraft } from '../api/templates';
 import './TemplateDraftEditor.css';
 
 interface TemplateDraftEditorProps {
-  template: SystemTemplate | TemplateSummary;
+  template: SystemTemplate | UserTemplate | TemplateSummary;
   onConfirm: (request: CreateFromTemplateRequest) => void;
   onBack: () => void;
   onCancel: () => void;
@@ -17,7 +17,7 @@ type RoleOverride = {
   provider?: string;
 };
 
-function buildDraftFromTemplate(template: SystemTemplate | TemplateSummary, taskName: string): TemplateDraft {
+function buildDraftFromTemplate(template: SystemTemplate | UserTemplate | TemplateSummary, taskName: string): TemplateDraft {
   const roles: TemplateRole[] = 'roles' in template ? [...template.roles] : [];
   const pmFirstWorkflow = 'pm_first_workflow' in template ? template.pm_first_workflow : false;
   const warnings: TemplateWarning[] = [];
