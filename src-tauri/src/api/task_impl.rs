@@ -767,3 +767,223 @@ pub(super) async fn delete_claurst_session(session_id: &str) -> Result<(), Strin
 
     Ok(())
 }
+
+pub async fn add_task_role(
+    task_id: String,
+    role_name: String,
+    identity: String,
+    archetype_id: Option<String>,
+    provider: String,
+    display_order: Option<i32>,
+) -> Result<Task, String> {
+    let role_id = format!("role-{}", Uuid::new_v4());
+    let now = Utc::now().to_rfc3339();
+
+    // Look up default model from provider config
+    let model = crate::config::AppConfig::load()
+        .ok()
+        .and_then(|config| {
+            config
+                .providers
+                .iter()
+                .find(|p| p.id == provider)
+                .map(|p| p.model.clone())
+        })
+        .unwrap_or_else(|| "gpt-4o".to_string());
+
+    // Calculate display_order if not provided
+    let display_order = match display_order {
+        Some(d) => d,
+        None => {
+            let pool = crate::database::get_pool()?;
+            let conn = pool
+                .get()
+                .map_err(|e| format!("Failed to get connection: {}", e))?;
+            let max_order: rusqlite::Result<i32> = conn.query_row(
+                "SELECT COALESCE(MAX(display_order), -1) FROM roles WHERE task_id = ?1",
+                params![&task_id],
+                |row| row.get(0),
+            );
+            max_order.unwrap_or(-1) + 1
+        }
+    };
+
+    {
+        let pool = crate::database::get_pool()?;
+        let conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+        conn.execute(
+            "INSERT INTO roles (id, task_id, name, identity, archetype_id, model, provider,
+             system_prompt_snapshot, prompt_source_type, prompt_hash, prompt_contract_version,
+             handoff_enabled, display_order, active_session_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', NULL, NULL, NULL, 0, ?8, NULL, ?9)",
+            params![
+                &role_id,
+                &task_id,
+                &role_name,
+                &identity,
+                &archetype_id,
+                &model,
+                &provider,
+                &display_order,
+                &now,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert role: {}", e))?;
+    }
+
+    log::info!(
+        "task_role_added task_id={} role_id={} role_name={} provider={} model={}",
+        task_id,
+        role_id,
+        role_name,
+        provider,
+        model,
+    );
+
+    crate::api::get_task(task_id).await
+}
+
+pub async fn update_task_role(
+    task_id: String,
+    role_id: String,
+    name: Option<String>,
+    identity: Option<String>,
+    archetype_id: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    display_order: Option<i32>,
+) -> Result<Task, String> {
+    // Read existing role values
+    let (old_name, old_identity, old_archetype_id, old_provider, old_model, old_display_order) = {
+        let pool = crate::database::get_pool()?;
+        let conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+        conn.query_row(
+            "SELECT name, identity, archetype_id, provider, model, display_order
+             FROM roles WHERE id = ?1 AND task_id = ?2",
+            params![&role_id, &task_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i32>(5)?,
+                ))
+            },
+        )
+        .map_err(|e| format!("Role not found: {}. {}", role_id, e))?
+    };
+
+    let new_name = name.unwrap_or(old_name);
+    let new_identity = identity.unwrap_or(old_identity);
+    let new_archetype_id = match archetype_id {
+        Some(v) => Some(v),
+        None => old_archetype_id,
+    };
+    let new_provider = provider.unwrap_or(old_provider);
+    let new_model = model.unwrap_or(old_model);
+    let new_display_order = display_order.unwrap_or(old_display_order);
+
+    {
+        let pool = crate::database::get_pool()?;
+        let conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+        let rows = conn
+            .execute(
+                "UPDATE roles SET name = ?1, identity = ?2, archetype_id = ?3,
+                 provider = ?4, model = ?5, display_order = ?6
+                 WHERE id = ?7 AND task_id = ?8",
+                params![
+                    &new_name,
+                    &new_identity,
+                    &new_archetype_id,
+                    &new_provider,
+                    &new_model,
+                    &new_display_order,
+                    &role_id,
+                    &task_id,
+                ],
+            )
+            .map_err(|e| format!("Failed to update role: {}", e))?;
+
+        if rows == 0 {
+            return Err(format!("Role not found: {}", role_id));
+        }
+    }
+
+    log::info!(
+        "task_role_updated task_id={} role_id={} name={} provider={} model={}",
+        task_id,
+        role_id,
+        new_name,
+        new_provider,
+        new_model,
+    );
+
+    crate::api::get_task(task_id).await
+}
+
+pub async fn delete_task_role(task_id: String, role_id: String) -> Result<Task, String> {
+    {
+        let pool = crate::database::get_pool()?;
+        let conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+        let rows = conn
+            .execute(
+                "DELETE FROM roles WHERE id = ?1 AND task_id = ?2",
+                params![&role_id, &task_id],
+            )
+            .map_err(|e| format!("Failed to delete role: {}", e))?;
+
+        if rows == 0 {
+            return Err(format!("Role not found: {}", role_id));
+        }
+    }
+
+    log::info!(
+        "task_role_deleted task_id={} role_id={}",
+        task_id,
+        role_id,
+    );
+
+    crate::api::get_task(task_id).await
+}
+
+pub async fn reorder_task_roles(
+    task_id: String,
+    role_orders: Vec<crate::api::RoleOrderItem>,
+) -> Result<Task, String> {
+    {
+        let pool = crate::database::get_pool()?;
+        let conn = pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+        for item in &role_orders {
+            conn.execute(
+                "UPDATE roles SET display_order = ?1 WHERE id = ?2 AND task_id = ?3",
+                params![&item.display_order, &item.role_id, &task_id],
+            )
+            .map_err(|e| format!("Failed to reorder role {}: {}", item.role_id, e))?;
+        }
+    }
+
+    log::info!(
+        "task_roles_reordered task_id={} role_count={}",
+        task_id,
+        role_orders.len(),
+    );
+
+    crate::api::get_task(task_id).await
+}

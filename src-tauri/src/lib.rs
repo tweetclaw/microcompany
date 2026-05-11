@@ -61,6 +61,48 @@ async fn get_team_brief(task_id: String) -> Result<api::TeamBrief, String> {
 }
 
 #[tauri::command]
+async fn add_task_role(
+    task_id: String,
+    role_name: String,
+    identity: String,
+    archetype_id: Option<String>,
+    provider: String,
+    display_order: Option<i32>,
+) -> Result<api::Task, String> {
+    api::add_task_role(task_id, role_name, identity, archetype_id, provider, display_order).await
+}
+
+#[tauri::command]
+async fn update_task_role(
+    task_id: String,
+    role_id: String,
+    name: Option<String>,
+    identity: Option<String>,
+    archetype_id: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    display_order: Option<i32>,
+) -> Result<api::Task, String> {
+    api::update_task_role(task_id, role_id, name, identity, archetype_id, provider, model, display_order).await
+}
+
+#[tauri::command]
+async fn delete_task_role(
+    task_id: String,
+    role_id: String,
+) -> Result<api::Task, String> {
+    api::delete_task_role(task_id, role_id).await
+}
+
+#[tauri::command]
+async fn reorder_task_roles(
+    task_id: String,
+    role_orders: Vec<api::RoleOrderItem>,
+) -> Result<api::Task, String> {
+    api::reorder_task_roles(task_id, role_orders).await
+}
+
+#[tauri::command]
 async fn list_tasks() -> Result<Vec<api::TaskSummary>, String> {
     api::list_tasks().await
 }
@@ -281,6 +323,10 @@ pub fn run() {
       create_task,
       get_task,
       restart_task_role_session,
+      add_task_role,
+      update_task_role,
+      delete_task_role,
+      reorder_task_roles,
       get_team_brief,
       list_tasks,
       update_task,

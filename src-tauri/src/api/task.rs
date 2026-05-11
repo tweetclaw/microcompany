@@ -81,6 +81,13 @@ pub struct TeamBriefRole {
     pub recommended_next_role_ids: Vec<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleOrderItem {
+    pub role_id: String,
+    pub display_order: i32,
+}
+
 #[derive(Serialize)]
 pub struct TaskSummary {
     pub id: String,
