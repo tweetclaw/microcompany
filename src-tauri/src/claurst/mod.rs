@@ -151,11 +151,14 @@ fn generate_title(first_message: &str) -> String {
 }
 
 fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
+    // Only collect visible Text blocks — Thinking blocks must NOT be included here,
+    // because they are rendered separately in the frontend timeline.
+    // Including thinking caused final_text to be thinking+text concatenated,
+    // making will_use_accumulated=false even when accumulated text was correct.
     blocks
         .iter()
         .filter_map(|block| match block {
             ContentBlock::Text { text } => Some(text.as_str()),
-            ContentBlock::Thinking { thinking, .. } => Some(thinking.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -2169,6 +2172,19 @@ impl ClaurstSession {
                     usage: Some(usage),
                     timeline: Some(timeline_items.lock().clone()),
                 };
+
+                {
+                    let items = timeline_items.lock();
+                    for item in items.iter() {
+                        log::warn!(
+                            "claurst_terminal_timeline_item request_id={} item_id={} item_type={} content_chars={}",
+                            request_id_owned,
+                            item.id,
+                            item.item_type,
+                            item.content.as_deref().map(|c| c.chars().count()).unwrap_or(0),
+                        );
+                    }
+                }
 
                 log::info!(
                     "claurst_terminal_payload_prepared request_id={} session_id={} outcome={} reason_code={} has_visible_text={} fallback_visible_text_used={} handoff_present={}",
