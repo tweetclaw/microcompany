@@ -15,6 +15,8 @@ interface InspectorPanelProps {
   modelLabel: string | null;
   currentUsage: AiUsageInfo | null;
   tokenWarnings: AiWarningInfo[];
+  currentTurn?: number;
+  maxTurns?: number;
   collapsed: boolean;
   isCompact: boolean;
 }
@@ -32,6 +34,8 @@ function InspectorPanel({
   modelLabel,
   currentUsage,
   tokenWarnings,
+  currentTurn = 0,
+  maxTurns = 25,
   collapsed,
   isCompact,
 }: InspectorPanelProps) {
@@ -170,6 +174,23 @@ function InspectorPanel({
             <div className="inspector-empty-state">当前请求没有 warnings</div>
           )}
         </section>
+
+        {currentTurn > 0 && (
+          <section className="inspector-card">
+            <div className="inspector-card-title">轮次进度</div>
+            <div className="inspector-key-value">
+              <span>当前轮次</span>
+              <strong>{currentTurn} / {maxTurns}</strong>
+            </div>
+            {currentTurn >= maxTurns - 3 && currentTurn < maxTurns && (
+              <div className="inspector-warning-item" style={{ marginTop: '8px' }}>
+                <div className="inspector-warning-message">
+                  ⚠️ 即将达到最大轮次限制
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="inspector-card">
           <div className="inspector-card-title">Project Info</div>

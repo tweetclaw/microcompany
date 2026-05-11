@@ -315,6 +315,10 @@ function App() {
         sessionId,
       });
 
+      // DEBUG: Log raw messages from backend
+      console.log('[App.tsx] Raw messages from get_messages:', JSON.stringify(messages, null, 2));
+      console.log('[App.tsx] Timeline counts:', messages.map(m => ({ id: m.id, role: m.role, timeline_count: m.timeline?.length || 0 })));
+
       const loadedMessages: Message[] = messages.map((msg) => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',

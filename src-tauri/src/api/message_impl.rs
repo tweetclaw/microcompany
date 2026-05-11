@@ -75,7 +75,7 @@ pub async fn get_messages(
 
         let placeholders = message_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT id, message_id, type, timestamp, content, tool, action, status, result
+            "SELECT id, message_id, type, timestamp, content, tool, action, status, result, tool_use_id
              FROM timeline_items
              WHERE message_id IN ({})
              ORDER BY message_id, timestamp ASC",
@@ -98,6 +98,7 @@ pub async fn get_messages(
                     action: row.get(6)?,
                     status: row.get(7)?,
                     result: row.get(8)?,
+                    tool_use_id: row.get(9)?,
                 })
             }
         ).map_err(|e| format!("Failed to query timeline items: {}", e))?;
@@ -163,8 +164,8 @@ pub async fn save_message(message: MessageCreateRequest) -> Result<String, Strin
     if let Some(timeline_items) = message.timeline {
         for item in timeline_items {
             conn.execute(
-                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result, tool_use_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     &item.id,
                     &message_id,
@@ -175,6 +176,7 @@ pub async fn save_message(message: MessageCreateRequest) -> Result<String, Strin
                     &item.action,
                     &item.status,
                     &item.result,
+                    &item.tool_use_id,
                 ],
             ).map_err(|e| format!("Failed to insert timeline item: {}", e))?;
         }

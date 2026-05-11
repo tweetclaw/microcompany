@@ -139,8 +139,11 @@ fn generate_title(first_message: &str) -> String {
     } else {
         // Find the last space before max_length to avoid cutting words
         let truncated: String = trimmed.chars().take(max_length).collect();
-        if let Some(last_space) = truncated.rfind(' ') {
-            format!("{}...", &truncated[..last_space])
+        if let Some(last_space_pos) = truncated.rfind(' ') {
+            // Use character slicing instead of byte slicing to avoid UTF-8 boundary panic
+            let chars_before_space = truncated[..last_space_pos].chars().count();
+            let result: String = trimmed.chars().take(chars_before_space).collect();
+            format!("{}...", result)
         } else {
             format!("{}...", truncated)
         }
@@ -152,6 +155,7 @@ fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
         .iter()
         .filter_map(|block| match block {
             ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Thinking { thinking, .. } => Some(thinking.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -207,6 +211,7 @@ struct TerminalEventPayload {
     has_visible_text: Option<bool>,
     handoff_suggestion: Option<HandoffSuggestion>,
     usage: Option<UsageInfo>,
+    timeline: Option<Vec<TimelineItemData>>,
 }
 
 #[derive(Debug, Clone)]
@@ -226,6 +231,50 @@ struct TimelineItemData {
     status: Option<String>,
     result: Option<String>,
     tool_use_id: Option<String>,  // Store original tool_id for matching in ToolEnd
+}
+
+impl TimelineItemData {
+    fn thinking(id: String, timestamp: i64, content: String) -> Self {
+        Self {
+            id,
+            item_type: "thinking".to_string(),
+            timestamp,
+            content: Some(content),
+            tool: None,
+            action: None,
+            status: None,
+            result: None,
+            tool_use_id: None,
+        }
+    }
+
+    fn output(id: String, timestamp: i64, content: String) -> Self {
+        Self {
+            id,
+            item_type: "output".to_string(),
+            timestamp,
+            content: Some(content),
+            tool: None,
+            action: None,
+            status: None,
+            result: None,
+            tool_use_id: None,
+        }
+    }
+
+    fn tool_call(id: String, timestamp: i64, tool: String, action: String, tool_use_id: String) -> Self {
+        Self {
+            id,
+            item_type: "tool_call".to_string(),
+            timestamp,
+            content: None,
+            tool: Some(tool),
+            action: Some(action),
+            status: Some("running".to_string()),
+            result: None,
+            tool_use_id: Some(tool_use_id),
+        }
+    }
 }
 
 fn warning_to_json(warning_type: &str, message: String) -> Value {
@@ -324,6 +373,20 @@ fn emit_terminal_event(
         "handoffSuggestion": payload.handoff_suggestion,
         "usage": payload.usage.as_ref().map(usage_to_json),
         "warnings": warnings,
+        "timeline": payload.timeline.as_ref().map(|items| {
+            items.iter().map(|item| {
+                serde_json::json!({
+                    "id": item.id,
+                    "type": item.item_type,
+                    "timestamp": item.timestamp,
+                    "content": item.content,
+                    "tool": item.tool,
+                    "action": item.action,
+                    "status": item.status,
+                    "result": item.result,
+                })
+            }).collect::<Vec<_>>()
+        }),
         "timestamp": now,
     }));
 }
@@ -484,6 +547,7 @@ struct HandoffSuggestion {
 
 #[derive(Debug, Clone)]
 struct ParsedHandoffBlock {
+    #[allow(dead_code)]
     visible_text: String,
     recommended: bool,
     target_role_name: Option<String>,
@@ -758,8 +822,8 @@ impl ClaurstSession {
         // 4. 创建 QueryConfig
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
-        // Increase max_turns to allow more tool calls in a single request
-        query_config.max_turns = 50;
+        // Allow sufficient turns for AI to complete work and provide response
+        query_config.max_turns = 25;
         // 注意：不再将 system_prompt 传递给 API 的 system 参数
         // 改为在第一条用户消息前拼接角色提示词
         // query_config.system_prompt = system_prompt.clone();
@@ -1069,6 +1133,7 @@ impl ClaurstSession {
                 role: "user".to_string(),
                 content: actual_message.clone(),
                 timestamp: chrono::Utc::now().timestamp(),
+                timeline: None, // User messages don't have timeline
             },
             task_session,
             "user",
@@ -1138,8 +1203,8 @@ impl ClaurstSession {
         };
         let event_tool_sequence = diagnostic_context.tool_sequence.clone();
         let event_turn_summaries = diagnostic_context.turn_summaries.clone();
-        let accumulated_streaming_text = Arc::new(parking_lot::Mutex::new(String::new()));
-        let event_accumulated_text = accumulated_streaming_text.clone();
+        let accumulated_visible_text = Arc::new(parking_lot::Mutex::new(String::new()));
+        let event_accumulated_visible_text = accumulated_visible_text.clone();
 
         // Timeline data collection
         let timeline_items = Arc::new(parking_lot::Mutex::new(Vec::<TimelineItemData>::new()));
@@ -1188,37 +1253,78 @@ impl ClaurstSession {
 
                         match stream_event {
                             AnthropicStreamEvent::ContentBlockStart { content_block, .. } => {
-                                // Handle thinking block start
+                                // Handle thinking and visible text block starts with stable IDs
                                 if let ContentBlock::Thinking { thinking, .. } = content_block {
-                                    let item = TimelineItemData {
-                                        id: format!("timeline-{}", uuid::Uuid::new_v4()),
-                                        item_type: "thinking".to_string(),
-                                        timestamp: chrono::Utc::now().timestamp_millis(),
-                                        content: Some(thinking.clone()),
-                                        tool: None,
-                                        action: None,
-                                        status: None,
-                                        result: None,
-                                        tool_use_id: None,
-                                    };
+                                    let timestamp = chrono::Utc::now().timestamp_millis();
+                                    let item_id = format!("thinking-{}", uuid::Uuid::new_v4());
+                                    log::info!("💭 [ContentBlockStart] Thinking block received, length={} chars", thinking.len());
+
+                                    let item = TimelineItemData::thinking(item_id.clone(), timestamp, thinking.clone());
                                     event_timeline_items.lock().push(item);
+
+                                    let _ = event_window.emit("thinking-chunk", serde_json::json!({
+                                        "request_id": event_request_id,
+                                        "item_id": item_id,
+                                        "timestamp": timestamp,
+                                        "chunk": thinking,
+                                    }));
+                                } else if let ContentBlock::Text { text } = content_block {
+                                    let timestamp = chrono::Utc::now().timestamp_millis();
+                                    let item_id = format!("output-{}", uuid::Uuid::new_v4());
+                                    log::info!("📝 [ContentBlockStart] Text block received, length={} chars", text.len());
+
+                                    if !text.is_empty() {
+                                        let item = TimelineItemData::output(item_id.clone(), timestamp, text.clone());
+                                        event_timeline_items.lock().push(item);
+
+                                        let mut acc = event_accumulated_visible_text.lock();
+                                        acc.push_str(&text);
+                                        drop(acc);
+
+                                        if !has_emitted_streaming {
+                                            has_emitted_streaming = true;
+                                            emit_lifecycle_event(
+                                                &event_window,
+                                                &event_request_id,
+                                                &event_session_id,
+                                                "streaming",
+                                                status_label_for_phase("streaming"),
+                                                "stream_first_chunk",
+                                            );
+                                        }
+
+                                        let _ = event_window.emit("message-chunk", serde_json::json!({
+                                            "request_id": event_request_id.clone(),
+                                            "item_id": item_id,
+                                            "timestamp": timestamp,
+                                            "chunk": text,
+                                        }));
+                                    }
                                 }
                             }
                             AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
                                 match delta {
                                     ContentDelta::ThinkingDelta { thinking } => {
-                                        // Append to the last thinking item
-                                        let mut items = event_timeline_items.lock();
-                                        if let Some(last_item) = items.last_mut() {
-                                            if last_item.item_type == "thinking" {
-                                                if let Some(ref mut content) = last_item.content {
-                                                    content.push_str(&thinking);
+                                        if !thinking.is_empty() {
+                                            let timestamp = chrono::Utc::now().timestamp_millis();
+                                            let mut items = event_timeline_items.lock();
+                                            if let Some(last_item) = items.last_mut() {
+                                                if last_item.item_type == "thinking" {
+                                                    if let Some(ref mut content) = last_item.content {
+                                                        content.push_str(&thinking);
+                                                    }
+
+                                                    let _ = event_window.emit("thinking-chunk", serde_json::json!({
+                                                        "request_id": event_request_id,
+                                                        "item_id": last_item.id.clone(),
+                                                        "timestamp": timestamp,
+                                                        "chunk": thinking,
+                                                    }));
                                                 }
                                             }
                                         }
                                     }
                                     ContentDelta::TextDelta { text } => {
-                                        // Filter out system-reminder tags from streaming content
                                         let filtered_text = filter_system_tags(&text);
 
                                         log::info!(
@@ -1229,10 +1335,9 @@ impl ClaurstSession {
                                             filtered_text.chars().count()
                                         );
 
-                                        // Only emit if there's content after filtering
                                         if !filtered_text.is_empty() {
-                                            // Accumulate streaming text
-                                            let mut acc = event_accumulated_text.lock();
+                                            let timestamp = chrono::Utc::now().timestamp_millis();
+                                            let mut acc = event_accumulated_visible_text.lock();
                                             let before_len = acc.len();
                                             let before_chars = acc.chars().count();
                                             acc.push_str(&filtered_text);
@@ -1264,39 +1369,32 @@ impl ClaurstSession {
                                             }
                                             log::info!("📤 [Streaming] Sending message-chunk, request_id={}, chunk_len={} chars (original: {} chars)",
                                                 event_request_id, filtered_text.len(), text.len());
-                                            let _ = event_window.emit("message-chunk", serde_json::json!({
-                                                "request_id": event_request_id.clone(),
-                                                "chunk": filtered_text,
-                                            }));
 
-                                            // Collect timeline data for output
                                             let mut items = event_timeline_items.lock();
-                                            let last_is_output = items.last()
-                                                .map(|i| i.item_type == "output")
-                                                .unwrap_or(false);
-
-                                            if last_is_output {
-                                                // Append to existing output item
-                                                if let Some(last_item) = items.last_mut() {
+                                            let output_item_id = if let Some(last_item) = items.last_mut() {
+                                                if last_item.item_type == "output" {
                                                     if let Some(ref mut content) = last_item.content {
                                                         content.push_str(&filtered_text);
                                                     }
+                                                    last_item.id.clone()
+                                                } else {
+                                                    let item_id = format!("output-{}", uuid::Uuid::new_v4());
+                                                    items.push(TimelineItemData::output(item_id.clone(), timestamp, filtered_text.clone()));
+                                                    item_id
                                                 }
                                             } else {
-                                                // Create new output item
-                                                let item = TimelineItemData {
-                                                    id: format!("timeline-{}", uuid::Uuid::new_v4()),
-                                                    item_type: "output".to_string(),
-                                                    timestamp: chrono::Utc::now().timestamp_millis(),
-                                                    content: Some(filtered_text.clone()),
-                                                    tool: None,
-                                                    action: None,
-                                                    status: None,
-                                                    result: None,
-                                                    tool_use_id: None,
-                                                };
-                                                items.push(item);
-                                            }
+                                                let item_id = format!("output-{}", uuid::Uuid::new_v4());
+                                                items.push(TimelineItemData::output(item_id.clone(), timestamp, filtered_text.clone()));
+                                                item_id
+                                            };
+                                            drop(items);
+
+                                            let _ = event_window.emit("message-chunk", serde_json::json!({
+                                                "request_id": event_request_id.clone(),
+                                                "item_id": output_item_id,
+                                                "timestamp": timestamp,
+                                                "chunk": filtered_text,
+                                            }));
                                         }
                                     }
                                     _ => {}
@@ -1356,27 +1454,25 @@ impl ClaurstSession {
                         // Generate a more descriptive action based on tool parameters
                         let description = generate_tool_description(&tool_name, &input_json);
                         emit_display_status(&event_window, &event_request_id, "tool_running", &description);
+                        let timestamp = chrono::Utc::now().timestamp_millis();
                         let _ = event_window.emit("tool-call-start", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
                             "tool_use_id": tool_id,
                             "action": description,
                             "input": input_json,
+                            "item_id": format!("tool-{}", tool_id),
+                            "timestamp": timestamp,
                         }));
 
                         // Collect timeline data for tool call start
-                        let unique_id = format!("tool-{}-{}", tool_id, uuid::Uuid::new_v4());
-                        let item = TimelineItemData {
-                            id: unique_id.clone(),
-                            item_type: "tool_call".to_string(),
-                            timestamp: chrono::Utc::now().timestamp_millis(),
-                            content: None,
-                            tool: Some(tool_name.clone()),
-                            action: Some(description),
-                            status: Some("running".to_string()),
-                            result: None,
-                            tool_use_id: Some(tool_id.clone()),
-                        };
+                        let item = TimelineItemData::tool_call(
+                            format!("tool-{}", tool_id),
+                            timestamp,
+                            tool_name.clone(),
+                            description,
+                            tool_id.clone(),
+                        );
                         event_timeline_items.lock().push(item);
                     }
                     QueryEvent::ToolEnd { tool_name, tool_id, result, is_error } => {
@@ -1437,12 +1533,15 @@ impl ClaurstSession {
                             log::info!("Tool '{}' completed successfully", tool_name);
                         }
 
+                        let timestamp = chrono::Utc::now().timestamp_millis();
                         let _ = event_window.emit("tool-call-end", serde_json::json!({
                             "request_id": event_request_id.clone(),
                             "tool": tool_name,
                             "tool_use_id": tool_id,
                             "success": !is_error,
                             "result": result,
+                            "item_id": format!("tool-{}", tool_id),
+                            "timestamp": timestamp,
                         }));
                         emit_lifecycle_event(
                             &event_window,
@@ -1461,12 +1560,13 @@ impl ClaurstSession {
                             item.result = Some(result.clone());
                         }
                     }
-                    QueryEvent::TurnComplete { usage, .. } => {
+                    QueryEvent::TurnComplete { turn, usage, .. } => {
                         // Log accumulated text length at turn complete
-                        let accumulated_len = event_accumulated_text.lock().len();
+                        let accumulated_len = event_accumulated_visible_text.lock().len();
                         log::info!(
-                            "🔄 [TurnComplete] request_id={} accumulated_text_len={}",
+                            "🔄 [TurnComplete] request_id={} turn={} accumulated_text_len={}",
                             event_request_id,
+                            turn,
                             accumulated_len
                         );
 
@@ -1480,22 +1580,37 @@ impl ClaurstSession {
                         }
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} turn={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
                                 trace.task_id,
                                 trace.role_id,
                                 trace.role_name,
+                                turn,
                                 usage.is_some()
                             );
                         } else {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} turn={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
+                                turn,
                                 usage.is_some()
                             );
                         }
+
+                        // Emit turn progress to frontend
+                        log::info!(
+                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/25",
+                            event_request_id,
+                            turn
+                        );
+                        let _ = event_window.emit("ai-turn-progress", serde_json::json!({
+                            "requestId": event_request_id,
+                            "sessionId": event_session_id,
+                            "currentTurn": turn,
+                            "maxTurns": 25,
+                        }));
 
                         if let Some(usage) = usage.as_ref() {
                             emit_usage_event(
@@ -1764,6 +1879,13 @@ impl ClaurstSession {
                     .collect::<Vec<_>>();
                 let turn_summaries = diagnostic_context.turn_summaries.lock().clone();
 
+                // DEBUG: Write raw message.content to file for inspection
+                if let Ok(content_json) = serde_json::to_string_pretty(&message.content) {
+                    let debug_file = format!("/tmp/ai_response_debug_{}.json", request_id_owned);
+                    let _ = std::fs::write(&debug_file, content_json);
+                    log::info!("🔍 [DEBUG] Wrote raw message.content to {}", debug_file);
+                }
+
                 let mut text = take_text_from_message_content(&message.content);
 
                 // Filter out system tags from the final message content
@@ -1782,27 +1904,32 @@ impl ClaurstSession {
                 log::info!(
                     "🔍 [BeforeRead] request_id={} accumulated_text_len_in_arc={}",
                     request_id_owned,
-                    accumulated_streaming_text.lock().len()
+                    accumulated_visible_text.lock().len()
                 );
 
-                // Use accumulated streaming text if available and extracted text is empty
-                let accumulated_text = accumulated_streaming_text.lock().clone();
+                // Use accumulated visible output if it has more content than extracted text
+                let accumulated_text = accumulated_visible_text.lock().clone();
+                let accumulated_char_count = accumulated_text.chars().count();
+                let extracted_char_count = text.chars().count();
+                let should_use_accumulated = accumulated_char_count > extracted_char_count;
+
                 log::info!(
                     "📊 [Final] request_id={} accumulated_chars={} accumulated_bytes={} extracted_chars={} will_use_accumulated={}",
                     request_id_owned,
-                    accumulated_text.chars().count(),
+                    accumulated_char_count,
                     accumulated_text.len(),
-                    text.chars().count(),
-                    extracted_text_was_empty && !accumulated_text.is_empty()
+                    extracted_char_count,
+                    should_use_accumulated
                 );
-                if extracted_text_was_empty && !accumulated_text.is_empty() {
+
+                if should_use_accumulated {
                     log::info!(
-                        "Using accumulated streaming text instead of extracted text: request_id={} accumulated_chars={} extracted_chars={}",
+                        "Using accumulated streaming text (has more content): request_id={} accumulated_chars={} extracted_chars={}",
                         request_id_owned,
-                        accumulated_text.chars().count(),
-                        extracted_text_before_fallback_chars
+                        accumulated_char_count,
+                        extracted_char_count
                     );
-                    text = accumulated_text;
+                    text = accumulated_text.clone();
                 } else if extracted_text_was_empty {
                     text = "✓ 已完成工具执行".to_string();
                 }
@@ -1890,13 +2017,31 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
-                // Save the full accumulated text to message content
-                // Timeline contains the same text split into output items for display
-                // Frontend will use timeline for display if available, content as fallback
-                let content_to_save = text.clone();
+                // Save only visible output text to message content
+                let content_to_save = if !accumulated_text.is_empty() {
+                    accumulated_text.clone()
+                } else {
+                    text.clone()
+                };
 
                 // Only save assistant message if content is not empty
                 if !content_to_save.trim().is_empty() {
+                    // Convert timeline items to storage format
+                    let timeline_items_vec = timeline_items.lock().clone();
+                    let stored_timeline: Vec<crate::storage::StoredTimelineItem> = timeline_items_vec.iter().map(|item| {
+                        crate::storage::StoredTimelineItem {
+                            id: item.id.clone(),
+                            item_type: item.item_type.clone(),
+                            timestamp: item.timestamp,
+                            content: item.content.clone(),
+                            tool: item.tool.clone(),
+                            action: item.action.clone(),
+                            status: item.status.clone(),
+                            result: item.result.clone(),
+                            tool_use_id: item.tool_use_id.clone(),
+                        }
+                    }).collect();
+
                     // Save assistant message to storage and database
                     save_message_to_file_storage(
                         &self.storage,
@@ -1905,6 +2050,7 @@ impl ClaurstSession {
                             role: "assistant".to_string(),
                             content: content_to_save.clone(),
                             timestamp: chrono::Utc::now().timestamp(),
+                            timeline: Some(stored_timeline),
                         },
                         task_session,
                         "assistant",
@@ -1927,8 +2073,8 @@ impl ClaurstSession {
                             let timeline_items_vec = timeline_items.lock().clone();
                             for item in timeline_items_vec {
                                 if let Err(e) = conn.execute(
-                                    "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                    "INSERT INTO timeline_items (id, message_id, type, timestamp, content, tool, action, status, result, tool_use_id)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                                     rusqlite::params![
                                         &item.id,
                                         &msg_id,
@@ -1939,6 +2085,7 @@ impl ClaurstSession {
                                         &item.action,
                                         &item.status,
                                         &item.result,
+                                        &item.tool_use_id,
                                     ],
                                 ) {
                                     log::error!("Failed to insert timeline item {}: {}", item.id, e);
@@ -1989,6 +2136,7 @@ impl ClaurstSession {
                     has_visible_text: Some(has_visible_text),
                     handoff_suggestion,
                     usage: Some(usage),
+                    timeline: Some(timeline_items.lock().clone()),
                 };
 
                 log::info!(
@@ -2054,6 +2202,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2103,6 +2252,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2155,6 +2305,7 @@ impl ClaurstSession {
                         has_visible_text: None,
                         handoff_suggestion: None,
                         usage: None,
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );
@@ -2204,6 +2355,7 @@ impl ClaurstSession {
                         has_visible_text: Some(!partial_text.is_empty()),
                         handoff_suggestion: None,
                         usage: Some(usage),
+                        timeline: None,
                     },
                     &warnings_snapshot,
                 );

@@ -9,6 +9,7 @@ CREATE TABLE timeline_items (
     action TEXT,
     status TEXT CHECK(status IN ('running', 'success', 'error')),
     result TEXT,
+    tool_use_id TEXT,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 

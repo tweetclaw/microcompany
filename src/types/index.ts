@@ -26,6 +26,7 @@ export interface TimelineItem {
   action?: string; // For tool_call
   status?: 'running' | 'success' | 'error'; // For tool_call
   result?: string; // For tool_call
+  toolUseId?: string;
 }
 
 // Legacy structure - kept for backward compatibility during migration
@@ -42,6 +43,13 @@ export type AiActivityPhase = 'thinking' | 'tool_running' | 'streaming' | 'final
 export type AiTerminalOutcome = 'completed' | 'completed_tool_only' | 'handoff_ready' | 'cancelled' | 'error' | 'max_tokens' | 'budget_exceeded';
 export type AiTerminalReasonCode = 'user_cancelled' | 'provider_error' | 'tool_only_end_turn' | 'handoff_detected' | 'context_limit' | 'budget_limit' | 'unknown';
 export type AiRequestResult = 'success' | 'cancelled' | 'error';
+
+export interface AiTurnProgressEvent {
+  requestId: string;
+  sessionId: string;
+  currentTurn: number;
+  maxTurns: number;
+}
 
 export interface AiUsageInfo {
   input_tokens?: number;
@@ -119,11 +127,21 @@ export interface AiRequestEndEvent {
   handoffSuggestion?: HandoffSuggestion;
   usage?: AiUsageInfo;
   warnings?: AiWarningInfo[];
+  timeline?: TimelineItem[];
   timestamp: number;
 }
 
 export interface AiMessageChunkEvent {
   request_id: string;
+  item_id: string;
+  timestamp: number;
+  chunk: string;
+}
+
+export interface AiThinkingChunkEvent {
+  request_id: string;
+  item_id: string;
+  timestamp: number;
   chunk: string;
 }
 
@@ -131,15 +149,19 @@ export interface AiToolStartEvent {
   request_id: string;
   tool: string;
   tool_use_id: string;
+  item_id: string;
   action: string;
+  timestamp: number;
 }
 
 export interface AiToolEndEvent {
   request_id: string;
   tool: string;
   tool_use_id: string;
+  item_id: string;
   success: boolean;
   result: string;
+  timestamp: number;
 }
 
 export interface ProcessTimelineItem {

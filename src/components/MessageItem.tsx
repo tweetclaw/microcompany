@@ -33,22 +33,19 @@ function MessageItem({ message }: MessageItemProps) {
           <div className="message-text">{message.content}</div>
         ) : (
           <>
+            {/* Show timeline if exists (tool calls and thinking in chronological order) */}
             {message.timeline && message.timeline.length > 0 ? (
-              // If timeline exists: show timeline only (includes tool_call and output in chronological order)
-              // This ensures consistent display for both streaming and historical messages
-              <TimelineView timeline={message.timeline} isStreaming={message.isStreaming} />
+              <TimelineView timeline={message.timeline} />
             ) : (
-              // No timeline: show content only (backward compatibility for old messages)
-              <>
-                {message.content && (
-                  <Suspense fallback={<div className="message-text">{message.content}</div>}>
-                    <MarkdownRenderer
-                      content={message.content}
-                      isStreaming={message.isStreaming}
-                    />
-                  </Suspense>
-                )}
-              </>
+              /* Show content only if no timeline exists (fallback for old messages) */
+              message.content && (
+                <Suspense fallback={<div className="message-text">{message.content}</div>}>
+                  <MarkdownRenderer
+                    content={message.content}
+                    isStreaming={message.isStreaming}
+                  />
+                </Suspense>
+              )
             )}
           </>
         )}
