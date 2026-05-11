@@ -44,6 +44,13 @@ export type AiTerminalOutcome = 'completed' | 'completed_tool_only' | 'handoff_r
 export type AiTerminalReasonCode = 'user_cancelled' | 'provider_error' | 'tool_only_end_turn' | 'handoff_detected' | 'context_limit' | 'budget_limit' | 'unknown';
 export type AiRequestResult = 'success' | 'cancelled' | 'error';
 
+export interface AiTurnProgressEvent {
+  requestId: string;
+  sessionId: string;
+  currentTurn: number;
+  maxTurns: number;
+}
+
 export interface AiUsageInfo {
   input_tokens?: number;
   output_tokens?: number;

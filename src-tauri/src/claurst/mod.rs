@@ -547,6 +547,7 @@ struct HandoffSuggestion {
 
 #[derive(Debug, Clone)]
 struct ParsedHandoffBlock {
+    #[allow(dead_code)]
     visible_text: String,
     recommended: bool,
     target_role_name: Option<String>,
@@ -1559,12 +1560,13 @@ impl ClaurstSession {
                             item.result = Some(result.clone());
                         }
                     }
-                    QueryEvent::TurnComplete { usage, .. } => {
+                    QueryEvent::TurnComplete { turn, usage, .. } => {
                         // Log accumulated text length at turn complete
                         let accumulated_len = event_accumulated_visible_text.lock().len();
                         log::info!(
-                            "🔄 [TurnComplete] request_id={} accumulated_text_len={}",
+                            "🔄 [TurnComplete] request_id={} turn={} accumulated_text_len={}",
                             event_request_id,
+                            turn,
                             accumulated_len
                         );
 
@@ -1578,22 +1580,37 @@ impl ClaurstSession {
                         }
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} turn={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
                                 trace.task_id,
                                 trace.role_id,
                                 trace.role_name,
+                                turn,
                                 usage.is_some()
                             );
                         } else {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} turn={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
+                                turn,
                                 usage.is_some()
                             );
                         }
+
+                        // Emit turn progress to frontend
+                        log::info!(
+                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/25",
+                            event_request_id,
+                            turn
+                        );
+                        let _ = event_window.emit("ai-turn-progress", serde_json::json!({
+                            "requestId": event_request_id,
+                            "sessionId": event_session_id,
+                            "currentTurn": turn,
+                            "maxTurns": 25,
+                        }));
 
                         if let Some(usage) = usage.as_ref() {
                             emit_usage_event(

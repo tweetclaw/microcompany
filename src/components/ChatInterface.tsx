@@ -219,6 +219,10 @@ function ChatInterface({
   const [lastError, setLastError] = useState<string | null>(null);
   const [retryMessageContent, setRetryMessageContent] = useState('');
   const [isCompacting, setIsCompacting] = useState(false);
+  const [currentTurn, setCurrentTurn] = useState<number>(0);
+  const currentTurnRef = useRef<number>(0);
+  const [maxTurns, setMaxTurns] = useState<number>(25);
+  const [showContinueButton, setShowContinueButton] = useState(false);
   const visibleError = useMemo(() => (
     lastError ? buildVisibleError(lastError) : null
   ), [lastError]);
@@ -483,8 +487,9 @@ function ChatInterface({
     let unlistenUsage: (() => void) | null = null;
     let unlistenTokenWarning: (() => void) | null = null;
     let unlistenStatus: (() => void) | null = null;
-    let unlistenRequestEnd: (() => void) | null = null;
     let unlistenCompactStart: (() => void) | null = null;
+    let unlistenTurnProgress: (() => void) | null = null;
+    let unlistenRequestEnd: (() => void) | null = null;
 
     const setupListeners = async () => {
       unlistenRequestStart = await listen<AiRequestStartEvent>('ai-request-start', (event) => {
@@ -506,6 +511,8 @@ function ChatInterface({
         setCurrentUsage(null);
         setTokenWarnings([]);
         setProcessTimeline([]);
+        setShowContinueButton(false);
+        setCurrentTurn(0);
         clearRequestTimeline(payload.request_id);
         appendTimeline({
           id: `${payload.request_id}-${payload.timestamp}-start`,
@@ -809,6 +816,13 @@ function ChatInterface({
         });
       });
 
+      unlistenTurnProgress = await listen('ai-turn-progress', (event: any) => {
+        const payload = event.payload;
+        currentTurnRef.current = payload.currentTurn;
+        setCurrentTurn(payload.currentTurn);
+        setMaxTurns(payload.maxTurns);
+      });
+
       unlistenRequestEnd = await listen<AiRequestEndEvent>('ai-request-end', async (event) => {
         const payload = event.payload;
         if (terminalRequestIdsRef.current.has(payload.request_id)) {
@@ -1091,6 +1105,12 @@ function ChatInterface({
           });
         }
 
+        // Check if stopped due to max turns limit
+        // Use ref to avoid stale closure (currentTurn state is captured at listener registration time)
+        if (currentTurnRef.current >= maxTurns && terminalRunState === 'completed') {
+          setShowContinueButton(true);
+        }
+
         console.log('[ChatInterface] scheduling terminal reset', {
           requestId: payload.request_id,
           delayMs: shouldDelayReset ? 450 : 0,
@@ -1115,6 +1135,7 @@ function ChatInterface({
       if (unlistenTokenWarning) unlistenTokenWarning();
       if (unlistenStatus) unlistenStatus();
       if (unlistenCompactStart) unlistenCompactStart();
+      if (unlistenTurnProgress) unlistenTurnProgress();
       if (unlistenRequestEnd) unlistenRequestEnd();
     };
   }, []);
@@ -1177,6 +1198,11 @@ function ChatInterface({
     // 不再要求必须选择模型才能新建对话
     return null;
   }, [workingDirectory]);
+
+  const handleContinue = () => {
+    setShowContinueButton(false);
+    handleSendMessage('请继续');
+  };
 
   const handleSendMessage = async (content: string) => {
     setRetryMessageContent(content);
@@ -1402,6 +1428,28 @@ function ChatInterface({
                       )}
                       <MessageList messages={messages} isBusy={isBusy} />
                       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
+                      {showContinueButton && (
+                        <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', margin: '12px 0' }}>
+                          <div style={{ marginBottom: '8px', color: '#0369a1', fontSize: '14px' }}>
+                            ⚠️ AI 已达到最大轮次限制（{maxTurns} 轮）
+                          </div>
+                          <button
+                            onClick={handleContinue}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#0ea5e9',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            继续执行
+                          </button>
+                        </div>
+                      )}
                       <InputBox
                         onSendMessage={handleSendMessage}
                         onCancelMessage={handleCancelMessage}
@@ -1507,6 +1555,8 @@ function ChatInterface({
                   modelLabel={currentModelName}
                   currentUsage={currentUsage}
                   tokenWarnings={tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }))}
+                  currentTurn={currentTurn}
+                  maxTurns={maxTurns}
                   collapsed={false}
                   isCompact={false}
                 />
@@ -1536,6 +1586,8 @@ function ChatInterface({
             modelLabel={currentModelName}
             currentUsage={currentUsage}
             tokenWarnings={tokenWarnings.map(({ warning_type, message }) => ({ warning_type, message }))}
+            currentTurn={currentTurn}
+            maxTurns={maxTurns}
             collapsed={!isInspectorDrawerOpen}
             isCompact={true}
           />
