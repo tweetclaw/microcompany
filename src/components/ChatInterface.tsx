@@ -1119,13 +1119,6 @@ function ChatInterface({
           setShowContinueButton(true);
         }
 
-        // Check if stopped due to incomplete tool use (provider returned end_turn
-        // but still had pending ToolUse blocks — e.g. deepseek-v4-pro bug).
-        if (payload.outcome === 'incomplete_tool_use') {
-          setContinueButtonReason('incomplete_tool_use');
-          setShowContinueButton(true);
-        }
-
         console.log('[ChatInterface] scheduling terminal reset', {
           requestId: payload.request_id,
           delayMs: shouldDelayReset ? 450 : 0,
