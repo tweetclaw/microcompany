@@ -23,6 +23,7 @@ mod backup_impl;
 pub use task::{
     DeleteTaskResult,
     RoleConfig,
+    RoleOrderItem,
     Task,
     TaskCreateRequest,
     TaskRole,
@@ -31,7 +32,14 @@ pub use task::{
     TeamBrief,
     TeamBriefRole,
 };
-pub use task_impl::{create_task, restart_task_role_session};
+pub use task_impl::{
+    add_task_role,
+    create_task,
+    delete_task_role,
+    reorder_task_roles,
+    restart_task_role_session,
+    update_task_role,
+};
 pub use task_queries::{delete_task, get_task, get_team_brief, list_tasks, update_task};
 
 pub use template::{

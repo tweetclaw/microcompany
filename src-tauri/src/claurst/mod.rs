@@ -811,6 +811,7 @@ impl ClaurstSession {
             completion_notifier: None,
             pending_permissions: None,
             permission_manager: None,
+            user_question_tx: None,
         };
 
         // 7. 创建存储层

@@ -584,6 +584,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "similar",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
@@ -593,6 +594,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "which",
 ]
 
 [[package]]
