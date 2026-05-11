@@ -58,17 +58,11 @@ export async function addTaskRole(
   identity: string,
   archetypeId: string | null,
   provider: string,
-  displayOrder?: number
+  displayOrder?: number,
+  handoffEnabled?: boolean,
+  systemPromptAppend?: string | null,
+  customSystemPrompt?: string | null,
 ): Promise<Task> {
-  console.log(`[api/index.ts] addTaskRole: Adding role "${roleName}" to task ${taskId}`);
-  console.log(`[api/index.ts] addTaskRole: Role config:`, {
-    roleName,
-    identity,
-    archetypeId,
-    provider,
-    displayOrder: displayOrder ?? 'auto',
-  });
-  
   try {
     const result = await invoke<Task>('add_task_role', {
       taskId,
@@ -77,8 +71,10 @@ export async function addTaskRole(
       archetypeId,
       provider,
       displayOrder: displayOrder ?? null,
+      handoffEnabled: handoffEnabled ?? true,
+      systemPromptAppend: systemPromptAppend ?? null,
+      customSystemPrompt: customSystemPrompt ?? null,
     });
-    console.log(`[api/index.ts] addTaskRole: Role added successfully`);
     return result;
   } catch (error) {
     console.error(`[api/index.ts] addTaskRole: Failed to add role:`, error);

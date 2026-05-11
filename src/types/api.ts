@@ -77,7 +77,7 @@ export interface TaskRole {
   provider: string;
   handoff_enabled: boolean;
   display_order: number;
-  session_id: string;
+  session_id: string | null;
   created_at: string;
 }
 

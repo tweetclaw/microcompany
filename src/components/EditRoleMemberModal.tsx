@@ -136,7 +136,7 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
   const currentProvider = props.availableProviders.find((p) => p.id === selectedProvider);
 
   return (
-    <div className="edit-role-modal-overlay" onClick={props.onClose}>
+    <div className="edit-role-modal-overlay">
       <div className="edit-role-modal" onClick={(e) => e.stopPropagation()}>
         <div className="edit-role-modal-header">
           <h2>✏️ 编辑团队成员</h2>

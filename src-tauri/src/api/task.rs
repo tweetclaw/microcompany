@@ -56,7 +56,7 @@ pub struct TaskRole {
     pub provider: String,
     pub handoff_enabled: bool,
     pub display_order: i32,
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub created_at: String,
 }
 

@@ -1965,8 +1965,26 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
+                // Detect incomplete tool use: EndTurn arrived but the final message
+                // still contains unexecuted ToolUse blocks (happens when deepseek /
+                // other non-Anthropic models return stop_reason "end_turn" instead
+                // of "tool_use" even though tool calls are present).
+                let has_incomplete_tool_use = matches!(
+                    &message.content,
+                    MessageContent::Blocks(blocks) if blocks.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. }))
+                );
+                if has_incomplete_tool_use {
+                    log::warn!(
+                        "claurst_incomplete_tool_use request_id={} session_id={} — EndTurn received with pending ToolUse blocks",
+                        request_id_owned,
+                        self.session_id
+                    );
+                }
+
                 let outcome = if handoff_suggestion.is_some() {
                     "handoff_ready"
+                } else if has_incomplete_tool_use {
+                    "incomplete_tool_use"
                 } else if has_visible_text {
                     "completed"
                 } else {
@@ -1974,6 +1992,8 @@ impl ClaurstSession {
                 };
                 let reason_code = if handoff_suggestion.is_some() {
                     Some("handoff_detected")
+                } else if has_incomplete_tool_use {
+                    Some("incomplete_tool_use")
                 } else if has_visible_text {
                     None
                 } else {

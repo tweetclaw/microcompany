@@ -222,7 +222,10 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
         config.identity,
         config.archetypeId,
         config.provider,
-        config.displayOrder
+        config.displayOrder,
+        config.handoffEnabled,
+        config.systemPromptAppend,
+        config.customSystemPrompt,
       );
 
       console.log(`[TaskModeLayout] handleAddRole: Role added successfully, refreshing task`);

@@ -40,8 +40,8 @@ export interface ToolCallRecord {
 }
 
 export type AiActivityPhase = 'thinking' | 'tool_running' | 'streaming' | 'finalizing';
-export type AiTerminalOutcome = 'completed' | 'completed_tool_only' | 'handoff_ready' | 'cancelled' | 'error' | 'max_tokens' | 'budget_exceeded';
-export type AiTerminalReasonCode = 'user_cancelled' | 'provider_error' | 'tool_only_end_turn' | 'handoff_detected' | 'context_limit' | 'budget_limit' | 'unknown';
+export type AiTerminalOutcome = 'completed' | 'completed_tool_only' | 'handoff_ready' | 'cancelled' | 'error' | 'max_tokens' | 'budget_exceeded' | 'incomplete_tool_use';
+export type AiTerminalReasonCode = 'user_cancelled' | 'provider_error' | 'tool_only_end_turn' | 'handoff_detected' | 'context_limit' | 'budget_limit' | 'incomplete_tool_use' | 'unknown';
 export type AiRequestResult = 'success' | 'cancelled' | 'error';
 
 export interface AiTurnProgressEvent {
