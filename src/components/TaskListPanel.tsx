@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { listTasks, deleteTask } from '../api';
 import { TaskSummary } from '../types/api';
+import type { ProviderConfig } from '../types/settings';
+import TemplateManagerPanel from './TemplateManagerPanel';
 import './TaskListPanel.css';
 
 interface TaskListPanelProps {
@@ -9,9 +11,11 @@ interface TaskListPanelProps {
   onTaskDeleted?: (taskId: string) => void;
   currentTaskId: string | null;
   refreshKey?: number;
+  availableProviders?: ProviderConfig[];
 }
 
-export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDeleted, currentTaskId, refreshKey }: TaskListPanelProps) {
+export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDeleted, currentTaskId, refreshKey, availableProviders = [] }: TaskListPanelProps) {
+  const [view, setView] = useState<'tasks' | 'templates'>('tasks');
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDeleteTaskId, setPendingDeleteTaskId] = useState<string | null>(null);
@@ -84,12 +88,31 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDe
     setPendingDeleteTaskId(null);
   };
 
+  // 模板管理视图
+  if (view === 'templates') {
+    return (
+      <TemplateManagerPanel
+        availableProviders={availableProviders}
+        onBack={() => setView('tasks')}
+      />
+    );
+  }
+
+  // 任务列表视图
   return (
     <div className="task-list-panel" ref={panelRef}>
       <div className="task-list-header">
         <button className="new-task-button" onClick={onNewTaskClick}>
           <span className="new-task-icon">➕</span>
           <span>新建任务</span>
+        </button>
+        <button
+          className="manage-templates-button"
+          onClick={() => setView('templates')}
+          title="管理模板"
+        >
+          <span>📋</span>
+          <span>模板</span>
         </button>
       </div>
       <div className="task-list-content">
