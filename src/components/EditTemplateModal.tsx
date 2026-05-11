@@ -107,8 +107,8 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
   };
 
   return (
-    <div className="edit-template-modal-overlay" onClick={props.onClose}>
-      <div className="edit-template-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="edit-template-modal-overlay">
+      <div className="edit-template-modal">
         <div className="edit-template-modal-header">
           <h2>✏️ Edit Template</h2>
           <button className="edit-template-modal-close" onClick={props.onClose}>

@@ -445,6 +445,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
               onTaskDeleted={props.onTaskDeleted}
               currentTaskId={props.currentTask?.id || null}
               refreshKey={props.taskListRefreshKey}
+              availableProviders={props.availableProviders}
             />
           </Panel>
           <Separator />
