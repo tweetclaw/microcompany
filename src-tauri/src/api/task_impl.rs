@@ -380,7 +380,7 @@ pub async fn create_task(task_request: TaskCreateRequest) -> Result<Task, String
                     provider: role.provider.clone(),
                     handoff_enabled: role.handoff_enabled,
                     display_order: role.display_order,
-                    session_id: session_id.clone(),
+                    session_id: Some(session_id.clone()),
                     created_at: Utc::now().to_rfc3339(),
                 });
             }
@@ -775,6 +775,9 @@ pub async fn add_task_role(
     archetype_id: Option<String>,
     provider: String,
     display_order: Option<i32>,
+    handoff_enabled: Option<bool>,
+    system_prompt_append: Option<String>,
+    custom_system_prompt: Option<String>,
 ) -> Result<Task, String> {
     let role_id = format!("role-{}", Uuid::new_v4());
     let now = Utc::now().to_rfc3339();
@@ -808,6 +811,8 @@ pub async fn add_task_role(
         }
     };
 
+    let handoff_enabled_val = handoff_enabled.unwrap_or(true) as i32;
+
     {
         let pool = crate::database::get_pool()?;
         let conn = pool
@@ -816,9 +821,10 @@ pub async fn add_task_role(
 
         conn.execute(
             "INSERT INTO roles (id, task_id, name, identity, archetype_id, model, provider,
+             system_prompt_append, custom_system_prompt,
              system_prompt_snapshot, prompt_source_type, prompt_hash, prompt_contract_version,
              handoff_enabled, display_order, active_session_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', NULL, NULL, NULL, 0, ?8, NULL, ?9)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, '', NULL, NULL, NULL, ?10, ?11, NULL, ?12)",
             params![
                 &role_id,
                 &task_id,
@@ -827,6 +833,9 @@ pub async fn add_task_role(
                 &archetype_id,
                 &model,
                 &provider,
+                &system_prompt_append,
+                &custom_system_prompt,
+                &handoff_enabled_val,
                 &display_order,
                 &now,
             ],
@@ -835,12 +844,13 @@ pub async fn add_task_role(
     }
 
     log::info!(
-        "task_role_added task_id={} role_id={} role_name={} provider={} model={}",
+        "task_role_added task_id={} role_id={} role_name={} provider={} model={} handoff_enabled={}",
         task_id,
         role_id,
         role_name,
         provider,
         model,
+        handoff_enabled_val,
     );
 
     crate::api::get_task(task_id).await

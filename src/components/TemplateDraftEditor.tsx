@@ -255,12 +255,6 @@ export default function TemplateDraftEditor({
                         <div className="template-draft-role-default">{role.archetype_id}</div>
                       </div>
                     )}
-                    <div className="template-draft-role-override-field">
-                      <label>Handoff</label>
-                      <div className="template-draft-role-default">
-                        {role.handoff_enabled ? 'Enabled' : 'Disabled'}
-                      </div>
-                    </div>
                   </div>
                 </div>
               );

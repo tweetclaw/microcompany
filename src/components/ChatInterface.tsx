@@ -136,6 +136,10 @@ function mapTerminalOutcomeToRunState(outcome: AiTerminalOutcome): AiRunState {
     case 'max_tokens':
     case 'budget_exceeded':
       return 'error';
+    // incomplete_tool_use: treat as completed so the input re-enables,
+    // the continue button will be shown separately.
+    case 'incomplete_tool_use':
+      return 'completed';
     default:
       return 'completed';
   }
@@ -223,6 +227,7 @@ function ChatInterface({
   const currentTurnRef = useRef<number>(0);
   const [maxTurns, setMaxTurns] = useState<number>(25);
   const [showContinueButton, setShowContinueButton] = useState(false);
+  const [continueButtonReason, setContinueButtonReason] = useState<'max_turns' | 'incomplete_tool_use'>('max_turns');
   const visibleError = useMemo(() => (
     lastError ? buildVisibleError(lastError) : null
   ), [lastError]);
@@ -948,6 +953,8 @@ function ChatInterface({
             });
           }
           timelineText = '请求完成（仅工具结果）';
+        } else if (payload.outcome === 'incomplete_tool_use') {
+          timelineText = '请求异常中断：AI 生成了工具调用但未能执行，请点击"继续"重试';
         } else if (payload.outcome === 'handoff_ready') {
           timelineText = '请求完成（可交接）';
         } else if (payload.outcome === 'cancelled') {
@@ -1108,6 +1115,14 @@ function ChatInterface({
         // Check if stopped due to max turns limit
         // Use ref to avoid stale closure (currentTurn state is captured at listener registration time)
         if (currentTurnRef.current >= maxTurns && terminalRunState === 'completed') {
+          setContinueButtonReason('max_turns');
+          setShowContinueButton(true);
+        }
+
+        // Check if stopped due to incomplete tool use (provider returned end_turn
+        // but still had pending ToolUse blocks — e.g. deepseek-v4-pro bug).
+        if (payload.outcome === 'incomplete_tool_use') {
+          setContinueButtonReason('incomplete_tool_use');
           setShowContinueButton(true);
         }
 
@@ -1201,6 +1216,7 @@ function ChatInterface({
 
   const handleContinue = () => {
     setShowContinueButton(false);
+    setContinueButtonReason('max_turns'); // reset to default
     handleSendMessage('请继续');
   };
 
@@ -1429,15 +1445,23 @@ function ChatInterface({
                       <MessageList messages={messages} isBusy={isBusy} />
                       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                       {showContinueButton && (
-                        <div style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', margin: '12px 0' }}>
-                          <div style={{ marginBottom: '8px', color: '#0369a1', fontSize: '14px' }}>
-                            ⚠️ AI 已达到最大轮次限制（{maxTurns} 轮）
+                        <div style={{
+                          padding: '12px 16px',
+                          backgroundColor: continueButtonReason === 'incomplete_tool_use' ? '#fff7ed' : '#f0f9ff',
+                          border: `1px solid ${continueButtonReason === 'incomplete_tool_use' ? '#fed7aa' : '#bae6fd'}`,
+                          borderRadius: '8px',
+                          margin: '12px 0'
+                        }}>
+                          <div style={{ marginBottom: '8px', color: continueButtonReason === 'incomplete_tool_use' ? '#9a3412' : '#0369a1', fontSize: '14px' }}>
+                            {continueButtonReason === 'incomplete_tool_use'
+                              ? '⚠️ AI 生成了工具调用但未能执行（模型异常中断），点击继续让 AI 重新尝试'
+                              : `⚠️ AI 已达到最大轮次限制（${maxTurns} 轮）`}
                           </div>
                           <button
                             onClick={handleContinue}
                             style={{
                               padding: '8px 16px',
-                              backgroundColor: '#0ea5e9',
+                              backgroundColor: continueButtonReason === 'incomplete_tool_use' ? '#ea580c' : '#0ea5e9',
                               color: 'white',
                               border: 'none',
                               borderRadius: '6px',

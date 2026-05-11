@@ -47,6 +47,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "add_timeline_items",
         sql: include_str!("../../migrations/008_add_timeline_items.sql"),
     },
+    Migration {
+        version: 9,
+        name: "add_task_templates",
+        sql: include_str!("../../migrations/009_add_task_templates.sql"),
+    },
 ];
 
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {

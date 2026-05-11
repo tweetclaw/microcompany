@@ -14,7 +14,7 @@ export default function DeleteRoleMemberModal(props: DeleteRoleMemberModalProps)
   }
 
   return (
-    <div className="delete-role-modal-overlay" onClick={props.onClose}>
+    <div className="delete-role-modal-overlay">
       <div className="delete-role-modal" onClick={(e) => e.stopPropagation()}>
         <div className="delete-role-modal-header">
           <h2>⚠️ 删除团队成员</h2>

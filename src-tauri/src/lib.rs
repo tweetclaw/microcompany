@@ -68,8 +68,22 @@ async fn add_task_role(
     archetype_id: Option<String>,
     provider: String,
     display_order: Option<i32>,
+    handoff_enabled: Option<bool>,
+    system_prompt_append: Option<String>,
+    custom_system_prompt: Option<String>,
 ) -> Result<api::Task, String> {
-    api::add_task_role(task_id, role_name, identity, archetype_id, provider, display_order).await
+    api::add_task_role(
+        task_id,
+        role_name,
+        identity,
+        archetype_id,
+        provider,
+        display_order,
+        handoff_enabled,
+        system_prompt_append,
+        custom_system_prompt,
+    )
+    .await
 }
 
 #[tauri::command]
