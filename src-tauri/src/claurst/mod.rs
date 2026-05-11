@@ -1981,9 +1981,50 @@ impl ClaurstSession {
                     );
                 }
 
+                // Detect empty-body EndTurn: API returned Blocks(count=0) with no content at all.
+                // This happens when the model says "I'll do it now" in streaming text, but the
+                // final API message body is empty — the work was NOT done.
+                // We rely on fallback_visible_text_used to distinguish real completions from this case.
+                let has_empty_blocks_body = matches!(
+                    &message.content,
+                    MessageContent::Blocks(blocks) if blocks.is_empty()
+                );
+                log::warn!(
+                    "claurst_end_turn_body_diagnosis request_id={} session_id={} \
+                     has_incomplete_tool_use={} has_empty_blocks_body={} \
+                     fallback_visible_text_used={} extracted_text_was_empty={} \
+                     accumulated_char_count={} extracted_char_count={}",
+                    request_id_owned,
+                    self.session_id,
+                    has_incomplete_tool_use,
+                    has_empty_blocks_body,
+                    fallback_visible_text_used,
+                    extracted_text_was_empty,
+                    accumulated_char_count,
+                    extracted_char_count,
+                );
+                if has_empty_blocks_body && fallback_visible_text_used {
+                    log::warn!(
+                        "claurst_empty_body_end_turn request_id={} session_id={} — \
+                         EndTurn with empty Blocks body + fallback text used. \
+                         AI likely stopped mid-task without executing anything. \
+                         accumulated_preview={}",
+                        request_id_owned,
+                        self.session_id,
+                        accumulated_text.chars().take(120).collect::<String>().replace('\n', "\\n"),
+                    );
+                }
+
+                // A second form of "incomplete" work: the API returned an empty Blocks body
+                // (count=0) but we had accumulated streaming text — meaning the model talked
+                // about what it was going to do, but the final round-trip gave us nothing to
+                // execute. Treat this the same as incomplete_tool_use so the UI shows the
+                // "continue" button.
+                let has_empty_body_with_fallback = has_empty_blocks_body && fallback_visible_text_used;
+
                 let outcome = if handoff_suggestion.is_some() {
                     "handoff_ready"
-                } else if has_incomplete_tool_use {
+                } else if has_incomplete_tool_use || has_empty_body_with_fallback {
                     "incomplete_tool_use"
                 } else if has_visible_text {
                     "completed"
@@ -1992,7 +2033,7 @@ impl ClaurstSession {
                 };
                 let reason_code = if handoff_suggestion.is_some() {
                     Some("handoff_detected")
-                } else if has_incomplete_tool_use {
+                } else if has_incomplete_tool_use || has_empty_body_with_fallback {
                     Some("incomplete_tool_use")
                 } else if has_visible_text {
                     None
