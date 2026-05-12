@@ -1561,10 +1561,18 @@ impl ClaurstSession {
                         }
                     }
                     QueryEvent::TurnComplete { turn, usage, .. } => {
-                        // Log accumulated text length at turn complete
-                        let accumulated_len = event_accumulated_visible_text.lock().len();
+                        // Log accumulated text length at turn complete, then clear it so that
+                        // only the final turn's streamed text ends up in final_text.
+                        // Without this, every intermediate "让我先读取…" line from tool-use
+                        // turns gets concatenated into the handoff fullMessage.
+                        let accumulated_len = {
+                            let mut acc = event_accumulated_visible_text.lock();
+                            let len = acc.len();
+                            acc.clear();
+                            len
+                        };
                         log::info!(
-                            "🔄 [TurnComplete] request_id={} turn={} accumulated_text_len={}",
+                            "🔄 [TurnComplete] request_id={} turn={} accumulated_text_len={} (cleared)",
                             event_request_id,
                             turn,
                             accumulated_len

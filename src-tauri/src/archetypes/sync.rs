@@ -129,6 +129,77 @@ fn read_manifest_if_exists(path: &Path) -> Result<Option<ArchetypeManifest>, Str
     read_manifest(path).map(Some)
 }
 
+/// Syncs role definition .md files from bundled resources to ~/.microcompany/archetypes/role-definitions/
+pub fn sync_role_definition_files(app: &AppHandle) -> Result<(), String> {
+    let bundled_root = resolve_bundled_role_definitions(app)?;
+    let local_root = archetypes_root_dir()
+        .map_err(|e| format!("Failed to resolve archetype root: {}", e))?;
+    let local_role_defs = local_root.join("role-definitions");
+
+    // Create role-definitions directory if it doesn't exist
+    fs::create_dir_all(&local_role_defs)
+        .map_err(|e| format!("Failed to create role-definitions directory: {}", e))?;
+
+    // List of role definition files to sync
+    let role_definition_files = vec![
+        "product_manager.md",
+        "software_architect.md",
+        "frontend_developer.md",
+        "backend_developer.md",
+        "qa_engineer.md",
+        "code_reviewer.md",
+        "designer.md",
+    ];
+
+    // Copy each .md file if it doesn't exist locally (don't overwrite existing files)
+    for file_name in role_definition_files {
+        let source = bundled_root.join(file_name);
+        let target = local_role_defs.join(file_name);
+
+        // Only copy if source exists and target doesn't exist
+        if source.exists() && !target.exists() {
+            fs::copy(&source, &target).map_err(|e| {
+                format!(
+                    "Failed to copy role definition {} to {}: {}",
+                    source.display(),
+                    target.display(),
+                    e
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_bundled_role_definitions(app: &AppHandle) -> Result<PathBuf, String> {
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("role-definitions"));
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            candidates.push(exe_dir.join("../Resources/role-definitions"));
+            candidates.push(exe_dir.join("resources/role-definitions"));
+        }
+    }
+
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("role-definitions"),
+    );
+
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .ok_or_else(|| {
+            "Bundled role definition resources not found in any known location".to_string()
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::sync_from_bundled_dir;

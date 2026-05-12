@@ -12,6 +12,7 @@ pub use prompt_builder::{
     TASK_PROMPT_CONTRACT_VERSION,
 };
 pub use sync::sync_archetype_resources;
+pub use sync::sync_role_definition_files;
 
 pub fn archetypes_root_dir() -> anyhow::Result<PathBuf> {
     let home_dir = dirs::home_dir()
@@ -31,14 +32,19 @@ pub fn get_role_archetype(archetype_id: &str) -> Result<Option<RoleArchetype>, S
 fn role_definition_file_name(archetype_id: &str) -> String {
     match archetype_id {
         "software_engineer" => "backend_developer.md".to_string(),
+        "quality_assurance" => "qa_engineer.md".to_string(),
         _ if archetype_id.ends_with(".md") => archetype_id.to_string(),
         _ => format!("{}.md", archetype_id),
     }
 }
 
 pub fn get_role_definition_path(archetype_id: &str) -> String {
-    format!(
-        "src-tauri/resources/role-definitions/{}",
-        role_definition_file_name(archetype_id)
-    )
+    let root = archetypes_root_dir().unwrap_or_else(|_| PathBuf::from("src-tauri/resources/archetypes"));
+    let role_defs_dir = root.join("role-definitions");
+    let file_name = role_definition_file_name(archetype_id);
+    
+    role_defs_dir
+        .join(&file_name)
+        .to_string_lossy()
+        .to_string()
 }
