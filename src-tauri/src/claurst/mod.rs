@@ -151,11 +151,14 @@ fn generate_title(first_message: &str) -> String {
 }
 
 fn collect_final_text_from_blocks(blocks: &[ContentBlock]) -> String {
+    // Only collect visible Text blocks — Thinking blocks must NOT be included here,
+    // because they are rendered separately in the frontend timeline.
+    // Including thinking caused final_text to be thinking+text concatenated,
+    // making will_use_accumulated=false even when accumulated text was correct.
     blocks
         .iter()
         .filter_map(|block| match block {
             ContentBlock::Text { text } => Some(text.as_str()),
-            ContentBlock::Thinking { thinking, .. } => Some(thinking.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -823,7 +826,7 @@ impl ClaurstSession {
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
         // Allow sufficient turns for AI to complete work and provide response
-        query_config.max_turns = 25;
+        query_config.max_turns = 50;
         // 注意：不再将 system_prompt 传递给 API 的 system 参数
         // 改为在第一条用户消息前拼接角色提示词
         // query_config.system_prompt = system_prompt.clone();
@@ -1164,6 +1167,11 @@ impl ClaurstSession {
                         "UPDATE sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
                         rusqlite::params![&title, &created_at, &self.session_id],
                     );
+                    // Notify frontend so session list and header title update immediately
+                    let _ = window.emit("session-title-updated", serde_json::json!({
+                        "session_id": &self.session_id,
+                        "title": &title,
+                    }));
                 }
             }
         }
@@ -1197,6 +1205,7 @@ impl ClaurstSession {
         let event_warnings = terminal_warnings.clone();
         let first_event_logged = Arc::new(parking_lot::Mutex::new(false));
         let event_first_event_logged = first_event_logged.clone();
+        let event_max_turns = self.config.max_turns;
         let diagnostic_context = CompletedToolOnlyDiagnosticContext {
             tool_sequence: Arc::new(parking_lot::Mutex::new(Vec::new())),
             turn_summaries: Arc::new(parking_lot::Mutex::new(Vec::new())),
@@ -1560,21 +1569,14 @@ impl ClaurstSession {
                             item.result = Some(result.clone());
                         }
                     }
-                    QueryEvent::TurnComplete { turn, usage, .. } => {
-                        // Log accumulated text length at turn complete, then clear it so that
-                        // only the final turn's streamed text ends up in final_text.
-                        // Without this, every intermediate "让我先读取…" line from tool-use
-                        // turns gets concatenated into the handoff fullMessage.
-                        let accumulated_len = {
-                            let mut acc = event_accumulated_visible_text.lock();
-                            let len = acc.len();
-                            acc.clear();
-                            len
-                        };
+                    QueryEvent::TurnComplete { turn, stop_reason, usage, .. } => {
+                        // Log accumulated text length at turn complete
+                        let accumulated_len = event_accumulated_visible_text.lock().len();
                         log::info!(
-                            "🔄 [TurnComplete] request_id={} turn={} accumulated_text_len={} (cleared)",
+                            "🔄 [TurnComplete] request_id={} turn={} stop_reason={} accumulated_text_len={}",
                             event_request_id,
                             turn,
+                            stop_reason,
                             accumulated_len
                         );
 
@@ -1583,41 +1585,45 @@ impl ClaurstSession {
                             let turn_index = turn_summaries.len();
                             turn_summaries.push(serde_json::json!({
                                 "turn_index": turn_index,
+                                "stop_reason": stop_reason,
                                 "usage_present": usage.is_some(),
                             }));
                         }
                         if let Some(trace) = event_task_trace.as_ref() {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} turn={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} task_id={} role_id={} role_name={} turn={} stop_reason={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
                                 trace.task_id,
                                 trace.role_id,
                                 trace.role_name,
                                 turn,
+                                stop_reason,
                                 usage.is_some()
                             );
                         } else {
                             log::info!(
-                                "claurst_turn_complete request_id={} session_id={} turn={} usage_present={}",
+                                "claurst_turn_complete request_id={} session_id={} turn={} stop_reason={} usage_present={}",
                                 event_request_id,
                                 event_session_id,
                                 turn,
+                                stop_reason,
                                 usage.is_some()
                             );
                         }
 
                         // Emit turn progress to frontend
                         log::info!(
-                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/25",
+                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/{}",
                             event_request_id,
-                            turn
+                            turn,
+                            event_max_turns
                         );
                         let _ = event_window.emit("ai-turn-progress", serde_json::json!({
                             "requestId": event_request_id,
                             "sessionId": event_session_id,
                             "currentTurn": turn,
-                            "maxTurns": 25,
+                            "maxTurns": event_max_turns,
                         }));
 
                         if let Some(usage) = usage.as_ref() {
@@ -1973,67 +1979,35 @@ impl ClaurstSession {
                     handoff_suggestion.is_some()
                 );
 
-                // Detect incomplete tool use: EndTurn arrived but the final message
-                // still contains unexecuted ToolUse blocks (happens when deepseek /
-                // other non-Anthropic models return stop_reason "end_turn" instead
-                // of "tool_use" even though tool calls are present).
-                let has_incomplete_tool_use = matches!(
+                // Diagnostic: log what the final message body looks like on end_turn.
+                // This is the key data we need to understand abnormal stops.
+                let has_tool_use_blocks = matches!(
                     &message.content,
                     MessageContent::Blocks(blocks) if blocks.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. }))
                 );
-                if has_incomplete_tool_use {
-                    log::warn!(
-                        "claurst_incomplete_tool_use request_id={} session_id={} — EndTurn received with pending ToolUse blocks",
-                        request_id_owned,
-                        self.session_id
-                    );
-                }
-
-                // Detect empty-body EndTurn: API returned Blocks(count=0) with no content at all.
-                // This happens when the model says "I'll do it now" in streaming text, but the
-                // final API message body is empty — the work was NOT done.
-                // We rely on fallback_visible_text_used to distinguish real completions from this case.
-                let has_empty_blocks_body = matches!(
+                let is_empty_blocks_body = matches!(
                     &message.content,
                     MessageContent::Blocks(blocks) if blocks.is_empty()
                 );
                 log::warn!(
-                    "claurst_end_turn_body_diagnosis request_id={} session_id={} \
-                     has_incomplete_tool_use={} has_empty_blocks_body={} \
+                    "claurst_end_turn_diagnosis request_id={} session_id={} \
+                     has_tool_use_blocks={} is_empty_blocks_body={} \
                      fallback_visible_text_used={} extracted_text_was_empty={} \
-                     accumulated_char_count={} extracted_char_count={}",
+                     accumulated_char_count={} extracted_char_count={} \
+                     final_text_preview={:?}",
                     request_id_owned,
                     self.session_id,
-                    has_incomplete_tool_use,
-                    has_empty_blocks_body,
+                    has_tool_use_blocks,
+                    is_empty_blocks_body,
                     fallback_visible_text_used,
                     extracted_text_was_empty,
                     accumulated_char_count,
                     extracted_char_count,
+                    text.chars().take(120).collect::<String>(),
                 );
-                if has_empty_blocks_body && fallback_visible_text_used {
-                    log::warn!(
-                        "claurst_empty_body_end_turn request_id={} session_id={} — \
-                         EndTurn with empty Blocks body + fallback text used. \
-                         AI likely stopped mid-task without executing anything. \
-                         accumulated_preview={}",
-                        request_id_owned,
-                        self.session_id,
-                        accumulated_text.chars().take(120).collect::<String>().replace('\n', "\\n"),
-                    );
-                }
-
-                // A second form of "incomplete" work: the API returned an empty Blocks body
-                // (count=0) but we had accumulated streaming text — meaning the model talked
-                // about what it was going to do, but the final round-trip gave us nothing to
-                // execute. Treat this the same as incomplete_tool_use so the UI shows the
-                // "continue" button.
-                let has_empty_body_with_fallback = has_empty_blocks_body && fallback_visible_text_used;
 
                 let outcome = if handoff_suggestion.is_some() {
                     "handoff_ready"
-                } else if has_incomplete_tool_use || has_empty_body_with_fallback {
-                    "incomplete_tool_use"
                 } else if has_visible_text {
                     "completed"
                 } else {
@@ -2041,8 +2015,6 @@ impl ClaurstSession {
                 };
                 let reason_code = if handoff_suggestion.is_some() {
                     Some("handoff_detected")
-                } else if has_incomplete_tool_use || has_empty_body_with_fallback {
-                    Some("incomplete_tool_use")
                 } else if has_visible_text {
                     None
                 } else {
@@ -2207,6 +2179,19 @@ impl ClaurstSession {
                     usage: Some(usage),
                     timeline: Some(timeline_items.lock().clone()),
                 };
+
+                {
+                    let items = timeline_items.lock();
+                    for item in items.iter() {
+                        log::warn!(
+                            "claurst_terminal_timeline_item request_id={} item_id={} item_type={} content_chars={}",
+                            request_id_owned,
+                            item.id,
+                            item.item_type,
+                            item.content.as_deref().map(|c| c.chars().count()).unwrap_or(0),
+                        );
+                    }
+                }
 
                 log::info!(
                     "claurst_terminal_payload_prepared request_id={} session_id={} outcome={} reason_code={} has_visible_text={} fallback_visible_text_used={} handoff_present={}",

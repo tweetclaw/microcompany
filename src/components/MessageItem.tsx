@@ -5,11 +5,13 @@ import './MessageItem.css';
 
 interface MessageItemProps {
   message: Message;
+  showRetry?: boolean;
+  onRetry?: (content: string) => void;
 }
 
 const MarkdownRenderer = lazy(() => import('./MarkdownRenderer').then((module) => ({ default: module.MarkdownRenderer })));
 
-function MessageItem({ message }: MessageItemProps) {
+function MessageItem({ message, showRetry, onRetry }: MessageItemProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -20,6 +22,12 @@ function MessageItem({ message }: MessageItemProps) {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleRetry = () => {
+    if (onRetry && message.content) {
+      onRetry(message.content);
     }
   };
 
@@ -57,6 +65,15 @@ function MessageItem({ message }: MessageItemProps) {
           title="复制消息内容"
         >
           {copied ? '✓' : '📋'}
+        </button>
+      )}
+      {isUser && showRetry && onRetry && (
+        <button
+          className="message-retry-button"
+          onClick={handleRetry}
+          title="重新发送此消息"
+        >
+          ↩ 重试
         </button>
       )}
     </div>

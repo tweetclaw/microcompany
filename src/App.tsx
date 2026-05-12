@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import WelcomePage from './components/WelcomePage';
 import MainNavigation, { NavigationMode } from './components/MainNavigation';
 import { TitleBar } from './components/TitleBar';
@@ -175,6 +176,29 @@ function App() {
       loadConfig();
     }
   }, [isSettingsOpen]);
+
+  // Listen for backend session-title-updated event and refresh UI immediately
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    listen<{ session_id: string; title: string }>('session-title-updated', (event) => {
+      const { session_id, title } = event.payload;
+      // Update header title if this is the current session
+      setCurrentSessionTitle((prev) => {
+        if (prev !== null) return title; // only update if we have an active session
+        return prev;
+      });
+      // Trigger session list refresh so the sidebar shows the new title
+      setSessionListRefreshKey((prev) => prev + 1);
+      console.log('[App] session-title-updated', { session_id, title });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const loadConfig = async () => {
     try {
