@@ -1435,7 +1435,7 @@ function ChatInterface({
                           )}
                         </div>
                       )}
-                      <MessageList messages={messages} isBusy={isBusy} />
+                      <MessageList messages={messages} isBusy={isBusy} onRetry={handleSendMessage} />
                       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                       {showContinueButton && (
                         <div style={{
