@@ -14,7 +14,7 @@ interface InputBoxProps {
 }
 
 const TEXTAREA_MIN_HEIGHT = 120;
-const TEXTAREA_MAX_HEIGHT = 280;
+const TEXTAREA_MAX_HEIGHT = 320;
 
 function InputBox({
   onSendMessage,
@@ -78,38 +78,40 @@ function InputBox({
   return (
     <div className="input-box">
       <div className="input-container">
-        <textarea
-          ref={textareaRef}
-          className="input-textarea"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholderText || defaultPlaceholder}
-          disabled={isInputDisabled || isBusy}
-          rows={1}
-        />
+        <div className="input-row">
+          <textarea
+            ref={textareaRef}
+            className="input-textarea"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholderText || defaultPlaceholder}
+            disabled={isInputDisabled || isBusy}
+            rows={1}
+          />
+          {isBusy ? (
+            <button
+              className="cancel-button"
+              onClick={handleCancel}
+              disabled={!canCancel}
+              title={isCancelling ? '正在中断...' : '中断 AI 思考'}
+            >
+              {isCancelling ? '⏹ 中断中...' : '⏹ 中断'}
+            </button>
+          ) : (
+            <button
+              className="send-button"
+              onClick={handleSend}
+              disabled={isInputDisabled || !input.trim()}
+            >
+              发送
+            </button>
+          )}
+        </div>
         {currentProviderName && currentModelName && (
           <div className="input-model-info">
             {currentProviderName} · {currentModelName}
           </div>
-        )}
-        {isBusy ? (
-          <button
-            className="cancel-button"
-            onClick={handleCancel}
-            disabled={!canCancel}
-            title={isCancelling ? '正在中断...' : '中断 AI 思考'}
-          >
-            {isCancelling ? '⏹ 中断中...' : '⏹ 中断'}
-          </button>
-        ) : (
-          <button
-            className="send-button"
-            onClick={handleSend}
-            disabled={isInputDisabled || !input.trim()}
-          >
-            发送
-          </button>
         )}
       </div>
     </div>

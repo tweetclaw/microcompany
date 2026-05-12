@@ -472,9 +472,17 @@ useEffect([input])
 
 ### Phase 1：核心体验修复（预计 3-4 天）
 
+> **开发状态说明（基于当前未提交代码，更新于 2026-05-12）：**
+> - ✅ Task 1.1 已实现：`src/hooks/useScrollControl.ts` 已创建，支持 `containerRef` / `threshold`，默认阈值为 100
+> - ✅ Task 1.2 已实现：`src/components/MessageList.tsx` 已接入 `useScrollControl`，并按 `isAtBottom` 控制自动滚动与“新消息”按钮
+> - ✅ Task 1.3 已实现：`src/components/MessageList.css` 已新增滚动到底部按钮样式
+> - ✅ Task 1.4 已实现：`src/components/InputBox.tsx` / `InputBox.css` 已完成 model-info 流式布局修复，并将输入框最大高度调整为 320px
+> - ⏳ Task 1.5 部分实现：`ForwardLatestReplyModal.tsx` / `.css` 已完成大部分 inline style → CSS 类迁移，但交互增强与部分验收项仍待补齐
+
 #### Task 1.1：创建 `useScrollControl` Hook
 - **文件：** 新建 `src/hooks/useScrollControl.ts`
 - **工时：** 0.5 天
+- **状态：** ✅ 已实现
 - **测试要点：** 
   - 初始状态 `isAtBottom = true`
   - 滚动到顶部后 `isAtBottom = false`
@@ -484,17 +492,20 @@ useEffect([input])
 - **文件：** `src/components/MessageList.tsx`
 - **改动量：** 约 20 行（增加 hook、修改 useEffect、添加浮动按钮）
 - **工时：** 0.5 天
+- **状态：** ✅ 已实现
 - **注意：** 不改变组件 Props 接口
 
 #### Task 1.3：添加"滚动到底部"按钮样式
 - **文件：** `src/components/MessageList.css`
 - **改动量：** 约 20 行（新增 `.scroll-to-bottom-btn` 类）
 - **工时：** 0.5 天
+- **状态：** ✅ 已实现
 
 #### Task 1.4：修复 InputBox model-info 布局
 - **文件：** `src/components/InputBox.tsx`, `InputBox.css`
 - **改动量：** TSX 约 10 行，CSS 约 30 行
 - **工时：** 0.5 天
+- **状态：** ✅ 已实现
 - **联动变更（必须同步处理）：**
   1. 将 `.input-model-info` 的 `position: absolute` 改为 `position: static`（流式布局）
   2. **同步移除** `.input-textarea` 的 `padding-bottom: calc(var(--space-4) + 28px)` 中的 `+ 28px` 补偿，改回标准值 `padding-bottom: var(--space-4)`。若只删除 absolute 定位而不还原 padding，textarea 底部将多出约 28px 空白。
@@ -508,6 +519,12 @@ useEffect([input])
 - **文件：** `src/components/ForwardLatestReplyModal.tsx`, `ForwardLatestReplyModal.css`
 - **改动量：** TSX 删除约 150 行 inline style，CSS 先删除约 90 行死代码后新增约 100 行
 - **工时：** 1.5 天
+- **状态：** ⏳ 部分实现（样式迁移主体已完成，剩余验收项待补齐）
+- **当前剩余待完成项（基于当前未提交代码）：**
+  1. 补齐 Handoff 弹窗交互增强：快捷键（如 `Esc` 关闭、确认快捷键）、实时表单验证、成功提示反馈等能力仍未完成。
+  2. 折叠消息预览尚未完全按 PRD 落地：当前为点击后显示完整消息，尚未实现“默认展示前 100 字符预览 + 展开/收起文案切换 + 300ms 淡入动画 + 400px 最大高度”的完整交互。
+  3. 样式变量化尚未完全收口：CSS 中仍存在部分硬编码值，尚未完全达到“新增 CSS 类全部使用 `variables.css` 中已有变量”的验收要求。
+  4. 主题与 DevTools 验证尚未完成：dark / light / ocean 三主题视觉验证，以及 Chrome DevTools 中无冲突样式确认，当前代码无法仅凭 diff 判定已完成。
 - **执行顺序（必须严格按步骤）：**
 
   **步骤 1：清理 CSS 死代码（必须先做）**
@@ -612,34 +629,34 @@ interface InputBoxProps {
 ## 9. 代码检查要点（供 Code Reviewer 参考）
 
 **useScrollControl Hook（Task 1.1）：**
-- [ ] Hook 签名包含可选 `containerRef` 和 `threshold` 参数（`UseScrollControlOptions`）
-- [ ] 外部传入 `containerRef` 时使用外部 ref，否则内部创建（保持向后兼容）
-- [ ] `BOTTOM_THRESHOLD` 默认值为 `100`（与 PRD 一致）
-- [ ] `useEffect` 中有完整清理函数（`removeEventListener`），无内存泄漏
-- [ ] `threshold` 参数正确传入 `handleScroll` 的 `useCallback` 依赖数组
+- [x] Hook 签名包含可选 `containerRef` 和 `threshold` 参数（`UseScrollControlOptions`）
+- [x] 外部传入 `containerRef` 时使用外部 ref，否则内部创建（保持向后兼容）
+- [x] `BOTTOM_THRESHOLD` 默认值为 `100`（与 PRD 一致）
+- [x] `useEffect` 中有完整清理函数（`removeEventListener`），无内存泄漏
+- [x] `threshold` 参数正确传入 `handleScroll` 的 `useCallback` 依赖数组
 
 **MessageList 改动（Task 1.2 / 1.3）：**
-- [ ] `scrollIntoView` 已完全替换为 `scrollToBottom()`
-- [ ] `useEffect` 中有 `isAtBottom` 判断，不无条件触发
-- [ ] `isBusy` 不再单独作为触发滚动的依据（只跟随 `messages` 变化 + `isAtBottom` 判断）
-- [ ] "新消息"浮动按钮有正确的 `z-index` 和显隐动画（不遮挡消息内容）
+- [x] `scrollIntoView` 已完全替换为 `scrollToBottom()`
+- [x] `useEffect` 中有 `isAtBottom` 判断，不无条件触发
+- [x] `isBusy` 不再单独作为触发滚动的依据（只跟随 `messages` 变化 + `isAtBottom` 判断）
+- [x] "新消息"浮动按钮有正确的 `z-index` 和显隐动画（不遮挡消息内容）
 - [ ] 新增的 `.scroll-to-bottom-btn` 类仅使用 `variables.css` 中的 CSS 变量
 
 **InputBox 改动（Task 1.4）：**
-- [ ] `.input-model-info` 不再使用 `position: absolute`，已改为 `position: static`（流式布局）
-- [ ] `.input-textarea` 的 `padding-bottom` 已从 `calc(var(--space-4) + 28px)` 改回 `var(--space-4)`
-- [ ] `.input-container` 已设置 `flex-direction: column`，`.input-row` 负责横向排列 textarea + 按钮
-- [ ] `TEXTAREA_MAX_HEIGHT` 常量已更新为 `320`
+- [x] `.input-model-info` 不再使用 `position: absolute`，已改为 `position: static`（流式布局）
+- [x] `.input-textarea` 的 `padding-bottom` 已从 `calc(var(--space-4) + 28px)` 改回 `var(--space-4)`
+- [x] `.input-container` 已设置 `flex-direction: column`，`.input-row` 负责横向排列 textarea + 按钮
+- [x] `TEXTAREA_MAX_HEIGHT` 常量已更新为 `320`
 - [ ] 视觉验证：各种文本长度下 model-info 均不遮挡 textarea 内文字
 
 **ForwardLatestReplyModal 改动（Task 1.5）：**
-- [ ] **先决条件**：旧版 CSS 死代码已清理（`.forward-from`、`.forward-preview` 等未引用的旧类均已删除）
-- [ ] `.forward-modal` 的 `max-width` 统一为 `600px`（CSS 文件），TSX 中无 `maxWidth` inline style 覆盖
-- [ ] JSX 中无硬编码颜色值（`#94a3b8`、`#3b82f6` 等）
-- [ ] 所有 `style={{...}}` 属性已删除（动态状态改用条件 `className`）
+- [x] **先决条件**：旧版 CSS 死代码已清理（`.forward-from`、`.forward-preview` 等未引用的旧类均已删除）
+- [x] `.forward-modal` 的 `max-width` 统一为 `600px`（CSS 文件），TSX 中无 `maxWidth` inline style 覆盖
+- [x] JSX 中无硬编码颜色值（`#94a3b8`、`#3b82f6` 等）
+- [x] 所有 `style={{...}}` 属性已删除（动态状态改用条件 `className`）
 - [ ] 新增 CSS 类全部使用 `variables.css` 中的 CSS 变量，无硬编码值
 - [ ] 三个主题（dark / light / ocean）下视觉验证通过
-- [ ] 按钮 `height: 44px` 与 InputBox 发送按钮对齐
+- [x] 按钮 `height: 44px` 与 InputBox 发送按钮对齐
 - [ ] Chrome DevTools 中确认无被划线覆盖的 CSS 属性（无冲突样式）
 
 ---
