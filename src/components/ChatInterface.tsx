@@ -105,6 +105,10 @@ interface ChatInterfaceProps {
   hideTitleBar?: boolean;
   externalInspectorCollapsed?: boolean;
   externalTerminalCollapsed?: boolean;
+  // Global run state — restored when component remounts after view switch
+  initialRunState?: AiRunState;
+  initialActiveRequestId?: string | null;
+  onActiveRequestIdChange?: (id: string | null) => void;
 }
 
 const RUNNING_STATES: AiRunState[] = [
@@ -214,10 +218,21 @@ function ChatInterface({
   hideInspector = false,
   externalInspectorCollapsed,
   externalTerminalCollapsed,
+  initialRunState,
+  initialActiveRequestId,
+  onActiveRequestIdChange,
 }: ChatInterfaceProps) {
+  // Only restore a running state — terminal states (error/cancelled/completed/idle)
+  // should NOT be restored, otherwise the UI gets permanently locked after a view switch
+  // that happened post-completion.
+  const restoredRunState: AiRunState =
+    initialRunState && RUNNING_STATES.includes(initialRunState) ? initialRunState : 'idle';
+  const restoredActiveRequestId: string | null =
+    restoredRunState !== 'idle' ? (initialActiveRequestId ?? null) : null;
+
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
-  const [runState, setRunState] = useState<AiRunState>('idle');
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [runState, setRunState] = useState<AiRunState>(restoredRunState);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(restoredActiveRequestId);
   const [processTimeline, setProcessTimeline] = useState<ProcessTimelineItem[]>([]);
   const [isRequestDispatching, setIsRequestDispatching] = useState(false);
   const [currentUsage, setCurrentUsage] = useState<AiRequestUsageEvent['usage'] | null>(null);
@@ -252,6 +267,26 @@ function ChatInterface({
   const terminalRequestIdsRef = useRef<Set<string>>(new Set());
   const timelineForRequestRef = useRef<Map<string, TimelineItem[]>>(new Map());
 
+  // Mount log — helps verify whether global runState was correctly restored after view switch
+  useEffect(() => {
+    console.log('[ChatInterface] mount', {
+      currentSessionId,
+      restoredRunState,
+      restoredActiveRequestId,
+      initialRunState,
+      initialActiveRequestId,
+      wasBusy: restoredRunState !== 'idle',
+    });
+    return () => {
+      console.log('[ChatInterface] unmount', {
+        currentSessionId,
+        runState: activeRequestIdRef.current ? 'has-active-request' : 'idle',
+        activeRequestId: activeRequestIdRef.current,
+      });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     processTimelineRef.current = processTimeline;
   }, [processTimeline]);
@@ -272,7 +307,14 @@ function ChatInterface({
     // 如果当前正在运行中（有活跃的请求），不要重置状态
     // 这样可以避免在草稿转换为真实 session 时中断流式显示
     // 注意：必须检查 ref 而不是状态，因为状态更新是异步的
-    if (runState !== 'idle' && activeRequestIdRef.current) {
+    const isRunning = runState !== 'idle' && activeRequestIdRef.current;
+    console.log('[ChatInterface] currentSessionId changed', {
+      currentSessionId,
+      runState,
+      activeRequestId: activeRequestIdRef.current,
+      willSkipReset: Boolean(isRunning),
+    });
+    if (isRunning) {
       return;
     }
     resetConversationRunState();
@@ -425,6 +467,7 @@ function ChatInterface({
       setIsRequestDispatching(false);
       activeRequestIdRef.current = null;
       setActiveRequestId(null);
+      onActiveRequestIdChange?.(null);
       setRunState('idle');
       console.log('[ChatInterface] resetRunIfTerminal -> idle', {
         currentRoleName: currentRoleNameRef.current,
@@ -454,6 +497,7 @@ function ChatInterface({
     timelineForRequestRef.current.clear();
     activeRequestIdRef.current = null;
     setActiveRequestId(null);
+    onActiveRequestIdChange?.(null);
     console.log('[ChatInterface] resetConversationRunState', {
       currentRoleName: currentRoleNameRef.current,
       isRequestDispatching: false,
@@ -512,6 +556,7 @@ function ChatInterface({
         setIsRequestDispatching(false);
         setActiveRequestId(payload.request_id);
         activeRequestIdRef.current = payload.request_id;
+        onActiveRequestIdChange?.(payload.request_id);
         setRunState('running_thinking');
         setLastError(null);
         setCurrentToolCall(null);

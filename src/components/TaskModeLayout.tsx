@@ -57,6 +57,8 @@ interface TaskModeLayoutProps {
   isTerminalCollapsed?: boolean;
   runState: AiRunState;
   onRunStateChange?: (runState: AiRunState) => void;
+  activeRequestId?: string | null;
+  onActiveRequestIdChange?: (id: string | null) => void;
 }
 
 function getSeatInitials(name: string) {
@@ -664,6 +666,9 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       hideToolbar={true}
                       hideTitleBar={true}
                       externalTerminalCollapsed={props.isTerminalCollapsed}
+                      initialRunState={props.runState}
+                      initialActiveRequestId={props.activeRequestId}
+                      onActiveRequestIdChange={props.onActiveRequestIdChange}
                     />
                   </div>
                 </div>

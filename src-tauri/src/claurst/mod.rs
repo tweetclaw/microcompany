@@ -709,8 +709,8 @@ pub struct ClaurstSession {
     api_key: String,
     model: String,
     base_url: Option<String>,
-    system_prompt: Option<String>,  // 角色提示词，用于拼接到第一条用户消息前面
-    role_prompt_prepended: bool,    // 标记是否已拼接角色提示词
+    system_prompt: Option<String>,  // 角色提示词，仅用于首次请求的运行时注入
+    role_prompt_prepended: bool,    // 标记是否已在运行时注入过角色提示词
     client: AnthropicClient,
     config: QueryConfig,
     messages: Vec<Message>,
@@ -827,12 +827,10 @@ impl ClaurstSession {
         query_config.model = model;
         // Allow sufficient turns for AI to complete work and provide response
         query_config.max_turns = 50;
-        // 注意：不再将 system_prompt 传递给 API 的 system 参数
-        // 改为在第一条用户消息前拼接角色提示词
-        // query_config.system_prompt = system_prompt.clone();
+        query_config.system_prompt = system_prompt.clone();
 
         log::info!(
-            "🔍 [ROLE_PROMPT] Role prompt will be prepended to first user message: is_some={} length={}",
+            "🔍 [ROLE_PROMPT] Session prompt configured for claurst system prompt path: is_some={} length={}",
             system_prompt.is_some(),
             system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
         );
@@ -884,11 +882,37 @@ impl ClaurstSession {
         // 7. 创建存储层
         let storage = ConversationStorage::new()?;
 
+        let latest_message_limit = 20usize;
+        let trim_stored_messages = |msgs: Vec<crate::storage::StoredMessage>| {
+            let total_messages = msgs.len();
+            let trimmed_msgs: Vec<crate::storage::StoredMessage> = if total_messages > latest_message_limit {
+                msgs.into_iter()
+                    .rev()
+                    .take(latest_message_limit)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect()
+            } else {
+                msgs
+            };
+
+            (trimmed_msgs, total_messages)
+        };
+
         let messages: Vec<Message> = if let Ok(pool) = crate::database::get_pool() {
             if let Ok(conn) = pool.get() {
-                match conn.prepare("SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY created_at ASC") {
+                match conn.prepare(
+                    "SELECT role, content FROM (
+                        SELECT role, content, created_at
+                        FROM messages
+                        WHERE session_id = ?1
+                        ORDER BY created_at DESC
+                        LIMIT ?2
+                    ) ORDER BY created_at ASC"
+                ) {
                     Ok(mut stmt) => {
-                        match stmt.query_map(rusqlite::params![&session_id], |row| {
+                        match stmt.query_map(rusqlite::params![&session_id, latest_message_limit as i64], |row| {
                             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                         }) {
                             Ok(rows) => {
@@ -908,44 +932,66 @@ impl ClaurstSession {
                                     .collect();
 
                                 if !db_messages.is_empty() {
-                                    log::info!("Loaded {} messages from database for session {}", db_messages.len(), session_id);
+                                    log::info!(
+                                        "Loaded {} messages from database for session {} (restore limit {})",
+                                        db_messages.len(),
+                                        session_id,
+                                        latest_message_limit
+                                    );
 
                                     // Apply context collapse to limit message history
                                     use claurst_core::context_collapse::{collapse_context, CollapseStrategy, estimate_message_tokens};
 
                                     let estimated_tokens = estimate_message_tokens(&db_messages);
                                     let max_tokens = 100_000u64; // Conservative limit to support various models
+                                    let should_collapse = estimated_tokens > max_tokens;
 
                                     log::info!(
-                                        "Context check: {} messages, estimated {} tokens, max {} tokens",
+                                        "Context check: {} restored messages, estimated {} tokens, max {} tokens, should_collapse={}",
                                         db_messages.len(),
                                         estimated_tokens,
-                                        max_tokens
-                                    );
-
-                                    let (collapsed_messages, collapse_state) = collapse_context(
-                                        db_messages,
                                         max_tokens,
-                                        CollapseStrategy::DropOldest
+                                        should_collapse
                                     );
 
-                                    if let Some(state) = collapse_state {
-                                        log::warn!(
-                                            "⚠️ Context collapsed for session {}: dropped {} messages, {} tokens -> {} tokens",
-                                            session_id,
-                                            state.messages_dropped,
-                                            state.tokens_before,
-                                            state.tokens_after
+                                    if should_collapse {
+                                        let (collapsed_messages, collapse_state) = collapse_context(
+                                            db_messages,
+                                            max_tokens,
+                                            CollapseStrategy::DropOldest
                                         );
-                                    }
 
-                                    collapsed_messages
+                                        if let Some(state) = collapse_state {
+                                            log::warn!(
+                                                "⚠️ Context collapsed for session {}: dropped {} messages, {} tokens -> {} tokens",
+                                                session_id,
+                                                state.messages_dropped,
+                                                state.tokens_before,
+                                                state.tokens_after
+                                            );
+                                        }
+
+                                        collapsed_messages
+                                    } else {
+                                        log::info!(
+                                            "Context collapse skipped for session {}: restored history already under token threshold",
+                                            session_id
+                                        );
+                                        db_messages
+                                    }
                                 } else {
                                     // No messages in DB, try file storage
                                     storage.load_messages(&session_id)
                                         .map(|msgs| {
-                                            log::info!("Loaded {} messages from file storage for session {}", msgs.len(), session_id);
-                                            msgs.into_iter()
+                                            let (trimmed_msgs, total_messages) = trim_stored_messages(msgs);
+                                            log::info!(
+                                                "Loaded {} messages from file storage for session {} ({} total persisted, restore limit {})",
+                                                trimmed_msgs.len(),
+                                                session_id,
+                                                total_messages,
+                                                latest_message_limit
+                                            );
+                                            trimmed_msgs.into_iter()
                                                 .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
                                                 .collect()
                                         })
@@ -957,7 +1003,15 @@ impl ClaurstSession {
                             }
                             Err(e) => {
                                 log::warn!("Failed to query messages from database: {}, trying file storage", e);
-                                storage.load_messages(&session_id).unwrap_or_default()
+                                let (trimmed_msgs, total_messages) = trim_stored_messages(storage.load_messages(&session_id).unwrap_or_default());
+                                log::info!(
+                                    "Loaded {} messages from file storage fallback for session {} ({} total persisted, restore limit {})",
+                                    trimmed_msgs.len(),
+                                    session_id,
+                                    total_messages,
+                                    latest_message_limit
+                                );
+                                trimmed_msgs
                                     .into_iter()
                                     .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
                                     .collect()
@@ -966,7 +1020,15 @@ impl ClaurstSession {
                     }
                     Err(e) => {
                         log::warn!("Failed to prepare statement: {}, trying file storage", e);
-                        storage.load_messages(&session_id).unwrap_or_default()
+                        let (trimmed_msgs, total_messages) = trim_stored_messages(storage.load_messages(&session_id).unwrap_or_default());
+                        log::info!(
+                            "Loaded {} messages from file storage fallback for session {} ({} total persisted, restore limit {})",
+                            trimmed_msgs.len(),
+                            session_id,
+                            total_messages,
+                            latest_message_limit
+                        );
+                        trimmed_msgs
                             .into_iter()
                             .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
                             .collect()
@@ -974,14 +1036,30 @@ impl ClaurstSession {
                 }
             } else {
                 log::warn!("Failed to get database connection, trying file storage");
-                storage.load_messages(&session_id).unwrap_or_default()
+                let (trimmed_msgs, total_messages) = trim_stored_messages(storage.load_messages(&session_id).unwrap_or_default());
+                log::info!(
+                    "Loaded {} messages from file storage fallback for session {} ({} total persisted, restore limit {})",
+                    trimmed_msgs.len(),
+                    session_id,
+                    total_messages,
+                    latest_message_limit
+                );
+                trimmed_msgs
                     .into_iter()
                     .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
                     .collect()
             }
         } else {
             log::warn!("Database pool unavailable, trying file storage");
-            storage.load_messages(&session_id).unwrap_or_default()
+            let (trimmed_msgs, total_messages) = trim_stored_messages(storage.load_messages(&session_id).unwrap_or_default());
+            log::info!(
+                "Loaded {} messages from file storage fallback for session {} ({} total persisted, restore limit {})",
+                trimmed_msgs.len(),
+                session_id,
+                total_messages,
+                latest_message_limit
+            );
+            trimmed_msgs
                 .into_iter()
                 .map(|m| if m.role == "user" { Message::user(m.content) } else { Message::assistant(m.content) })
                 .collect()
@@ -1005,17 +1083,16 @@ impl ClaurstSession {
             );
         }
 
-        // 检测是否已有用户消息，如果有则标记为已拼接角色提示词
-        // 这样可以防止重复拼接
-        // 注意：Message 是 claurst_core 的类型，我们通过检查消息内容来判断
-        let has_user_message = !messages.is_empty();
+        // 检测是否已有用户消息，如果有则标记为 system prompt 已经由 claurst query config 处理
+        let has_user_message = messages.iter().any(|message| matches!(message.role, claurst_core::types::Role::User));
         let role_prompt_prepended = has_user_message;
 
         if role_prompt_prepended {
             log::info!(
-                "🔗 [ROLE_PROMPT] Session has existing messages, marking role_prompt_prepended=true to prevent duplicate prepending: session_id={} message_count={}",
+                "🔗 [ROLE_PROMPT] Restored session already has user history, treating system prompt as already established: session_id={} message_count={} restored_user_messages={}",
                 session_id,
-                messages.len()
+                messages.len(),
+                messages.iter().filter(|message| matches!(message.role, claurst_core::types::Role::User)).count()
             );
         }
 
@@ -1047,65 +1124,39 @@ impl ClaurstSession {
         let task_trace = load_task_trace_context(&self.session_id);
         let task_session = task_trace.is_some();
 
-        // 检测是否为第一条用户消息，如果是则拼接角色提示词
+        // 检测是否为第一条用户消息，仅用于诊断日志
         let is_first_user_message = !self.role_prompt_prepended;
 
         if is_first_user_message {
-            if self.system_prompt.is_some() {
-                log::info!(
-                    "🔗 [MESSAGE_PREPEND] First user message detected, will prepend role prompt: request_id={} session_id={} has_role_prompt=true",
-                    request_id,
-                    self.session_id
-                );
-            } else {
-                log::info!(
-                    "🔗 [MESSAGE_PREPEND] First user message detected, but no role prompt available: request_id={} session_id={} has_role_prompt=false",
-                    request_id,
-                    self.session_id
-                );
-            }
+            log::info!(
+                "🔗 [MESSAGE_PREPEND] First user message detected, relying on claurst system prompt path: request_id={} session_id={} has_system_prompt={}",
+                request_id,
+                self.session_id,
+                self.system_prompt.is_some()
+            );
         } else {
             log::info!(
-                "🔗 [MESSAGE_PREPEND] Not first user message, skipping role prompt prepending: request_id={} session_id={} role_prompt_prepended=true",
+                "🔗 [MESSAGE_PREPEND] Existing user history detected, no special first-turn prompt injection needed: request_id={} session_id={} role_prompt_prepended=true",
                 request_id,
                 self.session_id
             );
         }
 
-        let actual_message = if is_first_user_message && self.system_prompt.is_some() {
-            let role_prompt = self.system_prompt.as_ref().unwrap();
-            let combined = format!("{}\n\n---\n\n{}", role_prompt, message);
+        let actual_message = message.to_string();
 
-            if let Some(trace) = task_trace.as_ref() {
-                log::info!(
-                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} task_id={} role_id={} role_name={} role_prompt_chars={} user_message_chars={} combined_chars={}",
-                    request_id,
-                    self.session_id,
-                    trace.task_id,
-                    trace.role_id,
-                    trace.role_name,
-                    role_prompt.chars().count(),
-                    message.chars().count(),
-                    combined.chars().count()
-                );
-            } else {
-                log::info!(
-                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} role_prompt_chars={} user_message_chars={} combined_chars={}",
-                    request_id,
-                    self.session_id,
-                    role_prompt.chars().count(),
-                    message.chars().count(),
-                    combined.chars().count()
-                );
-            }
+        self.role_prompt_prepended = true;
 
-            self.role_prompt_prepended = true;
-            combined
-        } else {
-            message.to_string()
-        };
+        log::info!(
+            "claurst_request_user_message_prepared request_id={} session_id={} raw_user_chars={} runtime_user_chars={} prompt_configured={} first_user_message={}",
+            request_id,
+            self.session_id,
+            message.chars().count(),
+            actual_message.chars().count(),
+            self.system_prompt.is_some(),
+            is_first_user_message
+        );
 
-        // 1. 添加用户消息（使用拼接后的消息）
+        // 1. 添加用户消息（仅使用原始用户消息）
         self.messages.push(Message::user(actual_message.clone()));
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
@@ -1128,7 +1179,7 @@ impl ClaurstSession {
             );
         }
 
-        // 保存用户消息到存储（使用拼接后的消息）
+        // 保存用户消息到存储（仅保存原始用户消息）
         save_message_to_file_storage(
             &self.storage,
             &self.session_id,
@@ -1142,7 +1193,7 @@ impl ClaurstSession {
             "user",
         );
 
-        // Also save to database（使用拼接后的消息）
+        // Also save to database（仅保存原始用户消息）
         if let Ok(pool) = crate::database::get_pool() {
             if let Ok(conn) = pool.get() {
                 let msg_id = format!("msg-{}", uuid::Uuid::new_v4());

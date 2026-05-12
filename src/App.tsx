@@ -74,8 +74,45 @@ function App() {
   const [currentTaskRoleId, setCurrentTaskRoleId] = useState<string | null>(null);
   const [taskListRefreshKey, setTaskListRefreshKey] = useState(0);
 
-  // AI run state
+  // AI run state — kept at App level so it survives ChatInterface unmount/remount
   const [runState, setRunState] = useState<AiRunState>('idle');
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+  // Fallback listener: if ChatInterface is unmounted when ai-request-end fires
+  // (e.g. user switched views mid-request), App.tsx resets global runState so
+  // the user isn't stuck in a perpetual "busy" state on return.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    listen<AiRequestEndEvent>('ai-request-end', (event) => {
+      const { request_id, result, outcome } = event.payload;
+      setActiveRequestId((prev) => {
+        if (prev !== request_id) return prev; // not our request, ignore
+        console.log('[App] ai-request-end fallback: resetting global runState', {
+          request_id,
+          result,
+          outcome,
+          prev,
+        });
+        return null;
+      });
+      setRunState((prev) => {
+        // Only reset if we're still in a running state for this request.
+        // ChatInterface will have already called onRunStateChange if it was mounted,
+        // so this is purely a safety net for the unmounted case.
+        const RUNNING: AiRunState[] = ['running_thinking', 'running_tool', 'running_generating', 'finalizing'];
+        if (!RUNNING.includes(prev)) return prev;
+        console.log('[App] ai-request-end fallback: runState', prev, '→ idle');
+        return 'idle';
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   // Layout panel visibility state
   const [isSessionListCollapsed, setIsSessionListCollapsed] = useState(false);
@@ -913,6 +950,10 @@ function App() {
                 isSessionListCollapsed={isSessionListCollapsed}
                 isInspectorCollapsed={isInspectorCollapsed}
                 isTerminalCollapsed={isTerminalCollapsed}
+                runState={runState}
+                onRunStateChange={setRunState}
+                activeRequestId={activeRequestId}
+                onActiveRequestIdChange={setActiveRequestId}
               />
             </Suspense>
           ) : (
@@ -952,6 +993,8 @@ function App() {
                 isTerminalCollapsed={isTerminalCollapsed}
                 runState={runState}
                 onRunStateChange={setRunState}
+                activeRequestId={activeRequestId}
+                onActiveRequestIdChange={setActiveRequestId}
               />
             </Suspense>
           )}
