@@ -7,9 +7,10 @@ interface MessageListProps {
   messages: Message[];
   isBusy: boolean;
   onRetry?: (content: string) => void;
+  onHandoffClick?: (message: Message, handoffRawValue: string, cleanedContent: string) => void;
 }
 
-function MessageList({ messages, isBusy, onRetry }: MessageListProps) {
+function MessageList({ messages, isBusy, onRetry, onHandoffClick }: MessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ function MessageList({ messages, isBusy, onRetry }: MessageListProps) {
             message={message}
             showRetry={isLastUserMessageUnreplied && index === lastMessageIndex}
             onRetry={onRetry}
+            onHandoffClick={onHandoffClick}
           />
         ))}
 

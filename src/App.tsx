@@ -548,6 +548,68 @@ function App() {
     setShowForwardModal(true);
   };
 
+  const handleManualHandoffFromMessage = (
+    _message: Message,
+    handoffRawValue: string,
+    cleanedContent: string
+  ) => {
+    if (!currentTask) {
+      console.warn('[Manual Handoff] No current task');
+      return;
+    }
+
+    console.log('[Manual Handoff] Starting role resolution', {
+      handoffRawValue,
+      availableRoles: currentTask.roles.map(r => ({ id: r.id, name: r.name, identity: r.identity }))
+    });
+
+    const normalizedHandoffValue = handoffRawValue.toLowerCase().trim();
+    const shorthandMatch = normalizedHandoffValue.match(/^(?:role_)?([a-z])$/i);
+
+    const matchedRole = currentTask.roles.find(
+      (r) =>
+        r.name.toLowerCase().trim() === normalizedHandoffValue ||
+        r.identity.toLowerCase().trim() === normalizedHandoffValue ||
+        r.id.toLowerCase().trim() === normalizedHandoffValue
+    ) ?? (shorthandMatch
+      ? currentTask.roles[shorthandMatch[1].charCodeAt(0) - 'a'.charCodeAt(0)]
+      : undefined);
+
+    const targetRoleId = matchedRole?.id;
+    const targetRoleName = matchedRole?.name ?? handoffRawValue;
+
+    if (matchedRole) {
+      console.log('[Manual Handoff] Matched role', {
+        targetRoleId,
+        targetRoleName,
+        matchSource: shorthandMatch ? 'shorthand_or_direct' : 'direct'
+      });
+    } else {
+      console.warn('[Manual Handoff] No role matched', { handoffRawValue });
+    }
+
+    // 构造 HandoffSuggestion
+    const suggestion: HandoffSuggestion = {
+      recommended: true,
+      targetRoleId: targetRoleId,
+      targetRoleName: targetRoleName,
+      reason: '基于历史消息中的 handoff 标签重新发起调度',
+      draftMessage: '',
+      fullMessage: cleanedContent,
+    };
+
+    console.log('[Manual Handoff] Opening modal with suggestion', {
+      handoffRawValue,
+      targetRoleId,
+      targetRoleName,
+      cleanedContentLength: cleanedContent.length,
+      suggestion,
+    });
+
+    setPendingHandoffSuggestion(suggestion);
+    setShowForwardModal(true);
+  };
+
   const handleForwardConfirm = async (targetRoleId: string, forwardedContent: string) => {
     if (!currentTask) return;
 
@@ -880,6 +942,7 @@ function App() {
                 onTaskRoleRestart={handleTaskRoleRestart}
                 onForwardLatestReply={handleForwardLatestReply}
                 onHandoffSuggestion={handleHandoffSuggestion}
+                onHandoffClick={handleManualHandoffFromMessage}
                 onTaskSelected={handleTaskSelected}
                 onTaskDeleted={handleTaskDeleted}
                 taskListRefreshKey={taskListRefreshKey}

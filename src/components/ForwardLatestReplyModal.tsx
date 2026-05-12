@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HandoffSuggestion, Message, Task } from '../types';
 import './ForwardLatestReplyModal.css';
 
@@ -30,6 +30,12 @@ function ForwardLatestReplyModal({
   const [note, setNote] = useState(suggestion?.draftMessage ?? '');
   const [isForwarding, setIsForwarding] = useState(false);
   const [showFullMessage, setShowFullMessage] = useState(false);
+
+  useEffect(() => {
+    setTargetRoleId(suggestion?.targetRoleId ?? '');
+    setNote(suggestion?.draftMessage ?? '');
+    setShowFullMessage(false);
+  }, [suggestion]);
 
   const currentRole = task.roles.find((r) => r.id === currentRoleId);
   const otherRoles = task.roles.filter((r) => r.id !== currentRoleId);
