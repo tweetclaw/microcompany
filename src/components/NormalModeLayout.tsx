@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from 'react';
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import SessionListPanel from './SessionListPanel';
 import ChatInterface from './ChatInterface';
-import { Message, ProviderConfig } from '../types';
+import { AiRunState, Message, ProviderConfig } from '../types';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import './NormalModeLayout.css';
 import './ResizeHandle.css';
@@ -35,6 +35,11 @@ interface NormalModeLayoutProps {
   isSessionListCollapsed?: boolean;
   isInspectorCollapsed?: boolean;
   isTerminalCollapsed?: boolean;
+  // Global run state — preserved across view switches
+  runState?: AiRunState;
+  onRunStateChange?: (runState: AiRunState) => void;
+  activeRequestId?: string | null;
+  onActiveRequestIdChange?: (id: string | null) => void;
 }
 
 export default function NormalModeLayout(props: NormalModeLayoutProps) {
@@ -75,6 +80,10 @@ export default function NormalModeLayout(props: NormalModeLayoutProps) {
         hideToolbar={true}
         externalInspectorCollapsed={props.isInspectorCollapsed}
         externalTerminalCollapsed={props.isTerminalCollapsed}
+        onRunStateChange={props.onRunStateChange}
+        initialRunState={props.runState}
+        initialActiveRequestId={props.activeRequestId}
+        onActiveRequestIdChange={props.onActiveRequestIdChange}
       />
     </Panel>
   );
