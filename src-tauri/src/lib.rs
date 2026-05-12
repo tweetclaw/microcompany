@@ -371,6 +371,7 @@ pub fn run() {
     ])
     .setup(|app| {
       archetypes::sync_archetype_resources(app.handle())?;
+      archetypes::sync_role_definition_files(app.handle())?;
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
