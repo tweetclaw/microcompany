@@ -4,6 +4,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--bg-primary);
+  position: relative;
 }
 
 .message-list-content {
@@ -53,5 +54,49 @@
   40% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* 滚动到底部按钮 */
+.message-list-scroll-btn {
+  position: sticky;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-elevated, var(--bg-secondary));
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  animation: scroll-btn-fade-in var(--duration-fast) var(--ease-out);
+  transition: var(--transition-all);
+}
+
+.message-list-scroll-btn:hover {
+  background: var(--bg-hover, var(--bg-tertiary));
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+.message-list-scroll-btn:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
+@keyframes scroll-btn-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 }
