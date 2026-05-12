@@ -826,7 +826,7 @@ impl ClaurstSession {
         let mut query_config = QueryConfig::from_config(&config);
         query_config.model = model;
         // Allow sufficient turns for AI to complete work and provide response
-        query_config.max_turns = 25;
+        query_config.max_turns = 50;
         // 注意：不再将 system_prompt 传递给 API 的 system 参数
         // 改为在第一条用户消息前拼接角色提示词
         // query_config.system_prompt = system_prompt.clone();
@@ -1167,6 +1167,11 @@ impl ClaurstSession {
                         "UPDATE sessions SET name = ?1, updated_at = ?2 WHERE id = ?3",
                         rusqlite::params![&title, &created_at, &self.session_id],
                     );
+                    // Notify frontend so session list and header title update immediately
+                    let _ = window.emit("session-title-updated", serde_json::json!({
+                        "session_id": &self.session_id,
+                        "title": &title,
+                    }));
                 }
             }
         }
@@ -1200,6 +1205,7 @@ impl ClaurstSession {
         let event_warnings = terminal_warnings.clone();
         let first_event_logged = Arc::new(parking_lot::Mutex::new(false));
         let event_first_event_logged = first_event_logged.clone();
+        let event_max_turns = self.config.max_turns;
         let diagnostic_context = CompletedToolOnlyDiagnosticContext {
             tool_sequence: Arc::new(parking_lot::Mutex::new(Vec::new())),
             turn_summaries: Arc::new(parking_lot::Mutex::new(Vec::new())),
@@ -1608,15 +1614,16 @@ impl ClaurstSession {
 
                         // Emit turn progress to frontend
                         log::info!(
-                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/25",
+                            "📊 [TurnProgress] Emitting ai-turn-progress event: request_id={} turn={}/{}",
                             event_request_id,
-                            turn
+                            turn,
+                            event_max_turns
                         );
                         let _ = event_window.emit("ai-turn-progress", serde_json::json!({
                             "requestId": event_request_id,
                             "sessionId": event_session_id,
                             "currentTurn": turn,
-                            "maxTurns": 25,
+                            "maxTurns": event_max_turns,
                         }));
 
                         if let Some(usage) = usage.as_ref() {
