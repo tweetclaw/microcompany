@@ -47,6 +47,7 @@ interface TaskModeLayoutProps {
   onTaskRoleRestart: (roleId: string) => void;
   onForwardLatestReply: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
+  onHandoffClick?: (message: Message, handoffRawValue: string, cleanedContent: string) => void;
   onTaskSelected: (taskSummary: TaskSummary) => void;
   onTaskDeleted?: (taskId: string) => void;
   taskListRefreshKey: number;
@@ -655,6 +656,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                       onSettingsClick={props.onSettingsClick}
                       onRunStateChange={props.onRunStateChange}
                       onHandoffSuggestion={props.onHandoffSuggestion}
+                      onHandoffClick={props.onHandoffClick}
                       availableRoleNames={props.currentTask?.roles.map(r => r.name) || []}
                       taskRoles={props.currentTask?.roles.map(r => ({ id: r.id, name: r.name })) || []}
                       currentRoleName={currentRoleName}

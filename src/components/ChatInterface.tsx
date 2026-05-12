@@ -93,6 +93,7 @@ interface ChatInterfaceProps {
   onCancelRequest?: () => Promise<void>;
   onMessageCompleted?: () => void;
   onHandoffSuggestion?: (event: AiRequestEndEvent) => void;
+  onHandoffClick?: (message: Message, handoffRawValue: string, cleanedContent: string) => void;
   onRunStateChange?: (runState: AiRunState) => void;
   availableRoleNames?: string[]; // For Task AI mode handoff observer
   taskRoles?: Array<{ id: string; name: string }>; // Full role objects for ID lookup
@@ -208,6 +209,7 @@ function ChatInterface({
   onSettingsClick,
   onMessageCompleted,
   onHandoffSuggestion,
+  onHandoffClick,
   onRunStateChange,
   availableRoleNames,
   taskRoles,
@@ -1480,7 +1482,7 @@ function ChatInterface({
                           )}
                         </div>
                       )}
-                      <MessageList messages={messages} isBusy={isBusy} onRetry={handleSendMessage} />
+                      <MessageList messages={messages} isBusy={isBusy} onRetry={handleSendMessage} onHandoffClick={onHandoffClick} />
                       {currentToolCall && <ToolIndicator toolCall={currentToolCall} />}
                       {showContinueButton && (
                         <div style={{
