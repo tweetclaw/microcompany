@@ -25,7 +25,7 @@ interface NormalModeLayoutProps {
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey: number;
   onSessionSelected: (sessionId: string) => void;
-  onSessionDeleted: (sessionId: string) => void;
+  onSessionDeleted: (deletedSessionId: string, replacementSessionId: string | null) => void;
   onNewChatWithModel: (modelValue: string) => void;
   onNewTask: () => void;
   hasActiveSession: boolean;

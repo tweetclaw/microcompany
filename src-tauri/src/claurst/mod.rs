@@ -765,6 +765,7 @@ impl ClaurstSession {
             .clone()
             .unwrap_or_else(|| "https://api.anthropic.com".to_string());
         let task_trace = load_task_trace_context(&session_id);
+        let is_task_session = task_trace.is_some();
         let prompt_chars = system_prompt
             .as_ref()
             .map(|value| value.chars().count())
@@ -773,7 +774,7 @@ impl ClaurstSession {
 
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
-                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_display_order={} role_roster={} handoff_candidates={} prompt_chars={} prompt_preview={}",
+                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_display_order={} role_roster={} handoff_candidates={} prompt_chars={} prompt_preview={} is_task_session={} configured_system_prompt_chars={}",
                 session_id,
                 trace.task_id,
                 trace.role_id,
@@ -788,16 +789,20 @@ impl ClaurstSession {
                 trace.role_roster_summary,
                 trace.handoff_candidates_summary,
                 prompt_chars,
-                prompt_preview
+                prompt_preview,
+                is_task_session,
+                if is_task_session { 0 } else { system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0) }
             );
         } else {
             log::info!(
-                "claurst_session_init_begin session_id={} model={} working_dir={} prompt_chars={} prompt_preview={}",
+                "claurst_session_init_begin session_id={} model={} working_dir={} prompt_chars={} prompt_preview={} is_task_session={} configured_system_prompt_chars={}",
                 session_id,
                 model,
                 working_dir.display(),
                 prompt_chars,
-                prompt_preview
+                prompt_preview,
+                is_task_session,
+                if is_task_session { 0 } else { system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0) }
             );
         }
 
@@ -827,12 +832,17 @@ impl ClaurstSession {
         query_config.model = model;
         // Allow sufficient turns for AI to complete work and provide response
         query_config.max_turns = 50;
-        query_config.system_prompt = system_prompt.clone();
+        query_config.system_prompt = if is_task_session {
+            None
+        } else {
+            system_prompt.clone()
+        };
 
         log::info!(
-            "🔍 [ROLE_PROMPT] Session prompt configured for claurst system prompt path: is_some={} length={}",
-            system_prompt.is_some(),
-            system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
+            "🔍 [ROLE_PROMPT] Session prompt routing: is_task_session={} incoming_prompt_chars={} configured_system_prompt_chars={}",
+            is_task_session,
+            system_prompt.as_ref().map(|s| s.len()).unwrap_or(0),
+            query_config.system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
         );
 
         if let Some(ref prompt) = system_prompt {
@@ -1147,13 +1157,14 @@ impl ClaurstSession {
         self.role_prompt_prepended = true;
 
         log::info!(
-            "claurst_request_user_message_prepared request_id={} session_id={} raw_user_chars={} runtime_user_chars={} prompt_configured={} first_user_message={}",
+            "claurst_request_user_message_prepared request_id={} session_id={} raw_user_chars={} runtime_user_chars={} prompt_configured={} first_user_message={} is_task_session={}",
             request_id,
             self.session_id,
             message.chars().count(),
             actual_message.chars().count(),
             self.system_prompt.is_some(),
-            is_first_user_message
+            is_first_user_message,
+            task_session
         );
 
         // 1. 添加用户消息（仅使用原始用户消息）

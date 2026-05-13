@@ -11,7 +11,7 @@ interface SidebarProps {
   currentSessionId?: string | null;
   sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
-  onSessionDeleted?: (sessionId: string) => void;
+  onSessionDeleted?: (deletedSessionId: string, replacementSessionId: string | null) => void;
 }
 
 function Sidebar({

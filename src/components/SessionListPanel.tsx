@@ -17,7 +17,7 @@ interface SessionListPanelProps {
   sessionListRefreshKey: number;
   availableProviders: ProviderConfig[];
   onSessionSelected: (sessionId: string) => void;
-  onSessionDeleted: (sessionId: string) => void;
+  onSessionDeleted: (deletedSessionId: string, replacementSessionId: string | null) => void;
   onNewChatWithModel: (modelValue: string) => void;
 }
 
