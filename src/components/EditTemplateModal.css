@@ -1,10 +1,7 @@
 /* Edit Template Modal */
 .edit-template-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
@@ -16,9 +13,9 @@
 .edit-template-modal {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 16px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 85vh;
+  width: 92%;
+  max-width: 980px;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -69,31 +66,51 @@
   padding: 24px;
 }
 
+.edit-template-warning,
+.edit-template-error,
+.edit-template-dirty-notice {
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
 .edit-template-warning {
   background: linear-gradient(135deg, rgba(255, 204, 0, 0.15) 0%, rgba(255, 149, 0, 0.15) 100%);
   border: 1px solid rgba(255, 204, 0, 0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
   color: #ffd60a;
-  font-size: 14px;
+}
+
+.edit-template-warning--subtle {
+  background: linear-gradient(135deg, rgba(90, 200, 250, 0.12) 0%, rgba(94, 92, 230, 0.12) 100%);
+  border-color: rgba(90, 200, 250, 0.25);
+  color: #9bdcff;
+}
+
+.edit-template-warning--danger-soft {
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.12) 0%, rgba(255, 149, 0, 0.12) 100%);
+  border-color: rgba(255, 107, 107, 0.28);
+  color: #ffb4a2;
 }
 
 .edit-template-error {
   background: linear-gradient(135deg, rgba(255, 59, 48, 0.15) 0%, rgba(255, 45, 85, 0.15) 100%);
   border: 1px solid rgba(255, 59, 48, 0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
   color: #ff453a;
-  font-size: 14px;
+}
+
+.edit-template-dirty-notice {
+  background: linear-gradient(135deg, rgba(90, 200, 250, 0.15) 0%, rgba(94, 92, 230, 0.15) 100%);
+  border: 1px solid rgba(90, 200, 250, 0.28);
+  color: #9bdcff;
 }
 
 .edit-template-section {
   margin-bottom: 24px;
 }
 
-.edit-template-section label {
+.edit-template-section > label,
+.edit-template-role-field label {
   display: block;
   margin-bottom: 8px;
   font-size: 14px;
@@ -102,7 +119,11 @@
 }
 
 .edit-template-section input[type="text"],
-.edit-template-section textarea {
+.edit-template-section textarea,
+.edit-template-section select,
+.edit-template-role-field input,
+.edit-template-role-field textarea,
+.edit-template-role-field select {
   width: 100%;
   padding: 12px;
   background: rgba(255, 255, 255, 0.05);
@@ -112,26 +133,83 @@
   font-size: 14px;
   font-family: inherit;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
-.edit-template-section input[type="text"]:hover,
-.edit-template-section textarea:hover {
+.edit-template-section input:hover,
+.edit-template-section textarea:hover,
+.edit-template-section select:hover,
+.edit-template-role-field input:hover,
+.edit-template-role-field textarea:hover,
+.edit-template-role-field select:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.edit-template-section input[type="text"]:focus,
-.edit-template-section textarea:focus {
+.edit-template-section input:focus,
+.edit-template-section textarea:focus,
+.edit-template-section select:focus,
+.edit-template-role-field input:focus,
+.edit-template-role-field textarea:focus,
+.edit-template-role-field select:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(138, 43, 226, 0.5);
   box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
 }
 
-.edit-template-section input[type="text"]:disabled,
-.edit-template-section textarea:disabled {
-  opacity: 0.5;
+.edit-template-section input:disabled,
+.edit-template-section textarea:disabled,
+.edit-template-section select:disabled,
+.edit-template-role-field input:disabled,
+.edit-template-role-field textarea:disabled,
+.edit-template-role-field select:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
+}
+
+.edit-template-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.edit-template-section-header label {
+  margin-bottom: 0;
+}
+
+.edit-template-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-template-secondary-btn,
+.edit-template-role-actions button,
+.edit-template-cancel-btn,
+.edit-template-save-btn {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-template-secondary-btn,
+.edit-template-role-actions button,
+.edit-template-cancel-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.edit-template-secondary-btn:hover,
+.edit-template-role-actions button:hover,
+.edit-template-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .edit-template-roles {
@@ -145,19 +223,44 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 16px;
-  transition: all 0.2s;
 }
 
-.edit-template-role-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
+.edit-template-role-card.dragging {
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+  border-color: rgba(138, 43, 226, 0.45);
 }
 
 .edit-template-role-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.edit-template-role-header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-template-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.72);
+  cursor: grab;
+  user-select: none;
+}
+
+.edit-template-role-card.dragging .edit-template-drag-handle,
+.edit-template-drag-handle:active {
+  cursor: grabbing;
 }
 
 .edit-template-role-number {
@@ -170,59 +273,58 @@
   font-weight: 600;
 }
 
+.edit-template-role-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-template-role-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.edit-template-role-actions .danger {
+  border-color: rgba(255, 69, 58, 0.3);
+  color: #ff8b86;
+}
+
+.edit-template-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .edit-template-role-field {
   margin-bottom: 12px;
-}
-
-.edit-template-role-field:last-child {
-  margin-bottom: 0;
-}
-
-.edit-template-role-field label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.edit-template-role-field input,
-.edit-template-role-field select {
-  width: 100%;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #fff;
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-.edit-template-role-field input:hover,
-.edit-template-role-field select:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.edit-template-role-field input:focus,
-.edit-template-role-field select:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(138, 43, 226, 0.5);
-  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
-}
-
-.edit-template-role-field input:disabled,
-.edit-template-role-field select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .edit-template-provider-info {
   margin-top: 6px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.edit-template-provider-warning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ffb4a2;
+}
+
+.edit-template-role-toggle {
+  margin: 12px 0 16px;
+}
+
+.edit-template-role-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+}
+
+.edit-template-role-toggle input[type="checkbox"] {
+  width: auto;
 }
 
 .edit-template-modal-footer {
@@ -234,51 +336,60 @@
   background: rgba(0, 0, 0, 0.2);
 }
 
-.edit-template-cancel-btn,
+.edit-template-delete-btn {
+  border: 1px solid rgba(255, 69, 58, 0.35);
+  background: rgba(255, 69, 58, 0.12);
+  color: #ffb4b0;
+}
+
+.edit-template-delete-btn:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.2);
+}
+
+.edit-template-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .edit-template-save-btn {
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
   border: none;
-}
-
-.edit-template-cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.edit-template-cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.edit-template-save-btn {
   background: linear-gradient(135deg, #8a2be2 0%, #4b0082 100%);
   color: #fff;
   box-shadow: 0 4px 12px rgba(138, 43, 226, 0.3);
 }
 
 .edit-template-save-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(138, 43, 226, 0.4);
 }
 
 .edit-template-save-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
+@media (max-width: 760px) {
+  .edit-template-modal {
+    width: 96%;
+    max-height: 94vh;
+  }
+
+  .edit-template-section-header,
+  .edit-template-role-header,
+  .edit-template-section-actions,
+  .edit-template-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-template-role-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideUp {
@@ -292,7 +403,6 @@
   }
 }
 
-/* Scrollbar styling */
 .edit-template-modal-content::-webkit-scrollbar {
   width: 8px;
 }
@@ -305,8 +415,4 @@
 .edit-template-modal-content::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
-}
-
-.edit-template-modal-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
 }

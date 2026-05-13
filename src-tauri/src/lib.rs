@@ -238,6 +238,16 @@ async fn update_template(template_id: String, updates: api::UpdateTemplateReques
 }
 
 #[tauri::command]
+async fn duplicate_template_as_user(template_id: String) -> Result<api::UserTemplate, String> {
+    api::duplicate_template_as_user(template_id).await
+}
+
+#[tauri::command]
+async fn delete_user_template(template_id: String) -> Result<(), String> {
+    api::delete_user_template(template_id).await
+}
+
+#[tauri::command]
 async fn save_task_as_template(request: api::SaveTemplateRequest) -> Result<api::UserTemplate, String> {
     api::save_task_as_template(request).await
 }
@@ -363,6 +373,8 @@ pub fn run() {
       get_system_template,
       list_user_templates,
       update_template,
+      duplicate_template_as_user,
+      delete_user_template,
       save_task_as_template,
       list_all_template_summaries,
       resolve_template_draft,

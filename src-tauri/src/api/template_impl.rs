@@ -247,7 +247,7 @@ pub async fn list_user_templates() -> Result<Vec<UserTemplate>, String> {
 }
 
 pub async fn update_template(template_id: String, updates: UpdateTemplateRequest) -> Result<UserTemplate, String> {
-    println!("[template_api] update_template: template_id={} roles_provided={}", template_id, updates.roles.as_ref().map(|r| r.len()).unwrap_or(0));
+    println!("[template_api] update_template: template_id={} roles_provided={} has_name={} has_description={} has_icon={}", template_id, updates.roles.as_ref().map(|r| r.len()).unwrap_or(0), updates.name.is_some(), updates.description.is_some(), updates.icon.is_some());
     let pool = get_pool()?;
     let mut conn = pool
         .get()
@@ -257,6 +257,11 @@ pub async fn update_template(template_id: String, updates: UpdateTemplateRequest
         return Err(format!("Template not found: {}", template_id));
     };
 
+    if existing.source != "user" {
+        println!("[template_api] update_template: rejected non-user template update template_id={} source={}", template_id, existing.source);
+        return Err("System templates are read-only. Duplicate the template before editing.".to_string());
+    }
+
     let tx = conn
         .transaction()
         .map_err(|e| format!("Failed to start template update transaction: {}", e))?;
@@ -265,25 +270,28 @@ pub async fn update_template(template_id: String, updates: UpdateTemplateRequest
         "UPDATE task_templates
          SET name = COALESCE(?2, name),
              description = COALESCE(?3, description),
-             icon = COALESCE(?4, icon)
+             icon = COALESCE(?4, icon),
+             updated_at = ?5
          WHERE id = ?1",
-        params![template_id, updates.name, updates.description, updates.icon],
+        params![template_id, updates.name, updates.description, updates.icon, Utc::now().to_rfc3339()],
     )
     .map_err(|e| format!("Failed to update template row: {}", e))?;
 
     if let Some(roles) = &updates.roles {
+        println!("[template_api] update_template: replacing template roles template_id={} role_count={}", template_id, roles.len());
         tx.execute(
             "DELETE FROM task_template_roles WHERE template_id = ?1",
             params![template_id],
         )
         .map_err(|e| format!("Failed to clear template roles: {}", e))?;
 
+        let now = Utc::now().to_rfc3339();
         for (index, role) in roles.iter().enumerate() {
             let role_id = format!("{}-role-{}-{}", template_id, index + 1, Uuid::new_v4().simple());
             tx.execute(
                 "INSERT INTO task_template_roles
-                 (id, template_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, model, provider, handoff_enabled, display_order)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                 (id, template_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, model, provider, handoff_enabled, display_order, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
                 params![
                     role_id,
                     template_id,
@@ -296,6 +304,7 @@ pub async fn update_template(template_id: String, updates: UpdateTemplateRequest
                     role.provider,
                     if role.handoff_enabled { 1 } else { 0 },
                     index as i32,
+                    &now,
                 ],
             )
             .map_err(|e| format!("Failed to insert template role: {}", e))?;
@@ -309,7 +318,7 @@ pub async fn update_template(template_id: String, updates: UpdateTemplateRequest
         .ok_or_else(|| format!("Template disappeared after update: {}", template_id))?;
     let refreshed_roles = load_template_roles(&conn, &template_id)?;
 
-    println!("[template_api] update_template: updated template {} source={}", template_id, existing.source);
+    println!("[template_api] update_template: updated template {} source={} final_role_count={}", template_id, existing.source, refreshed_roles.len());
     Ok(UserTemplate {
         id: refreshed.id,
         name: refreshed.name,
@@ -321,6 +330,129 @@ pub async fn update_template(template_id: String, updates: UpdateTemplateRequest
         created_at: refreshed.created_at,
         updated_at: refreshed.updated_at,
     })
+}
+
+pub async fn duplicate_template_as_user(template_id: String) -> Result<UserTemplate, String> {
+    println!("[template_api] duplicate_template_as_user: source_template_id={}", template_id);
+    let pool = get_pool()?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let Some(source_template) = load_template_row(&conn, &template_id)? else {
+        return Err(format!("Template not found: {}", template_id));
+    };
+
+    let source_roles = load_template_roles(&conn, &template_id)?;
+    println!("[template_api] duplicate_template_as_user: loaded source template template_id={} source={} role_count={}", source_template.id, source_template.source, source_roles.len());
+    let now = Utc::now().to_rfc3339();
+    let new_template_id = format!("user-tpl-{}", Uuid::new_v4());
+    let duplicated_name = format!("{} (Copy)", source_template.name);
+
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start duplicate_template_as_user transaction: {}", e))?;
+
+    tx.execute(
+        "INSERT INTO task_templates
+         (id, name, description, icon, category, source, pm_first_workflow, tags_json, source_path, source_task_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, 'user', ?5, ?6, NULL, NULL, ?7, ?7)",
+        params![
+            &new_template_id,
+            &duplicated_name,
+            &source_template.description,
+            &source_template.icon,
+            if source_template.pm_first_workflow { 1 } else { 0 },
+            &source_template.tags_json,
+            &now,
+        ],
+    )
+    .map_err(|e| format!("Failed to insert duplicated user template: {}", e))?;
+
+    for (index, role) in source_roles.iter().enumerate() {
+        let role_id = format!("{}-role-{}", new_template_id, Uuid::new_v4());
+        tx.execute(
+            "INSERT INTO task_template_roles
+             (id, template_id, name, identity, archetype_id, system_prompt_append, custom_system_prompt, model, provider, handoff_enabled, display_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+            params![
+                role_id,
+                &new_template_id,
+                &role.name,
+                &role.identity,
+                &role.archetype_id,
+                &role.system_prompt_append,
+                &role.custom_system_prompt,
+                &role.model,
+                &role.provider,
+                if role.handoff_enabled { 1 } else { 0 },
+                index as i32,
+                &now,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert duplicated template role: {}", e))?;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit duplicate_template_as_user transaction: {}", e))?;
+
+    let duplicated_roles = load_template_roles(&conn, &new_template_id)?;
+    println!("[template_api] duplicate_template_as_user: duplicated template created new_template_id={} role_count={}", new_template_id, duplicated_roles.len());
+    Ok(UserTemplate {
+        id: new_template_id,
+        name: duplicated_name,
+        description: source_template.description,
+        icon: source_template.icon,
+        pm_first_workflow: source_template.pm_first_workflow,
+        roles: duplicated_roles,
+        source_task_id: None,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+pub async fn delete_user_template(template_id: String) -> Result<(), String> {
+    println!("[template_api] delete_user_template: template_id={}", template_id);
+    let pool = get_pool()?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let Some(existing) = load_template_row(&conn, &template_id)? else {
+        return Err(format!("Template not found: {}", template_id));
+    };
+
+    if existing.source != "user" {
+        println!("[template_api] delete_user_template: rejected non-user template deletion template_id={} source={}", template_id, existing.source);
+        return Err("Only user templates can be deleted.".to_string());
+    }
+
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start delete_user_template transaction: {}", e))?;
+
+    tx.execute(
+        "DELETE FROM task_template_roles WHERE template_id = ?1",
+        params![&template_id],
+    )
+    .map_err(|e| format!("Failed to delete template roles: {}", e))?;
+
+    let deleted = tx
+        .execute(
+            "DELETE FROM task_templates WHERE id = ?1 AND source = 'user'",
+            params![&template_id],
+        )
+        .map_err(|e| format!("Failed to delete template row: {}", e))?;
+
+    if deleted == 0 {
+        return Err(format!("User template not found or already deleted: {}", template_id));
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit delete_user_template transaction: {}", e))?;
+
+    println!("[template_api] delete_user_template: deleted template_id={} template_name={}", template_id, existing.name);
+    Ok(())
 }
 
 pub async fn save_task_as_template(request: SaveTemplateRequest) -> Result<UserTemplate, String> {

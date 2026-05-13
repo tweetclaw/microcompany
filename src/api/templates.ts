@@ -25,6 +25,13 @@ function normalizeRole(role: Partial<TemplateRole> & { name: string; identity: s
   };
 }
 
+function normalizeUserTemplate(template: UserTemplate): UserTemplate {
+  return {
+    ...template,
+    roles: template.roles.map(normalizeRole),
+  };
+}
+
 export async function listSystemTemplates(): Promise<SystemTemplate[]> {
   console.log('[templates.ts] listSystemTemplates: Fetching system templates from DB');
   const templates = await invoke<SystemTemplate[]>('list_system_templates');
@@ -56,20 +63,14 @@ export async function listUserTemplates(): Promise<UserTemplate[]> {
   console.log('[templates.ts] listUserTemplates: Fetching user templates from DB');
   const templates = await invoke<UserTemplate[]>('list_user_templates');
   console.log(`[templates.ts] listUserTemplates: Loaded ${templates.length} user templates`);
-  return templates.map((template) => ({
-    ...template,
-    roles: template.roles.map(normalizeRole),
-  }));
+  return templates.map(normalizeUserTemplate);
 }
 
 export async function saveTaskAsTemplate(request: SaveTemplateRequest): Promise<UserTemplate> {
   console.log(`[templates.ts] saveTaskAsTemplate: Saving task "${request.source_task_id}" as template "${request.name}"`);
   const template = await invoke<UserTemplate>('save_task_as_template', { request });
   console.log(`[templates.ts] saveTaskAsTemplate: Saved template with ID: ${template.id}`);
-  return {
-    ...template,
-    roles: template.roles.map(normalizeRole),
-  };
+  return normalizeUserTemplate(template);
 }
 
 export async function updateUserTemplate(
@@ -91,7 +92,12 @@ export async function updateUserTemplate(
   }
 ): Promise<UserTemplate> {
   console.log(`[templates.ts] updateUserTemplate: Updating template "${templateId}" in DB`);
-  console.log('[templates.ts] updateUserTemplate: Updates payload:', updates);
+  console.log('[templates.ts] updateUserTemplate: Updates summary:', {
+    hasName: typeof updates.name === 'string',
+    hasDescription: typeof updates.description === 'string',
+    hasIcon: typeof updates.icon === 'string',
+    roleCount: updates.roles?.length ?? null,
+  });
 
   const payload = {
     ...updates,
@@ -104,15 +110,19 @@ export async function updateUserTemplate(
   });
 
   console.log(`[templates.ts] updateUserTemplate: Template updated successfully: ${updated.id}`);
-  return {
-    ...updated,
-    roles: updated.roles.map(normalizeRole),
-  };
+  return normalizeUserTemplate(updated);
+}
+
+export async function duplicateTemplateAsUserTemplate(templateId: string): Promise<UserTemplate> {
+  console.log(`[templates.ts] duplicateTemplateAsUserTemplate: Duplicating template ${templateId}`);
+  const duplicated = await invoke<UserTemplate>('duplicate_template_as_user', { templateId });
+  console.log(`[templates.ts] duplicateTemplateAsUserTemplate: Duplicated as ${duplicated.id}`);
+  return normalizeUserTemplate(duplicated);
 }
 
 export async function deleteUserTemplate(templateId: string): Promise<void> {
-  console.warn(`[templates.ts] deleteUserTemplate: Not implemented yet for template ${templateId}`);
-  throw new Error('deleteUserTemplate is not implemented yet');
+  console.log(`[templates.ts] deleteUserTemplate: Deleting user template ${templateId}`);
+  await invoke('delete_user_template', { templateId });
 }
 
 export async function resolveTemplateDraft(
