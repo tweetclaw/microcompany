@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
+import type { RefObject } from 'react';
 
 const DEFAULT_THRESHOLD = 100; // 距底部 100px 以内视为"在底部"，与 PRD 保持一致
 

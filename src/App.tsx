@@ -392,27 +392,40 @@ function App() {
 
       setCurrentSessionId(sessionId);
       setCurrentSessionTitle(session.name);
-      
+
       // Debug: Log session provider and model
       console.log('[App.tsx] handleSessionSelected: session.provider =', session.provider);
       console.log('[App.tsx] handleSessionSelected: session.model =', session.model);
       console.log('[App.tsx] handleSessionSelected: availableProviders =', availableProviders.map(p => ({ id: p.id, name: p.name, model: p.model })));
-      
+
       // Find provider by ID to get the friendly name
       const provider = availableProviders.find((p) => p.id === session.provider || `${p.id}::${p.model}` === `${session.provider}::${session.model}`);
       console.log('[App.tsx] handleSessionSelected: found provider =', provider ? { id: provider.id, name: provider.name, model: provider.model } : null);
-      
+
       setCurrentProviderName(provider?.name || session.provider);
       setCurrentModelName(provider?.model || session.model);
       console.log('[App.tsx] handleSessionSelected: displaying providerName =', provider?.name || session.provider);
       console.log('[App.tsx] handleSessionSelected: displaying modelName =', provider?.model || session.model);
-      
+
       setSelectedProviderValue(`${session.provider}::${session.model}`);
       setMessages(loadedMessages);
       setHasActiveSession(true);
       setIsDraftConversation(false);
       setSessionListRefreshKey((prev) => prev + 1);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Session not found')) {
+        setCurrentSessionId(null);
+        setCurrentSessionTitle(null);
+        setCurrentProviderName(null);
+        setCurrentModelName(null);
+        setMessages([]);
+        setHasActiveSession(false);
+        setIsDraftConversation(false);
+        setSessionListRefreshKey((prev) => prev + 1);
+        return;
+      }
+
       console.error('Failed to load session:', error);
       alert(`Failed to load session: ${error}`);
     } finally {
@@ -437,7 +450,7 @@ function App() {
     setHasActiveSession(true);
   };
 
-  const handleSessionDeleted = async (deletedSessionId: string) => {
+  const handleSessionDeleted = async (deletedSessionId: string, replacementSessionId: string | null) => {
     // 如果删除的是当前正在使用的 session
     if (currentSessionId === deletedSessionId) {
       // 先尝试取消正在进行的请求
@@ -446,6 +459,11 @@ function App() {
       } catch (error) {
         // 如果没有正在进行的请求，忽略错误
         console.log('No active request to cancel:', error);
+      }
+
+      if (replacementSessionId) {
+        await handleSessionSelected(replacementSessionId);
+        return;
       }
 
       // 清空对话界面

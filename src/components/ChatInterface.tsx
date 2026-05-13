@@ -83,7 +83,7 @@ interface ChatInterfaceProps {
   onMessagesChange: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   sessionListRefreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
-  onSessionDeleted?: (sessionId: string) => void;
+  onSessionDeleted?: (deletedSessionId: string, replacementSessionId: string | null) => void;
   onNewChatWithModel: (modelValue: string) => void;
   onNewTask: () => void;
   hasActiveSession: boolean;
@@ -1160,8 +1160,8 @@ function ChatInterface({
         }
 
         // Check if stopped due to max turns limit
-        // Use ref to avoid stale closure (currentTurn state is captured at listener registration time)
-        if (currentTurnRef.current >= maxTurns && terminalRunState === 'completed') {
+        // Rely on backend reason_code rather than currentTurn/local terminal state heuristics
+        if (payload.reason_code === 'max_turns') {
           setContinueButtonReason('max_turns');
           setShowContinueButton(true);
         }

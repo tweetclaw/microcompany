@@ -9,7 +9,7 @@ interface SessionListProps {
   currentSessionId?: string | null;
   refreshKey?: string | number;
   onSessionSelected: (sessionId: string) => void;
-  onSessionDeleted?: (sessionId: string) => void;
+  onSessionDeleted?: (deletedSessionId: string, replacementSessionId: string | null) => void;
   availableProviders?: ProviderConfig[];
 }
 
@@ -31,15 +31,17 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     if (!workingDirectory) {
       setSessions([]);
       setLoading(false);
-      return;
+      return [] as SessionSummary[];
     }
 
     try {
       setLoading(true);
       const result = await listNormalSessions(workingDirectory);
       setSessions(result);
+      return result;
     } catch (error) {
       console.error('Failed to load sessions:', error);
+      return [] as SessionSummary[];
     } finally {
       setLoading(false);
     }
@@ -53,13 +55,19 @@ function SessionList({ workingDirectory, currentSessionId, refreshKey, onSession
     }
 
     try {
+      const deletedIndex = sessions.findIndex((session) => session.id === sessionId);
+      const wasCurrentSession = currentSessionId === sessionId;
+
       await deleteSession(sessionId);
+      const refreshedSessions = await loadSessions();
+
+      const replacementSessionId = wasCurrentSession
+        ? refreshedSessions[deletedIndex]?.id ?? refreshedSessions[deletedIndex - 1]?.id ?? null
+        : null;
 
       if (onSessionDeleted) {
-        onSessionDeleted(sessionId);
+        onSessionDeleted(sessionId, replacementSessionId);
       }
-
-      await loadSessions();
     } catch (error) {
       console.error('Failed to delete session:', error);
       alert(`删除会话失败: ${error}`);
