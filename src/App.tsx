@@ -18,6 +18,7 @@ const TaskBuilder = lazy(() => import('./components/TaskBuilder'));
 const ForwardLatestReplyModal = lazy(() => import('./components/ForwardLatestReplyModal'));
 const SearchModal = lazy(() => import('./components/SearchModal'));
 const Settings = lazy(() => import('./components/Settings').then((module) => ({ default: module.Settings })));
+const TemplateManagerPanel = lazy(() => import('./components/TemplateManagerPanel'));
 
 const PRODUCT_MANAGER_IDENTITIES = new Set(['product manager', 'pm', '项目经理', '产品经理']);
 
@@ -956,7 +957,7 @@ function App() {
                 onActiveRequestIdChange={setActiveRequestId}
               />
             </Suspense>
-          ) : (
+          ) : navigationMode === 'task' ? (
             <Suspense fallback={null}>
               <TaskModeLayout
                 workingDirectory={workingDirectory}
@@ -996,6 +997,10 @@ function App() {
                 activeRequestId={activeRequestId}
                 onActiveRequestIdChange={setActiveRequestId}
               />
+            </Suspense>
+          ) : (
+            <Suspense fallback={null}>
+              <TemplateManagerPanel onBack={() => setNavigationMode('task')} />
             </Suspense>
           )}
         </div>

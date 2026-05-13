@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { normalizeSettingsData } from '../types/settings';
 import TemplateManagerPanel from '../components/TemplateManagerPanel';
 import type { ProviderConfig } from '../types/settings';
 import type { SystemTemplate, TemplateSummary, UserTemplate } from '../types/template';
@@ -8,6 +9,8 @@ import type { SystemTemplate, TemplateSummary, UserTemplate } from '../types/tem
 const listAllTemplateSummariesMock = vi.fn();
 const getSystemTemplateMock = vi.fn();
 const listUserTemplatesMock = vi.fn();
+
+let latestModalProps: MockEditTemplateModalProps | null = null;
 
 type MockEditTemplateModalProps = {
   template: SystemTemplate | UserTemplate;
@@ -17,16 +20,24 @@ type MockEditTemplateModalProps = {
   onDeleted?: (templateId: string) => void;
 };
 
-const editTemplateModalMock = vi.fn(
-  ({ template }: MockEditTemplateModalProps) => (
-    <div data-testid="edit-template-modal">opened:{template.id}</div>
-  )
-);
+const editTemplateModalMock = vi.fn((props: MockEditTemplateModalProps) => {
+  latestModalProps = props;
+  return <div data-testid="edit-template-modal">opened:{props.template.id}</div>;
+});
+
+const invokeMock = vi.fn();
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
 
 vi.mock('../api/templates', () => ({
   listAllTemplateSummaries: (...args: unknown[]) => listAllTemplateSummariesMock(...args),
   getSystemTemplate: (...args: unknown[]) => getSystemTemplateMock(...args),
   listUserTemplates: (...args: unknown[]) => listUserTemplatesMock(...args),
+}));
+
+vi.mock('../api', () => ({
 }));
 
 vi.mock('../components/EditTemplateModal', () => ({
@@ -96,12 +107,17 @@ describe('TemplateManagerPanel', () => {
     listAllTemplateSummariesMock.mockReset();
     getSystemTemplateMock.mockReset();
     listUserTemplatesMock.mockReset();
+    invokeMock.mockReset();
     editTemplateModalMock.mockClear();
+    latestModalProps = null;
+    invokeMock.mockResolvedValue(normalizeSettingsData({ providers }));
   });
+
   it('filters templates by search query and source', async () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
+    getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
 
-    render(<TemplateManagerPanel availableProviders={providers} onBack={() => {}} />);
+    render(<TemplateManagerPanel onBack={() => {}} />);
 
     expect(await screen.findByText('Dev Team')).toBeInTheDocument();
     expect(screen.getByText('My Product Team')).toBeInTheDocument();
@@ -121,24 +137,25 @@ describe('TemplateManagerPanel', () => {
     expect(await screen.findByText('没有符合当前筛选条件的模板')).toBeInTheDocument();
   });
 
-  it('renders enhanced template summary information', async () => {
+  it('renders simplified template summary information', async () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
+    getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
 
-    render(<TemplateManagerPanel availableProviders={providers} onBack={() => {}} />);
+    render(<TemplateManagerPanel onBack={() => {}} />);
 
     expect(await screen.findByText('development')).toBeInTheDocument();
     expect(screen.getByText('#dev')).toBeInTheDocument();
     expect(screen.getByText('系统')).toBeInTheDocument();
     expect(screen.getByText('自定义')).toBeInTheDocument();
     expect(screen.getByText(/更新于/)).toBeInTheDocument();
+    expect(screen.getByText(/3 个角色/)).toBeInTheDocument();
   });
 
-  it('opens system template detail when clicking a system template item', async () => {
+  it('shows selected template detail in center panel instead of popup flow', async () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
-    listUserTemplatesMock.mockResolvedValue([]);
 
-    render(<TemplateManagerPanel availableProviders={providers} onBack={() => {}} />);
+    render(<TemplateManagerPanel onBack={() => {}} />);
 
     fireEvent.click(await screen.findByText('Dev Team'));
 
@@ -166,9 +183,18 @@ describe('TemplateManagerPanel', () => {
         },
       ]);
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
-    listUserTemplatesMock.mockResolvedValue([userTemplateDetail]);
+    listUserTemplatesMock.mockResolvedValue([
+      userTemplateDetail,
+      {
+        ...userTemplateDetail,
+        id: 'user-copy-1',
+        name: 'Dev Team (Copy)',
+        description: 'Copied from system template',
+        updated_at: '2025-01-04T10:00:00Z',
+      },
+    ]);
 
-    render(<TemplateManagerPanel availableProviders={providers} onBack={() => {}} />);
+    render(<TemplateManagerPanel onBack={() => {}} />);
 
     fireEvent.click(await screen.findByText('Dev Team'));
 
@@ -180,11 +206,10 @@ describe('TemplateManagerPanel', () => {
       );
     });
 
-    const modalProps = editTemplateModalMock.mock.calls[editTemplateModalMock.mock.calls.length - 1]?.[0];
-    expect(modalProps).toBeTruthy();
+    expect(latestModalProps).toBeTruthy();
 
     await act(async () => {
-      await modalProps.onSaved({
+      await latestModalProps?.onSaved({
         ...userTemplateDetail,
         id: 'user-copy-1',
         name: 'Dev Team (Copy)',
@@ -205,12 +230,11 @@ describe('TemplateManagerPanel', () => {
   });
 
   it('refreshes list and shows success message after delete callback', async () => {
-    listAllTemplateSummariesMock
-      .mockResolvedValueOnce(summaries)
-      .mockResolvedValueOnce([summaries[0]]);
+    listAllTemplateSummariesMock.mockResolvedValueOnce(summaries).mockResolvedValueOnce([summaries[0]]);
+    getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
     listUserTemplatesMock.mockResolvedValue([userTemplateDetail]);
 
-    render(<TemplateManagerPanel availableProviders={providers} onBack={() => {}} />);
+    render(<TemplateManagerPanel onBack={() => {}} />);
 
     fireEvent.click(await screen.findByText('My Product Team'));
 
@@ -222,17 +246,18 @@ describe('TemplateManagerPanel', () => {
       );
     });
 
-    const modalProps = editTemplateModalMock.mock.calls[editTemplateModalMock.mock.calls.length - 1]?.[0];
-    expect(modalProps).toBeTruthy();
+    expect(latestModalProps).toBeTruthy();
 
     await act(async () => {
-      await modalProps.onDeleted?.('user-1');
+      await latestModalProps?.onDeleted?.('user-1');
     });
 
     expect(await screen.findByText('模板已删除')).toBeInTheDocument();
     await waitFor(() => {
       expect(listAllTemplateSummariesMock).toHaveBeenCalledTimes(2);
     });
-    expect(screen.queryByTestId('edit-template-modal')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('edit-template-modal')).not.toBeInTheDocument();
+    });
   });
 });

@@ -1,295 +1,264 @@
 .template-manager-panel {
+  display: flex;
   width: 100%;
   height: 100%;
+  min-height: 0;
+  color: #e5eef7;
+}
+
+.template-manager-panel-embedded {
+  background: #0f1726;
+}
+
+.template-manager-sidebar {
+  width: 360px;
+  min-width: 320px;
+  max-width: 400px;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(15, 23, 38, 0.98), rgba(10, 15, 26, 0.98));
   display: flex;
   flex-direction: column;
-  background-color: var(--vscode-sideBar-background);
-}
-
-/* Header */
-.template-manager-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.template-manager-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  color: var(--vscode-foreground);
-  font-size: 12px;
-  padding: 4px 8px;
-  cursor: pointer;
-  transition: background-color 0.1s ease, border-color 0.1s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.template-manager-back-btn:hover {
-  background-color: var(--vscode-list-hoverBackground);
-  border-color: var(--border-strong);
-}
-
-.template-manager-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--vscode-foreground);
-  opacity: 0.85;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* List area */
-.template-manager-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
   min-height: 0;
 }
 
+.template-manager-sidebar-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.template-manager-sidebar-header h2 {
+  margin: 12px 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.template-manager-sidebar-header p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.template-manager-back-button {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(30, 41, 59, 0.75);
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
 .template-manager-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+  padding: 16px 20px 14px;
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .template-manager-search,
 .template-manager-filter {
-  border: 1px solid var(--border-default);
-  background: var(--vscode-input-background, rgba(255, 255, 255, 0.04));
-  color: var(--vscode-input-foreground, var(--vscode-foreground));
-  border-radius: 6px;
-  font-size: 12px;
-  padding: 8px 10px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5eef7;
+  padding: 10px 12px;
+  font-size: 14px;
 }
 
-.template-manager-search {
-  flex: 1;
-  min-width: 0;
-}
-
-.template-manager-filter {
-  min-width: 128px;
-}
-
-.template-manager-filter-summary {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
-  margin-bottom: 8px;
-  padding: 0 2px;
-}
-
-.template-manager-loading,
-.template-manager-empty {
-  padding: 24px 12px;
-  text-align: center;
-  color: var(--vscode-descriptionForeground);
+.template-manager-success,
+.template-manager-error,
+.template-manager-summary-line {
+  margin: 12px 20px 0;
   font-size: 13px;
-}
-
-.template-manager-error {
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  background-color: rgba(255, 59, 48, 0.12);
-  border: 1px solid rgba(255, 59, 48, 0.3);
-  border-radius: 6px;
-  color: #ff9b9b;
-  font-size: 12px;
 }
 
 .template-manager-success {
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  background-color: rgba(52, 199, 89, 0.12);
-  border: 1px solid rgba(52, 199, 89, 0.3);
-  border-radius: 6px;
-  color: #8df0a9;
-  font-size: 12px;
+  color: #86efac;
 }
 
-.template-manager-section {
-  margin-bottom: 12px;
+.template-manager-error {
+  color: #fda4af;
 }
 
-.template-manager-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--vscode-descriptionForeground);
-  padding: 4px 4px 6px 4px;
-  opacity: 0.7;
+.template-manager-summary-line {
+  color: #94a3b8;
 }
 
-/* Template item */
-.template-manager-item {
+.template-manager-list {
+  padding: 14px 14px 20px;
+  overflow: auto;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px;
-  margin-bottom: 6px;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
+  min-height: 0;
+}
+
+.template-manager-list-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  padding: 14px;
+  color: inherit;
   cursor: pointer;
-  transition: background-color 0.1s ease, border-color 0.1s ease, transform 0.1s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 
-.template-manager-item:hover {
-  background-color: var(--vscode-list-hoverBackground);
-  border-color: var(--border-strong);
+.template-manager-list-item:hover {
   transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.36);
+  background: rgba(20, 32, 54, 0.95);
 }
 
-.template-manager-item.loading {
-  opacity: 0.6;
-  cursor: default;
+.template-manager-list-item.selected {
+  border-color: rgba(59, 130, 246, 0.72);
+  background: rgba(29, 78, 216, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
 }
 
-.template-manager-item-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  line-height: 1;
-  width: 24px;
-  text-align: center;
-  margin-top: 2px;
-}
-
-.template-manager-item-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.template-manager-item-topline {
+.template-manager-list-item-main {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
 }
 
-.template-manager-item-badges {
+.template-manager-list-item-top-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.template-manager-badge {
-  display: inline-flex;
+.template-manager-list-item-title-group {
+  display: flex;
   align-items: center;
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  line-height: 1.4;
-  border: 1px solid transparent;
-  white-space: nowrap;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
 
-.template-manager-badge.system {
-  background: rgba(90, 200, 250, 0.12);
-  border-color: rgba(90, 200, 250, 0.24);
-  color: #9bdcff;
+.template-manager-list-item-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex: 0 0 auto;
 }
 
-.template-manager-badge.user {
-  background: rgba(191, 90, 242, 0.12);
-  border-color: rgba(191, 90, 242, 0.24);
-  color: #d7a8ff;
-}
-
-.template-manager-badge.neutral {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: var(--vscode-descriptionForeground);
-}
-
-.template-manager-item-name {
-  font-size: 13px;
+.template-manager-list-item-title {
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
+  color: #f8fafc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--vscode-foreground);
 }
 
-.template-manager-item-description {
-  margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--vscode-descriptionForeground);
+.template-manager-source-badge,
+.template-manager-category-badge,
+.template-manager-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.template-manager-source-badge {
+  flex: 0 0 auto;
+}
+
+.template-manager-source-badge.system {
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
+}
+
+.template-manager-source-badge.user {
+  background: rgba(16, 185, 129, 0.16);
+  color: #a7f3d0;
+}
+
+.template-manager-category-badge {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+}
+
+.template-manager-list-item-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cbd5e1;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.template-manager-item-meta {
+.template-manager-list-item-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
-  margin-top: 6px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
-.template-manager-tags {
+.template-manager-tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
 }
 
 .template-manager-tag {
-  display: inline-flex;
+  background: rgba(37, 99, 235, 0.14);
+  color: #bfdbfe;
+}
+
+.template-manager-empty,
+.template-manager-detail-placeholder {
+  display: flex;
   align-items: center;
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--vscode-descriptionForeground);
+  justify-content: center;
+  min-height: 180px;
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  color: #94a3b8;
+  padding: 24px;
+  text-align: center;
 }
 
-.template-manager-tag-more {
-  opacity: 0.8;
+.template-manager-detail-placeholder.error {
+  color: #fda4af;
 }
 
-.template-manager-item-action {
-  font-size: 14px;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+.template-manager-detail-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 20px;
+  background: radial-gradient(circle at top, rgba(30, 64, 175, 0.08), transparent 32%), #0b1220;
 }
 
-.template-manager-item:hover .template-manager-item-action {
-  opacity: 1;
+.template-manager-detail-card {
+  min-height: 100%;
 }
 
-.template-manager-item.loading .template-manager-item-action {
-  opacity: 1;
-}
-
-@media (max-width: 640px) {
-  .template-manager-toolbar {
+@media (max-width: 1080px) {
+  .template-manager-panel {
     flex-direction: column;
   }
 
-  .template-manager-filter {
+  .template-manager-sidebar {
     width: 100%;
+    max-width: none;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   }
 
-  .template-manager-item-topline {
-    flex-direction: column;
-  }
-
-  .template-manager-item-badges {
-    justify-content: flex-start;
+  .template-manager-detail-panel {
+    padding: 16px;
   }
 }

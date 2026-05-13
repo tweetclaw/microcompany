@@ -1,7 +1,7 @@
 import React from 'react';
 import './MainNavigation.css';
 
-export type NavigationMode = 'normal' | 'task';
+export type NavigationMode = 'normal' | 'task' | 'templates';
 
 interface MainNavigationProps {
   currentMode: NavigationMode;
@@ -27,6 +27,13 @@ export default function MainNavigation({ currentMode, onModeChange, onSettingsCl
           title="Task Mode - Multi-role Tasks"
         >
           <span className="main-navigation-icon">📋</span>
+        </button>
+        <button
+          className={`main-navigation-item ${currentMode === 'templates' ? 'active' : ''}`}
+          onClick={() => onModeChange('templates')}
+          title="Template Manager"
+        >
+          <span className="main-navigation-icon">🧩</span>
         </button>
       </div>
       <div className="main-navigation-footer">

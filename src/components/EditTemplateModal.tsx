@@ -1,21 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import * as apiClient from '../api';
 import {
   deleteUserTemplate,
@@ -33,6 +16,8 @@ interface EditTemplateModalProps {
   onClose: () => void;
   onSaved: (savedTemplate?: UserTemplate) => void;
   onDeleted?: (templateId: string) => void;
+  embedded?: boolean;
+  allowSystemTemplateEditing?: boolean;
 }
 
 interface RoleConfig {
@@ -158,41 +143,12 @@ function buildMissingArchetypeMap(archetypes: RoleArchetype[], roles: RoleConfig
   return missingArchetypes;
 }
 
-function SortableRoleCard({
-  id,
-  disabled,
-  children,
-}: {
-  id: string;
-  disabled: boolean;
-  children: React.ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-    disabled,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.72 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`edit-template-role-card ${isDragging ? 'dragging' : ''}`}
-      {...attributes}
-      {...listeners}
-    >
-      {children}
-    </div>
-  );
-}
-
 export default function EditTemplateModal(props: EditTemplateModalProps) {
   const isSystemTemplate = 'category' in props.template;
+  const canEditSystemTemplateProviderOnly = isSystemTemplate && props.allowSystemTemplateEditing === true;
+  const canEditTemplate = !isSystemTemplate;
+  const canEditTemplateMetadata = !isSystemTemplate;
+  const canManageRoles = !isSystemTemplate;
   const defaultProvider = props.availableProviders[0];
 
   const [templateName, setTemplateName] = useState(props.template.name);
@@ -254,16 +210,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
     () => buildMissingArchetypeMap(archetypes, roles),
     [archetypes, roles]
   );
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 6,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   useEffect(() => {
     if (missingProviders.size === 0) {
@@ -299,7 +245,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
     () => buildTemplateSnapshot(templateName, templateDescription, roles),
     [templateName, templateDescription, roles]
   );
-  const hasUnsavedChanges = !isSystemTemplate && initialSnapshot !== currentSnapshot;
+  const hasUnsavedChanges = (canEditTemplate || canEditSystemTemplateProviderOnly) && initialSnapshot !== currentSnapshot;
 
   useEffect(() => {
     console.log('[EditTemplateModal] Dirty state changed', {
@@ -420,38 +366,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
       const [item] = copied.splice(index, 1);
       copied.splice(nextIndex, 0, item);
       return copied;
-    });
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) {
-      return;
-    }
-
-    setRoles((current) => {
-      const oldIndex = current.findIndex((role) => role.id === active.id);
-      const newIndex = current.findIndex((role) => role.id === over.id);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        console.warn('[EditTemplateModal] Drag reorder aborted: role index not found', {
-          templateId: props.template.id,
-          activeId: String(active.id),
-          overId: String(over.id),
-          oldIndex,
-          newIndex,
-        });
-        return current;
-      }
-
-      console.log('[EditTemplateModal] Drag reorder applied', {
-        templateId: props.template.id,
-        activeId: String(active.id),
-        overId: String(over.id),
-        fromIndex: oldIndex,
-        toIndex: newIndex,
-      });
-      return arrayMove(current, oldIndex, newIndex);
     });
   };
 
@@ -616,38 +530,30 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
   };
 
   return (
-    <div className="edit-template-modal-overlay">
-      <div className="edit-template-modal">
-        <div className="edit-template-modal-header">
-          <h2>{isSystemTemplate ? '查看模板' : '编辑模板'}</h2>
-          <button className="edit-template-modal-close" onClick={handleRequestClose}>
-            ✕
-          </button>
+    <div className={props.embedded ? 'edit-template-modal-overlay embedded' : 'edit-template-modal-overlay'}>
+      <div className={props.embedded ? 'edit-template-modal embedded' : 'edit-template-modal'}>
+        <div className={props.embedded ? 'edit-template-modal-header embedded' : 'edit-template-modal-header'}>
+          <div className="edit-template-modal-header-main">
+            <h2>{canEditTemplate ? '编辑模板' : '查看模板'}</h2>
+            {props.embedded ? null : (
+              <p className="edit-template-modal-subtitle">
+                {canEditTemplate ? '在这里直接编辑模板名称、成员、身份、原型绑定与模型配置。' : '查看模板详情。'}
+              </p>
+            )}
+          </div>
+          {props.embedded ? null : (
+            <button
+              className={props.embedded ? 'edit-template-modal-close embedded' : 'edit-template-modal-close'}
+              onClick={handleRequestClose}
+              aria-label="关闭"
+              title="关闭"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <div className="edit-template-modal-content">
-          {isSystemTemplate ? (
-            <div className="edit-template-warning">
-              系统模板的成员组成是只读的。若要调整成员、顺序、职责或模型，请先复制为自定义模板。
-            </div>
-          ) : (
-            <div className="edit-template-warning edit-template-warning--subtle">
-              你可以编辑自定义模板的成员组成，包括新增、删除、排序、职责、原型绑定和模型配置。
-            </div>
-          )}
-
-          {missingProviders.size > 0 && (
-            <div className="edit-template-warning edit-template-warning--danger-soft">
-              检测到模板引用了当前不存在的 Provider。受影响角色会保留原 provider/model 文本，但你需要重新选择可用 Provider 后才能稳定保存或继续使用。
-            </div>
-          )}
-
-          {missingArchetypes.size > 0 && (
-            <div className="edit-template-warning edit-template-warning--danger-soft">
-              检测到模板引用了当前不存在的 Archetype。角色会保留原有身份文本，但 archetype 绑定需要你手动重新选择。
-            </div>
-          )}
-
           {error && <div className="edit-template-error">{error}</div>}
 
           {hasUnsavedChanges && (
@@ -661,7 +567,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               placeholder="Enter template name"
-              disabled={isSystemTemplate}
+              disabled={!canEditTemplateMetadata}
             />
           </div>
 
@@ -672,14 +578,14 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
               onChange={(e) => setTemplateDescription(e.target.value)}
               placeholder="Enter template description"
               rows={3}
-              disabled={isSystemTemplate}
+              disabled={!canEditTemplateMetadata}
             />
           </div>
 
           <div className="edit-template-section">
             <div className="edit-template-section-header">
               <label>成员组成 ({roles.length})</label>
-              {!isSystemTemplate && (
+              {canManageRoles && (
                 <div className="edit-template-section-actions">
                   <button type="button" className="edit-template-secondary-btn" onClick={handleAddEmptyRole}>
                     + 添加空白成员
@@ -703,15 +609,6 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
             </div>
 
             <div className="edit-template-roles">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={roles.map((role) => role.id)}
-                  strategy={verticalListSortingStrategy}
-                >
               {roles.map((role, index) => {
                 const selectedProvider = props.availableProviders.find((p) => p.id === role.provider);
                 const isMissingProvider = Boolean(role.provider?.trim()) && !selectedProvider;
@@ -719,13 +616,12 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                 const isMissingArchetype = Boolean(role.archetype_id?.trim()) && !selectedArchetype;
 
                 return (
-                  <SortableRoleCard key={role.id} id={role.id} disabled={isSystemTemplate}>
+                  <div key={role.id} className="edit-template-role-card">
                     <div className="edit-template-role-header">
                       <div className="edit-template-role-header-main">
-                        {!isSystemTemplate && <span className="edit-template-drag-handle" title="拖拽排序">⋮⋮</span>}
                         <span className="edit-template-role-number">#{index + 1}</span>
                       </div>
-                      {!isSystemTemplate && (
+                      {canManageRoles && (
                         <div className="edit-template-role-actions">
                           <button type="button" onClick={() => handleMoveRole(index, -1)} disabled={index === 0}>
                             ↑
@@ -752,7 +648,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                           value={role.name}
                           onChange={(e) => handleRoleFieldChange(index, 'name', e.target.value)}
                           placeholder="e.g., Alice"
-                          disabled={isSystemTemplate}
+                          disabled={!canEditTemplateMetadata}
                         />
                       </div>
 
@@ -761,7 +657,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                         <select
                           value={role.archetype_id || ''}
                           onChange={(e) => handleRoleFieldChange(index, 'archetype_id', e.target.value)}
-                          disabled={isSystemTemplate}
+                          disabled={!canEditTemplateMetadata}
                         >
                           <option value="">-- None --</option>
                           {isMissingArchetype && (
@@ -778,7 +674,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                         {selectedArchetype && (
                           <p className="edit-template-provider-info">{selectedArchetype.summary || selectedArchetype.description}</p>
                         )}
-                        {isMissingArchetype && (
+                        {!isSystemTemplate && isMissingArchetype && (
                           <p className="edit-template-provider-warning">
                             当前绑定的 archetype 不存在：{role.archetype_id}
                           </p>
@@ -793,7 +689,7 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                         onChange={(e) => handleRoleFieldChange(index, 'identity', e.target.value)}
                         placeholder="e.g., Product Manager"
                         rows={2}
-                        disabled={isSystemTemplate}
+                        disabled={!canEditTemplateMetadata}
                       />
                     </div>
 
@@ -803,17 +699,17 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                         <select
                           value={role.provider || ''}
                           onChange={(e) => handleRoleFieldChange(index, 'provider', e.target.value)}
-                          disabled={isSystemTemplate}
+                          disabled={!canEditSystemTemplateProviderOnly && !canEditTemplate}
                         >
                           <option value="">-- Select Provider --</option>
                           {isMissingProvider && (
                             <option value={role.provider || ''}>
-                              Missing provider: {role.provider}
+                              缺失的 Provider（{role.provider}）
                             </option>
                           )}
                           {props.availableProviders.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} ({p.model})
+                              {p.name}
                             </option>
                           ))}
                         </select>
@@ -835,25 +731,13 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                       </div>
                     </div>
 
-                    <div className="edit-template-role-toggle">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={role.handoff_enabled ?? true}
-                          onChange={(e) => handleRoleFieldChange(index, 'handoff_enabled', e.target.checked)}
-                          disabled={isSystemTemplate}
-                        />
-                        允许参与协作 / handoff
-                      </label>
-                    </div>
-
                     <div className="edit-template-role-field">
                       <label>System Prompt Append</label>
                       <textarea
                         value={role.system_prompt_append || ''}
                         onChange={(e) => handleRoleFieldChange(index, 'system_prompt_append', e.target.value)}
                         rows={2}
-                        disabled={isSystemTemplate}
+                        disabled={!canEditTemplateMetadata}
                       />
                     </div>
 
@@ -863,20 +747,18 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
                         value={role.custom_system_prompt || ''}
                         onChange={(e) => handleRoleFieldChange(index, 'custom_system_prompt', e.target.value)}
                         rows={3}
-                        disabled={isSystemTemplate}
+                        disabled={!canEditTemplateMetadata}
                       />
                     </div>
-                  </SortableRoleCard>
+                  </div>
                 );
               })}
-                </SortableContext>
-              </DndContext>
             </div>
           </div>
         </div>
 
         <div className="edit-template-modal-footer">
-          {!isSystemTemplate && (
+          {canEditTemplate && (
             <button
               className="edit-template-delete-btn"
               onClick={handleDeleteTemplate}
@@ -889,13 +771,20 @@ export default function EditTemplateModal(props: EditTemplateModalProps) {
             关闭
           </button>
           {isSystemTemplate ? (
-            <button
-              className="edit-template-save-btn"
-              onClick={handleDuplicateSystemTemplate}
-              disabled={isDuplicating}
-            >
-              {isDuplicating ? '复制中...' : '复制为自定义模板'}
-            </button>
+            <>
+              {canEditSystemTemplateProviderOnly && (
+                <button className="edit-template-save-btn" onClick={handleSave} disabled={isSaving || isDeleting || !hasUnsavedChanges}>
+                  {isSaving ? '保存中...' : '保存 Provider 配置'}
+                </button>
+              )}
+              <button
+                className="edit-template-save-btn"
+                onClick={handleDuplicateSystemTemplate}
+                disabled={isDuplicating}
+              >
+                {isDuplicating ? '复制中...' : '复制为自定义模板'}
+              </button>
+            </>
           ) : (
             <button className="edit-template-save-btn" onClick={handleSave} disabled={isSaving || isDeleting || !hasUnsavedChanges}>
               {isSaving ? 'Saving...' : 'Save Template'}

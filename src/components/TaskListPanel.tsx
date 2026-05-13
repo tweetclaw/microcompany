@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { listTasks, deleteTask } from '../api';
 import { TaskSummary } from '../types/api';
-import type { ProviderConfig } from '../types/settings';
-import TemplateManagerPanel from './TemplateManagerPanel';
 import './TaskListPanel.css';
 
 interface TaskListPanelProps {
@@ -11,11 +9,9 @@ interface TaskListPanelProps {
   onTaskDeleted?: (taskId: string) => void;
   currentTaskId: string | null;
   refreshKey?: number;
-  availableProviders?: ProviderConfig[];
 }
 
-export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDeleted, currentTaskId, refreshKey, availableProviders = [] }: TaskListPanelProps) {
-  const [view, setView] = useState<'tasks' | 'templates'>('tasks');
+export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDeleted, currentTaskId, refreshKey }: TaskListPanelProps) {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDeleteTaskId, setPendingDeleteTaskId] = useState<string | null>(null);
@@ -44,7 +40,6 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDe
 
     document.addEventListener('mousedown', handlePointerDownOutside);
     document.addEventListener('keydown', handleEscapeKey);
-
     return () => {
       document.removeEventListener('mousedown', handlePointerDownOutside);
       document.removeEventListener('keydown', handleEscapeKey);
@@ -54,51 +49,26 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDe
   const loadTasks = async () => {
     try {
       setLoading(true);
-      const loadedTasks = await listTasks();
-      setTasks(loadedTasks);
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
+      setTasks(await listTasks());
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteTaskClick = (taskId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPendingDeleteTaskId(taskId);
-  };
+  const handleDeleteTask = async (taskId: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setPendingDeleteTaskId(null);
 
-  const handleConfirmDeleteTask = async (taskId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
     try {
       await deleteTask(taskId);
-      setPendingDeleteTaskId(null);
-      if (onTaskDeleted) {
-        onTaskDeleted(taskId);
-      }
-      await loadTasks();
+      setTasks((current) => current.filter((task) => task.id !== taskId));
+      onTaskDeleted?.(taskId);
     } catch (error) {
-      console.error('Failed to delete task:', error);
-      alert(`删除任务失败: ${error}`);
+      console.error('[TaskListPanel] Failed to delete task:', error);
+      window.alert('删除任务失败');
     }
   };
 
-  const handleCancelDeleteTask = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPendingDeleteTaskId(null);
-  };
-
-  // 模板管理视图
-  if (view === 'templates') {
-    return (
-      <TemplateManagerPanel
-        availableProviders={availableProviders}
-        onBack={() => setView('tasks')}
-      />
-    );
-  }
-
-  // 任务列表视图
   return (
     <div className="task-list-panel" ref={panelRef}>
       <div className="task-list-header">
@@ -106,64 +76,49 @@ export default function TaskListPanel({ onNewTaskClick, onTaskSelected, onTaskDe
           <span className="new-task-icon">➕</span>
           <span>新建任务</span>
         </button>
-        <button
-          className="manage-templates-button"
-          onClick={() => setView('templates')}
-          title="管理模板"
-        >
-          <span>📋</span>
-          <span>模板</span>
-        </button>
       </div>
+
       <div className="task-list-content">
         {loading ? (
           <div className="task-list-loading">Loading...</div>
-        ) : tasks.length === 0 ? (
-          <div className="task-list-empty">No tasks yet</div>
         ) : (
           tasks.map((task) => {
             const isPendingDelete = pendingDeleteTaskId === task.id;
-
             return (
               <div
                 key={task.id}
                 className={`task-list-item ${currentTaskId === task.id ? 'active' : ''}`}
                 onClick={() => onTaskSelected(task)}
               >
-                <div className="task-list-item-icon">📋</div>
                 <div className="task-list-item-content">
                   <div className="task-list-item-name">{task.name}</div>
-                  <div className="task-list-item-meta">
-                    {task.role_count} roles
-                  </div>
                 </div>
-                {isPendingDelete ? (
-                  <div className="task-delete-confirm" onClick={(e) => e.stopPropagation()}>
-                    <span className="task-delete-confirm-text">确认删除？</span>
+                <div className="task-list-item-actions">
+                  {isPendingDelete ? (
+                    <div className="task-list-delete-confirm" onClick={(event) => event.stopPropagation()}>
+                      <span>删除？</span>
+                      <button type="button" className="confirm" onClick={(event) => handleDeleteTask(task.id, event)}>
+                        是
+                      </button>
+                      <button type="button" className="cancel" onClick={(event) => { event.stopPropagation(); setPendingDeleteTaskId(null); }}>
+                        否
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      className="task-delete-confirm-button confirm"
-                      onClick={(e) => handleConfirmDeleteTask(task.id, e)}
-                      title="确认删除任务"
+                      type="button"
+                      className="task-list-delete-button"
+                      aria-label={`删除任务 ${task.name}`}
+                      title="删除任务"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPendingDeleteTaskId(task.id);
+                      }}
                     >
-                      确认
+                      ×
                     </button>
-                    <button
-                      className="task-delete-confirm-button cancel"
-                      onClick={handleCancelDeleteTask}
-                      title="取消删除任务"
-                    >
-                      取消
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="task-delete-button"
-                    onClick={(e) => handleDeleteTaskClick(task.id, e)}
-                    title="删除任务"
-                  >
-                    🗑️
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             );
           })

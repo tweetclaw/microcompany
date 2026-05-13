@@ -29,7 +29,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.1) 0%, rgba(75, 0, 130, 0.1) 100%);
+}
+
+.edit-template-modal-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .edit-template-modal-header h2 {
@@ -37,6 +45,13 @@
   font-size: 24px;
   font-weight: 700;
   color: #fff;
+}
+
+.edit-template-modal-subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #a9bbd3;
 }
 
 .edit-template-modal-close {
@@ -57,7 +72,7 @@
 .edit-template-modal-close:hover {
   background: rgba(255, 59, 48, 0.2);
   border-color: rgba(255, 59, 48, 0.4);
-  transform: scale(1.1);
+  transform: scale(1.04);
 }
 
 .edit-template-modal-content {
@@ -366,6 +381,67 @@
 .edit-template-save-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.edit-template-modal-overlay.embedded {
+  position: static;
+  inset: auto;
+  padding: 0;
+  background: transparent;
+  display: block;
+  animation: none;
+}
+
+.edit-template-modal.embedded {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  min-height: 100%;
+  border-radius: 18px;
+  box-shadow: none;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(11, 18, 32, 0.98));
+  animation: none;
+}
+
+.edit-template-modal-header.embedded {
+  padding: 22px 24px 18px;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(15, 23, 42, 0));
+}
+
+.edit-template-modal-header.embedded h2 {
+  font-size: 22px;
+}
+
+.edit-template-modal-close.embedded {
+  width: auto;
+  height: auto;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(30, 41, 59, 0.82);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #dbe7f5;
+}
+
+.edit-template-modal-close.embedded:hover {
+  background: rgba(51, 65, 85, 0.94);
+  border-color: rgba(96, 165, 250, 0.28);
+  transform: none;
+}
+
+.edit-template-modal.embedded .edit-template-modal-content {
+  padding: 20px 24px;
+}
+
+.edit-template-modal.embedded .edit-template-modal-footer {
+  padding: 16px 24px 20px;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.edit-template-modal.embedded .edit-template-warning {
+  border-radius: 12px;
 }
 
 @media (max-width: 760px) {
