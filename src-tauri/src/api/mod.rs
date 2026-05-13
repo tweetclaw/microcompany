@@ -52,6 +52,8 @@ pub use template::{
     UserTemplate,
 };
 pub use template_impl::{
+    delete_user_template,
+    duplicate_template_as_user,
     get_system_template,
     list_all_template_summaries,
     list_system_templates,

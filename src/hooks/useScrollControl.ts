@@ -10,7 +10,7 @@ export interface UseScrollControlOptions {
    * 提供此参数时 hook 使用外部 ref，否则内部创建新 ref。
    * 主要用途：单元测试时注入 mock 容器，无需真实 DOM。
    */
-  containerRef?: RefObject<HTMLDivElement | null>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
   /**
    * "视为在底部"的距离阈值（px），默认 100。
    * 可按设备类型覆盖：移动端建议 120，桌面端可保持 100。
@@ -19,7 +19,7 @@ export interface UseScrollControlOptions {
 }
 
 export interface ScrollControlResult {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   isAtBottom: boolean;
   hasNewMessage: boolean;
   setHasNewMessage: React.Dispatch<React.SetStateAction<boolean>>;
