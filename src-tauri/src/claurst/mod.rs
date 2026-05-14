@@ -1277,6 +1277,12 @@ impl ClaurstSession {
         let accumulated_visible_text = Arc::new(parking_lot::Mutex::new(String::new()));
         let event_accumulated_visible_text = accumulated_visible_text.clone();
 
+        // 连续纯工具轮次检测：连续 N 轮 tool_use 且无文字输出时，触发强制收敛警告
+        let consecutive_tool_only_turns = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let event_consecutive_tool_only_turns = consecutive_tool_only_turns.clone();
+        // 超过此阈值时打印明确警告日志，帮助定位失控工具链
+        const CONSECUTIVE_TOOL_ONLY_WARN_THRESHOLD: u32 = 8;
+
         // Timeline data collection
         let timeline_items = Arc::new(parking_lot::Mutex::new(Vec::<TimelineItemData>::new()));
         let event_timeline_items = timeline_items.clone();
@@ -1641,6 +1647,34 @@ impl ClaurstSession {
                             stop_reason,
                             accumulated_len
                         );
+
+                        // 连续纯工具轮次检测
+                        if stop_reason == "tool_use" && accumulated_len == 0 {
+                            let count = event_consecutive_tool_only_turns.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            if count >= CONSECUTIVE_TOOL_ONLY_WARN_THRESHOLD {
+                                log::warn!(
+                                    "⚠️ [TOOL_LOOP_WARNING] request_id={} session_id={} consecutive_tool_only_turns={} turn={} — model has been running tools without any text output for {} consecutive turns. This may indicate an uncontrolled tool loop.",
+                                    event_request_id,
+                                    event_session_id,
+                                    count,
+                                    turn,
+                                    count
+                                );
+                                let now = chrono::Utc::now().timestamp_millis();
+                                let _ = event_window.emit("ai-tool-loop-warning", serde_json::json!({
+                                    "request_id": event_request_id,
+                                    "session_id": event_session_id,
+                                    "consecutive_tool_only_turns": count,
+                                    "current_turn": turn,
+                                    "timestamp": now,
+                                }));
+                            }
+                        } else {
+                            // 只要本轮有可见文字输出，就重置计数
+                            if accumulated_len > 0 {
+                                event_consecutive_tool_only_turns.store(0, std::sync::atomic::Ordering::Relaxed);
+                            }
+                        }
 
                         {
                             let mut turn_summaries = event_turn_summaries.lock();
