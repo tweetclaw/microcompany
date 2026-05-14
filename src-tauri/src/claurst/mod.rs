@@ -2109,8 +2109,11 @@ impl ClaurstSession {
                 } else {
                     "completed_tool_only"
                 };
+                let is_max_turns_hit = turn_summaries.len() as u32 >= self.config.max_turns;
                 let reason_code = if handoff_suggestion.is_some() {
                     Some("handoff_detected")
+                } else if is_max_turns_hit {
+                    Some("max_turns")
                 } else if has_visible_text {
                     None
                 } else {
