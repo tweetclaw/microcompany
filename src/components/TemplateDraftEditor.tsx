@@ -1,13 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import React, { useState, useMemo } from 'react';
 import type { SystemTemplate, TemplateSummary, TemplateRole, TemplateWarning, CreateFromTemplateRequest, TemplateDraft, UserTemplate } from '../types/template';
-import type { ProviderConfig, SettingsData } from '../types/settings';
-import { normalizeSettingsData } from '../types/settings';
-import { resolveTemplateDraft } from '../api/templates';
+import type { ProviderConfig } from '../types/settings';
 import './TemplateDraftEditor.css';
 
 interface TemplateDraftEditorProps {
   template: SystemTemplate | UserTemplate | TemplateSummary;
+  availableProviders: ProviderConfig[];
   onConfirm: (request: CreateFromTemplateRequest) => void;
   onBack: () => void;
   onCancel: () => void;
@@ -15,6 +13,7 @@ interface TemplateDraftEditorProps {
 
 type RoleOverride = {
   provider?: string;
+  model?: string;
 };
 
 function buildDraftFromTemplate(template: SystemTemplate | UserTemplate | TemplateSummary, taskName: string): TemplateDraft {
@@ -47,6 +46,7 @@ function buildDraftFromTemplate(template: SystemTemplate | UserTemplate | Templa
 
 export default function TemplateDraftEditor({
   template,
+  availableProviders,
   onConfirm,
   onBack,
 }: TemplateDraftEditorProps) {
@@ -55,26 +55,8 @@ export default function TemplateDraftEditor({
   const initialTaskName = template.name;
 
   const [taskName, setTaskName] = useState(initialTaskName);
-  const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
 
   console.log('[TemplateDraftEditor] Initializing with template:', template.name);
-
-  // Load AI Providers from system settings
-  useEffect(() => {
-    const loadProviders = async () => {
-      try {
-        console.log('[TemplateDraftEditor] Loading AI Providers from system settings...');
-        const rawConfig = await invoke('get_config');
-        const config = normalizeSettingsData(rawConfig);
-        const enabledProviders = config.providers.filter(p => p.enabled);
-        console.log('[TemplateDraftEditor] Loaded AI Providers:', enabledProviders.map(p => ({ id: p.id, name: p.name })));
-        setAvailableProviders(enabledProviders);
-      } catch (error) {
-        console.error('[TemplateDraftEditor] Failed to load AI Providers:', error);
-      }
-    };
-    loadProviders();
-  }, []);
 
   // Derive the draft from the template
   const draft = useMemo(
@@ -100,9 +82,11 @@ export default function TemplateDraftEditor({
   const resolvedRoles = useMemo(() => {
     return draft.roles.map((role, idx) => {
       const provider = overrides[idx]?.provider ?? role.provider;
+      const model = overrides[idx]?.model ?? role.model;
       return {
         ...role,
-        provider: provider,
+        provider,
+        model,
       };
     });
   }, [draft.roles, overrides]);
@@ -136,12 +120,13 @@ export default function TemplateDraftEditor({
     });
 
     // Build role_overrides record keyed by role name
-    const roleOverrides: Record<string, { provider?: string }> = {};
+    const roleOverrides: Record<string, { provider?: string; model?: string }> = {};
     Object.entries(overrides).forEach(([idx, override]) => {
       const roleName = draft.roles[Number(idx)]?.name;
-      if (roleName && override.provider) {
+      if (roleName && (override.provider || override.model)) {
         roleOverrides[roleName] = {
           provider: override.provider,
+          model: override.model,
         };
       }
     });
@@ -224,9 +209,14 @@ export default function TemplateDraftEditor({
                       <label>AI Provider {hasProviderWarning && <span style={{color: '#ef4444'}}>*</span>}</label>
                       <select
                         value={role.provider || ''}
-                        onChange={(e) =>
-                          updateRoleOverride(idx, { provider: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const providerId = e.target.value;
+                          const matchedProvider = availableProviders.find((provider) => provider.id === providerId);
+                          updateRoleOverride(idx, {
+                            provider: providerId,
+                            model: matchedProvider?.model || '',
+                          });
+                        }}
                       >
                         <option value="">Select AI Provider...</option>
                         {availableProviders.map((provider) => (

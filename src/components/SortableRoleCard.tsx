@@ -1,9 +1,8 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { TaskRole } from '../types';
 
 interface SortableRoleCardProps {
   role: TaskRole;
+  providerDisplayName: string;
   isActive: boolean;
   isWorking: boolean;
   isDisabled: boolean;
@@ -20,28 +19,11 @@ interface SortableRoleCardProps {
 }
 
 export default function SortableRoleCard(props: SortableRoleCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: props.role.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   return (
     <article
-      ref={setNodeRef}
-      style={style}
       role="button"
       tabIndex={props.isDisabled ? -1 : 0}
-      className={`task-seat-card ${props.isActive ? 'active' : ''} ${props.isWorking ? 'working' : ''} ${props.isDisabled ? 'disabled' : ''} ${props.isPmFirst ? 'pm-first' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`task-seat-card ${props.isActive ? 'active' : ''} ${props.isWorking ? 'working' : ''} ${props.isDisabled ? 'disabled' : ''} ${props.isPmFirst ? 'pm-first' : ''}`}
       onClick={() => {
         if (!props.isDisabled) {
           props.onRoleSelected(props.role.id);
@@ -59,18 +41,6 @@ export default function SortableRoleCard(props: SortableRoleCardProps) {
       aria-label={props.isDisabled ? `${props.role.name}，当前有角色处理中，暂时无法切换` : props.role.name}
     >
       <div className="task-seat-card-actions">
-        <button
-          type="button"
-          className="task-seat-drag-handle"
-          {...attributes}
-          {...listeners}
-          disabled={props.isAiWorking}
-          aria-label={`拖拽 ${props.role.name} 调整顺序`}
-          title={props.isAiWorking ? 'AI 处理中时暂时不能拖拽' : '拖拽调整顺序'}
-          onClick={(event) => event.stopPropagation()}
-        >
-          ⋮⋮
-        </button>
         <button
           type="button"
           className="task-seat-edit-button"
@@ -123,7 +93,7 @@ export default function SortableRoleCard(props: SortableRoleCardProps) {
       <div className="task-seat-body">
         <div className="task-seat-name">{props.role.name}</div>
         <div className="task-seat-meta">{props.getRoleArchetypeLabel(props.role.identity, props.role.archetype_id)}</div>
-        <div className="task-seat-model">{props.role.model}</div>
+        <div className="task-seat-model">{props.providerDisplayName}</div>
         {props.isPmFirst && <div className="task-seat-badge">Start here</div>}
       </div>
     </article>

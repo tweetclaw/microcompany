@@ -1,6 +1,7 @@
 import React from 'react';
-import { Task, TaskRole } from '../types';
+import { Task } from '../types';
 import { useTaskStatistics } from '../hooks/useApi';
+import { getProviderDisplayName } from '../types/providerDisplay';
 import './TaskInspector.css';
 
 interface TaskInspectorProps {
@@ -9,6 +10,7 @@ interface TaskInspectorProps {
   onRoleSelected: (roleId: string) => void;
   onForwardLatestReply: () => void;
   hasLatestReply: boolean;
+  providerNameMap?: Map<string, string>;
 }
 
 function getRoleArchetypeLabel(identity: string, archetypeId: string | null) {
@@ -25,6 +27,7 @@ export default function TaskInspector({
   onRoleSelected,
   onForwardLatestReply,
   hasLatestReply,
+  providerNameMap,
 }: TaskInspectorProps) {
   const { stats, loading, error } = useTaskStatistics(task.id);
   const [showAllRoles, setShowAllRoles] = React.useState(false);
@@ -46,7 +49,7 @@ export default function TaskInspector({
               </div>
               <div className="role-card-details">
                 <div className="role-identity">{getRoleArchetypeLabel(role.identity, role.archetype_id)}</div>
-                <div className="role-model">{role.model}</div>
+                <div className="role-model">{getProviderDisplayName(role, providerNameMap)}</div>
               </div>
             </div>
           ))}

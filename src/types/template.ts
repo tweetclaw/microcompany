@@ -87,7 +87,7 @@ export interface CreateFromTemplateRequest {
   template_source: 'system' | 'user';
   task_name: string;
   /** Optional overrides for role configs (provider changes) */
-  role_overrides?: Record<string, { provider?: string }>;
+  role_overrides?: Record<string, { provider?: string; model?: string }>;
 }
 
 /**

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ProviderConfig } from '../types';
+import { isProviderUsable } from '../types/settings';
 import { TaskRole } from '../types/api';
 import './EditRoleMemberModal.css';
 
@@ -25,33 +26,41 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
   const [identity, setIdentity] = useState('');
   const [archetypeId, setArchetypeId] = useState<string>('custom');
   const [selectedProvider, setSelectedProvider] = useState('');
+  const [selectedProviderModel, setSelectedProviderModel] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  console.log('[EditRoleMemberModal] Available providers:', props.availableProviders.map(p => ({ id: p.id, name: p.name })));
+  const usableProviders = useMemo(
+    () => props.availableProviders.filter((provider) => isProviderUsable(provider) && provider.model.trim().length > 0),
+    [props.availableProviders],
+  );
 
-  // Initialize form with role data
   useEffect(() => {
     if (props.isOpen && props.role) {
       console.log('[EditRoleMemberModal] Initializing with role:', props.role);
       setRoleName(props.role.name);
       setIdentity(props.role.identity);
       setArchetypeId(props.role.archetype_id || 'custom');
-      
-      // Use the provider field directly (it's already the Provider ID)
-      const roleProvider = props.role.provider;
-      if (roleProvider) {
+
+      const roleProvider = props.role.provider || '';
+      const roleModel = props.role.model || '';
+      const combinedProviderValue = roleProvider && roleModel ? `${roleProvider}::${roleModel}` : roleProvider;
+      const matchingProvider = usableProviders.find(
+        (provider) => provider.id === roleProvider || `${provider.id}::${provider.model}` === combinedProviderValue,
+      );
+
+      if (matchingProvider) {
+        setSelectedProvider(matchingProvider.id);
+        setSelectedProviderModel(matchingProvider.model);
+      } else {
         setSelectedProvider(roleProvider);
-        console.log('[EditRoleMemberModal] Using role provider:', roleProvider);
-      } else if (props.availableProviders.length > 0) {
-        setSelectedProvider(props.availableProviders[0].id);
-        console.log('[EditRoleMemberModal] Using first provider:', props.availableProviders[0].id);
+        setSelectedProviderModel(roleModel);
       }
-      
+
       setError(null);
       setIsSubmitting(false);
     }
-  }, [props.isOpen, props.role, props.availableProviders]);
+  }, [props.isOpen, props.role, usableProviders]);
 
   const handleSubmit = async () => {
     if (!props.role) return;
@@ -83,7 +92,7 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
       return;
     }
 
-    if (!selectedProvider) {
+    if (!selectedProvider || !selectedProviderModel) {
       setError('请选择 AI Provider');
       return;
     }
@@ -107,8 +116,10 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
         updates.archetypeId = newArchetypeId;
       }
       
-      if (selectedProvider !== props.role.provider) {
-        updates.provider = selectedProvider;
+      const selectedProviderValue = `${selectedProvider}::${selectedProviderModel}`;
+      const currentProviderValue = `${props.role.provider || ''}::${props.role.model || ''}`;
+      if (selectedProviderValue !== currentProviderValue) {
+        updates.provider = selectedProviderValue;
       }
 
       // If no changes, just close
@@ -133,7 +144,12 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
     return null;
   }
 
-  const currentProvider = props.availableProviders.find((p) => p.id === selectedProvider);
+  const currentProvider = usableProviders.find(
+    (provider) => provider.id === selectedProvider && provider.model === selectedProviderModel,
+  );
+  const selectedProviderValue = selectedProvider && selectedProviderModel
+    ? `${selectedProvider}::${selectedProviderModel}`
+    : selectedProvider;
 
   return (
     <div className="edit-role-modal-overlay">
@@ -204,17 +220,22 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
             </label>
             <select
               id="edit-role-ai-provider"
-              value={selectedProvider}
-              onChange={(e) => setSelectedProvider(e.target.value)}
+              value={selectedProviderValue}
+              onChange={(e) => {
+                const value = e.target.value;
+                const [providerId, providerModel = ''] = value.split('::');
+                setSelectedProvider(providerId);
+                setSelectedProviderModel(providerModel);
+              }}
             >
               <option value="">Select AI Provider...</option>
-              {props.availableProviders.map((provider) => (
-                <option key={provider.id} value={provider.id}>
+              {usableProviders.map((provider) => (
+                <option key={`${provider.id}::${provider.model}`} value={`${provider.id}::${provider.model}`}>
                   {provider.name} ({provider.model})
                 </option>
               ))}
             </select>
-            {props.availableProviders.length === 0 && (
+            {usableProviders.length === 0 && (
               <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>
                 ⚠️ 没有可用的 AI Provider，请先在设置中配置
               </div>
@@ -222,6 +243,12 @@ export default function EditRoleMemberModal(props: EditRoleMemberModalProps) {
             {currentProvider && (
               <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
                 💡 使用 {currentProvider.name} 的 {currentProvider.model} 模型
+              </div>
+            )}
+            {!currentProvider && props.role.provider && (
+              <div style={{ fontSize: '12px', color: '#f59e0b', marginTop: '4px' }}>
+                ⚠️ 当前角色绑定的是旧 provider：{props.role.provider}
+                {props.role.model ? ` · ${props.role.model}` : ''}，请重新选择一个可用 provider。
               </div>
             )}
           </div>
