@@ -1,7 +1,5 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties, useEffect } from 'react';
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
-import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import TaskListPanel from './TaskListPanel';
 import ChatInterface from './ChatInterface';
 import SaveTemplateModal from './SaveTemplateModal';
@@ -10,9 +8,10 @@ import EditRoleMemberModal, { type RoleUpdateConfig } from './EditRoleMemberModa
 import DeleteRoleMemberModal from './DeleteRoleMemberModal';
 import SortableRoleCard from './SortableRoleCard';
 import { AiRequestEndEvent, Message, Task, TaskSummary, ProviderConfig, AiRunState, TeamBrief, TaskRole } from '../types';
+import { buildProviderNameMap, getProviderDisplayName, normalizeRoleProviderModel } from '../types/providerDisplay';
 import { loadLayoutState, saveLayoutState } from '../utils/layoutState';
 import { saveTaskAsTemplate } from '../api/templates';
-import { addTaskRole, updateTaskRole, deleteTaskRole, reorderTaskRoles } from '../api/index';
+import { addTaskRole, updateTaskRole, deleteTaskRole } from '../api/index';
 import './TaskModeLayout.css';
 import './ResizeHandle.css';
 
@@ -102,14 +101,45 @@ function getRecommendedRoleNames(teamBrief: TeamBrief | null, roleId: string) {
 export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const initial = useMemo(() => loadLayoutState(), []);
   const [localRoles, setLocalRoles] = useState<TaskRole[]>([]);
-  
-  // 同步 props.currentTask.roles 到 localRoles
-  useMemo(() => {
+
+  useEffect(() => {
     if (props.currentTask?.roles) {
       setLocalRoles([...props.currentTask.roles].sort((a, b) => a.display_order - b.display_order));
+    } else {
+      setLocalRoles([]);
     }
-  }, [props.currentTask?.roles]);
+  }, [props.currentTask]);
+
+  const providerNameMap = useMemo(() => buildProviderNameMap(props.availableProviders), [props.availableProviders]);
   
+  useEffect(() => {
+    if (!props.currentTask?.id || localRoles.length === 0) {
+      return;
+    }
+
+    const rolesNeedingRepair = localRoles
+      .map((role) => ({ role, normalized: normalizeRoleProviderModel(role, providerNameMap, props.availableProviders) }))
+      .filter(({ normalized }) => normalized.changed);
+
+    if (rolesNeedingRepair.length === 0) {
+      return;
+    }
+
+    setLocalRoles((current) => current.map((role) => {
+      const repair = rolesNeedingRepair.find((item) => item.role.id === role.id);
+      return repair
+        ? { ...role, provider: repair.normalized.provider, model: repair.normalized.model }
+        : role;
+    }));
+
+    void Promise.allSettled(
+      rolesNeedingRepair.map(({ role, normalized }) => updateTaskRole(props.currentTask!.id, role.id, {
+        provider: normalized.provider,
+        model: normalized.model,
+      })),
+    );
+  }, [props.availableProviders, props.currentTask?.id, localRoles, providerNameMap]);
+
   const seatRows = useMemo(
     () => chunkRoles(localRoles, 3),
     [localRoles],
@@ -124,16 +154,6 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
   const [showDeleteRoleModal, setShowDeleteRoleModal] = useState(false);
   const [deletingRole, setDeletingRole] = useState<TaskRole | null>(null);
   const [isDeletingRole, setIsDeletingRole] = useState(false);
-  const [isReorderingRoles, setIsReorderingRoles] = useState(false);
-  
-  // 配置拖拽传感器
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // 拖拽至少移动 8px 才激活，避免误触
-      },
-    })
-  );
 
   const isAiWorking = useMemo(() => {
     return props.runState === 'running_thinking'
@@ -352,76 +372,7 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    console.log(`[TaskModeLayout] handleDragEnd: Drag ended`, { activeId: active.id, overId: over?.id });
-    
-    if (!over || active.id === over.id || !props.currentTask || isReorderingRoles) {
-      if (!over) {
-        console.log(`[TaskModeLayout] handleDragEnd: No drop target, ignoring`);
-      } else if (active.id === over.id) {
-        console.log(`[TaskModeLayout] handleDragEnd: Dropped on same position, ignoring`);
-      } else if (isReorderingRoles) {
-        console.log(`[TaskModeLayout] handleDragEnd: Already reordering, ignoring`);
-      }
-      return;
-    }
 
-    const oldIndex = localRoles.findIndex(r => r.id === active.id);
-    const newIndex = localRoles.findIndex(r => r.id === over.id);
-
-    if (oldIndex === -1 || newIndex === -1) {
-      console.warn(`[TaskModeLayout] handleDragEnd: Invalid indices`, { oldIndex, newIndex });
-      return;
-    }
-
-    console.log(`[TaskModeLayout] handleDragEnd: Moving role from index ${oldIndex} to ${newIndex}`);
-
-    // 乐观更新 UI
-    const newRoles = arrayMove(localRoles, oldIndex, newIndex);
-    setLocalRoles(newRoles);
-    console.log(`[TaskModeLayout] handleDragEnd: UI updated optimistically`);
-
-    // 调用后端 API 保存新顺序
-    setIsReorderingRoles(true);
-    try {
-      const roleOrders = newRoles.map((role, index) => ({
-        roleId: role.id,
-        displayOrder: index,
-      }));
-
-      console.log(`[TaskModeLayout] handleDragEnd: Saving new order to backend`, roleOrders);
-      await reorderTaskRoles(props.currentTask.id, roleOrders);
-
-      console.log(`[TaskModeLayout] handleDragEnd: Order saved successfully, refreshing task`);
-
-      // 刷新任务以确保数据同步
-      const taskSummary: TaskSummary = {
-        id: props.currentTask.id,
-        name: props.currentTask.name,
-        description: props.currentTask.description || '',
-        icon: props.currentTask.icon || 'team',
-        pm_first_workflow: props.currentTask.pm_first_workflow,
-        role_count: props.currentTask.roles.length,
-        total_messages: 0,
-        status: 'active',
-        created_at: props.currentTask.created_at,
-        updated_at: new Date().toISOString(),
-      };
-      
-      props.onTaskSelected(taskSummary);
-      console.log(`[TaskModeLayout] handleDragEnd: Task refreshed successfully`);
-    } catch (error) {
-      console.error('[TaskModeLayout] handleDragEnd: Failed to reorder roles:', error);
-      // 回滚到原来的顺序
-      console.log(`[TaskModeLayout] handleDragEnd: Rolling back to original order`);
-      setLocalRoles([...props.currentTask.roles].sort((a, b) => a.display_order - b.display_order));
-      alert(`调整角色顺序失败：${error instanceof Error ? error.message : '未知错误'}`);
-    } finally {
-      setIsReorderingRoles(false);
-    }
-  };
 
   const existingRoleNames = useMemo(() => {
     return props.currentTask?.roles.map(role => role.name) ?? [];
@@ -500,57 +451,51 @@ export default function TaskModeLayout(props: TaskModeLayoutProps) {
                 )}
 
 
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext items={localRoles.map(r => r.id)} strategy={rectSortingStrategy}>
-                    <div className="task-mode-seat-grid">
-                      {seatRows.map((row, rowIndex) => (
-                        <div className="task-mode-seat-row" key={`row-${rowIndex}`}>
-                          {row.map((role) => {
-                            const isActive = props.currentTaskRoleId === role.id;
-                            const isWorking = isAiWorking && isActive;
-                            const isDisabled = isAiWorking && !isActive;
-                            const isPmFirst = Boolean(props.currentTask?.pm_first_workflow && pmRole?.id === role.id);
-                            const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
+                <div className="task-mode-seat-grid">
+                  {seatRows.map((row, rowIndex) => (
+                    <div className="task-mode-seat-row" key={`row-${rowIndex}`}>
+                      {row.map((role) => {
+                        const isActive = props.currentTaskRoleId === role.id;
+                        const isWorking = isAiWorking && isActive;
+                        const isDisabled = isAiWorking && !isActive;
+                        const isPmFirst = Boolean(props.currentTask?.pm_first_workflow && pmRole?.id === role.id);
+                        const disabledReason = isDisabled ? '当前有角色处理中，暂时无法切换' : undefined;
+                        const providerDisplayName = getProviderDisplayName(role, providerNameMap);
 
-                            return (
-                              <SortableRoleCard
-                                key={role.id}
-                                role={role}
-                                isActive={isActive}
-                                isWorking={isWorking}
-                                isDisabled={isDisabled}
-                                isPmFirst={isPmFirst}
-                                disabledReason={disabledReason}
-                                onRoleSelected={props.onTaskRoleSelected}
-                                onEditClick={handleEditRoleClick}
-                                onDeleteClick={handleDeleteRoleClick}
-                                onRestartClick={props.onTaskRoleRestart}
-                                isAiWorking={isAiWorking}
-                                totalRoles={localRoles.length}
-                                getSeatInitials={getSeatInitials}
-                                getRoleArchetypeLabel={getRoleArchetypeLabel}
-                              />
-                            );
-                          })}
-                          {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (
-                            <div
-                              key={`row-${rowIndex}-empty-${emptyIndex}`}
-                              className="task-seat-card task-seat-card-empty"
-                              aria-hidden="true"
-                            >
-                              <div className="task-seat-empty-dot" />
-                              <div className="task-seat-empty-label">Empty seat</div>
-                            </div>
-                          ))}
+                        return (
+                          <SortableRoleCard
+                            key={role.id}
+                            role={role}
+                            providerDisplayName={providerDisplayName}
+                            isActive={isActive}
+                            isWorking={isWorking}
+                            isDisabled={isDisabled}
+                            isPmFirst={isPmFirst}
+                            disabledReason={disabledReason}
+                            onRoleSelected={props.onTaskRoleSelected}
+                            onEditClick={handleEditRoleClick}
+                            onDeleteClick={handleDeleteRoleClick}
+                            onRestartClick={props.onTaskRoleRestart}
+                            isAiWorking={isAiWorking}
+                            totalRoles={localRoles.length}
+                            getSeatInitials={getSeatInitials}
+                            getRoleArchetypeLabel={getRoleArchetypeLabel}
+                          />
+                        );
+                      })}
+                      {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, emptyIndex) => (
+                        <div
+                          key={`row-${rowIndex}-empty-${emptyIndex}`}
+                          className="task-seat-card task-seat-card-empty"
+                          aria-hidden="true"
+                        >
+                          <div className="task-seat-empty-dot" />
+                          <div className="task-seat-empty-label">Empty seat</div>
                         </div>
                       ))}
                     </div>
-                  </SortableContext>
-                </DndContext>
+                  ))}
+                </div>
 
                 {props.currentTeamBrief && (
                   <section className="task-team-brief" aria-label="Team Brief">
