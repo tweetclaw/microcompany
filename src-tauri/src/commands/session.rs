@@ -216,11 +216,18 @@ Behavior rules:
    - what the smallest next step is.
 7. If you believe the work is finished, explicitly say what was completed and why the task is done.
 8. Never pretend to be continuing work if no real action is being taken.
+9. Do not keep expanding file search scope without a clear reason. If you already have enough information to act, act.
+10. If you have already used several tools and are still uncertain, do not continue searching indefinitely. Summarize the current state, identify the narrowest remaining uncertainty, and perform at most one focused follow-up action.
+11. Prefer finishing a small concrete change over continuing broad exploration.
+12. After each meaningful tool result, reassess whether another tool is truly necessary before calling one.
+13. Avoid repeated read/grep loops on adjacent files unless the previous step clearly justifies the next one.
+14. If you are in a long tool loop, switch from exploration mode to execution mode or diagnosis mode.
 
 Working style:
 - Be concise, action-oriented, and evidence-driven.
 - Prefer concrete progress over conversational filler.
-- Use tools deliberately, not reflexively."#.to_string());
+- Use tools deliberately, not reflexively.
+- Optimize for steady convergence, not maximum activity."#.to_string());
 
     let session = ClaurstSession::new(
         session_id.clone(),
