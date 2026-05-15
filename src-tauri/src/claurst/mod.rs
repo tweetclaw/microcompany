@@ -709,7 +709,10 @@ pub struct ClaurstSession {
     api_key: String,
     model: String,
     base_url: Option<String>,
-    system_prompt: Option<String>,  // 角色提示词，仅用于首次请求的运行时注入
+    /// Task 角色提示词，仅在第一条用户消息时作为前缀拼接
+    /// 包含角色定义、团队成员列表、Handoff 规则等
+    /// 注意：这不是传递给 Claude API 的 system 参数，而是拼接到第一条用户消息中
+    role_prompt_for_first_message: Option<String>,
     role_prompt_prepended: bool,    // 标记是否已在运行时注入过角色提示词
     client: AnthropicClient,
     config: QueryConfig,
@@ -757,7 +760,7 @@ impl ClaurstSession {
         api_key: String,
         model: String,
         base_url: Option<String>,
-        system_prompt: Option<String>,
+        role_prompt_for_first_message: Option<String>,
     ) -> anyhow::Result<Self> {
         // 1. 创建 ClientConfig
         let provider_base_url = base_url;
@@ -766,15 +769,15 @@ impl ClaurstSession {
             .unwrap_or_else(|| "https://api.anthropic.com".to_string());
         let task_trace = load_task_trace_context(&session_id);
         let is_task_session = task_trace.is_some();
-        let prompt_chars = system_prompt
+        let prompt_chars = role_prompt_for_first_message
             .as_ref()
             .map(|value| value.chars().count())
             .unwrap_or(0);
-        let prompt_preview = build_prompt_preview(system_prompt.as_deref());
+        let prompt_preview = build_prompt_preview(role_prompt_for_first_message.as_deref());
 
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
-                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_display_order={} role_roster={} handoff_candidates={} prompt_chars={} prompt_preview={} is_task_session={} configured_system_prompt_chars={}",
+                "claurst_session_init_begin session_id={} task_id={} role_id={} role_name={} handoff_enabled={} model={} working_dir={} prompt_source_type={} prompt_hash={} prompt_contract_version={} role_display_order={} role_roster={} handoff_candidates={} prompt_chars={} prompt_preview={} is_task_session={}",
                 session_id,
                 trace.task_id,
                 trace.role_id,
@@ -790,19 +793,17 @@ impl ClaurstSession {
                 trace.handoff_candidates_summary,
                 prompt_chars,
                 prompt_preview,
-                is_task_session,
-                if is_task_session { 0 } else { system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0) }
+                is_task_session
             );
         } else {
             log::info!(
-                "claurst_session_init_begin session_id={} model={} working_dir={} prompt_chars={} prompt_preview={} is_task_session={} configured_system_prompt_chars={}",
+                "claurst_session_init_begin session_id={} model={} working_dir={} prompt_chars={} prompt_preview={} is_task_session={}",
                 session_id,
                 model,
                 working_dir.display(),
                 prompt_chars,
                 prompt_preview,
-                is_task_session,
-                if is_task_session { 0 } else { system_prompt.as_ref().map(|value| value.chars().count()).unwrap_or(0) }
+                is_task_session
             );
         }
 
@@ -832,22 +833,17 @@ impl ClaurstSession {
         query_config.model = model;
         // Allow sufficient turns for AI to complete work and provide response
         query_config.max_turns = 50;
+        // Task session 使用 Claurst 固定系统提示词（由 claurst-core 提供）
+        // 非 Task session 可以自定义系统提示词
         query_config.system_prompt = if is_task_session {
-            None
+            None  // 使用 Claurst 默认系统提示词
         } else {
-            system_prompt.clone()
+            role_prompt_for_first_message.clone()  // 自定义系统提示词
         };
 
-        log::info!(
-            "🔍 [ROLE_PROMPT] Session prompt routing: is_task_session={} incoming_prompt_chars={} configured_system_prompt_chars={}",
-            is_task_session,
-            system_prompt.as_ref().map(|s| s.len()).unwrap_or(0),
-            query_config.system_prompt.as_ref().map(|s| s.len()).unwrap_or(0)
-        );
-
-        if let Some(ref prompt) = system_prompt {
+        if let Some(ref prompt) = role_prompt_for_first_message {
             log::info!(
-                "🔍 [ROLE_PROMPT] Role prompt length={} first_200_chars={}",
+                "🔍 [ROLE_PROMPT] Role prompt for first message length={} first_200_chars={}",
                 prompt.len(),
                 &prompt.chars().take(200).collect::<String>()
             );
@@ -1112,7 +1108,7 @@ impl ClaurstSession {
             api_key,
             model: query_config.model.clone(),
             base_url: provider_base_url,
-            system_prompt,  // 直接使用传入的 system_prompt，不再从 query_config 获取
+            role_prompt_for_first_message,
             role_prompt_prepended,  // 根据是否有消息来设置
             client,
             config: query_config,
@@ -1134,40 +1130,70 @@ impl ClaurstSession {
         let task_trace = load_task_trace_context(&self.session_id);
         let task_session = task_trace.is_some();
 
-        // 检测是否为第一条用户消息，仅用于诊断日志
+        // 检测是否为第一条用户消息
         let is_first_user_message = !self.role_prompt_prepended;
 
-        if is_first_user_message {
-            log::info!(
-                "🔗 [MESSAGE_PREPEND] First user message detected, relying on claurst system prompt path: request_id={} session_id={} has_system_prompt={}",
-                request_id,
-                self.session_id,
-                self.system_prompt.is_some()
-            );
-        } else {
-            log::info!(
-                "🔗 [MESSAGE_PREPEND] Existing user history detected, no special first-turn prompt injection needed: request_id={} session_id={} role_prompt_prepended=true",
-                request_id,
-                self.session_id
-            );
-        }
+        let actual_message = if is_first_user_message && self.role_prompt_for_first_message.is_some() {
+            let role_prompt = self.role_prompt_for_first_message.as_ref().unwrap();
+            let combined = format!("{}\n\n---\n\n{}", role_prompt, message);
 
-        let actual_message = message.to_string();
+            if let Some(trace) = task_trace.as_ref() {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} task_id={} role_id={} role_name={} role_prompt_chars={} user_message_chars={} combined_chars={}",
+                    request_id,
+                    self.session_id,
+                    trace.task_id,
+                    trace.role_id,
+                    trace.role_name,
+                    role_prompt.chars().count(),
+                    message.chars().count(),
+                    combined.chars().count()
+                );
+            } else {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] Prepending role prompt to first user message: request_id={} session_id={} role_prompt_chars={} user_message_chars={} combined_chars={}",
+                    request_id,
+                    self.session_id,
+                    role_prompt.chars().count(),
+                    message.chars().count(),
+                    combined.chars().count()
+                );
+            }
+
+            combined
+        } else {
+            if is_first_user_message {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] First user message without role prompt: request_id={} session_id={} has_role_prompt={}",
+                    request_id,
+                    self.session_id,
+                    self.role_prompt_for_first_message.is_some()
+                );
+            } else {
+                log::info!(
+                    "🔗 [MESSAGE_PREPEND] Existing user history detected, no special first-turn prompt injection needed: request_id={} session_id={} role_prompt_prepended=true",
+                    request_id,
+                    self.session_id
+                );
+            }
+
+            message.to_string()
+        };
 
         self.role_prompt_prepended = true;
 
         log::info!(
-            "claurst_request_user_message_prepared request_id={} session_id={} raw_user_chars={} runtime_user_chars={} prompt_configured={} first_user_message={} is_task_session={}",
+            "claurst_request_user_message_prepared request_id={} session_id={} raw_user_chars={} runtime_user_chars={} role_prompt_configured={} first_user_message={} is_task_session={}",
             request_id,
             self.session_id,
             message.chars().count(),
             actual_message.chars().count(),
-            self.system_prompt.is_some(),
+            self.role_prompt_for_first_message.is_some(),
             is_first_user_message,
             task_session
         );
 
-        // 1. 添加用户消息（仅使用原始用户消息）
+        // 1. 添加用户消息
         self.messages.push(Message::user(actual_message.clone()));
         if let Some(trace) = task_trace.as_ref() {
             log::info!(
@@ -2528,7 +2554,7 @@ impl ClaurstSession {
             self.api_key.clone(),
             self.model.clone(),
             self.base_url.clone(),
-            self.system_prompt.clone(),
+            self.role_prompt_for_first_message.clone(),
         )?;
 
         // 如果原 session 已经拼接过角色提示词，新 session 也应该标记为已拼接
@@ -2536,6 +2562,87 @@ impl ClaurstSession {
         new_session.role_prompt_prepended = self.role_prompt_prepended;
 
         Ok(new_session)
+    }
+
+    /// 静默通知：把 message 作为 user 消息追加到会话历史，调用 Claude API，
+    /// 等待完整回复后把 assistant 消息也存入会话历史。
+    /// 不向前端发任何 Tauri 事件，纯后台运行。
+    pub async fn send_silent_notification(&mut self, message: &str) -> Result<(), anyhow::Error> {
+        // 标记角色提示词已拼接（静默通知不需要首条消息特殊处理）
+        self.role_prompt_prepended = true;
+
+        // 1. 追加 user 消息
+        self.messages.push(Message::user(message.to_string()));
+
+        // 保存 user 消息到数据库
+        if let Ok(pool) = crate::database::get_pool() {
+            if let Ok(conn) = pool.get() {
+                let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                let created_at = chrono::Utc::now().to_rfc3339();
+                let request_id = format!("silent-{}", uuid::Uuid::new_v4());
+                if let Err(e) = conn.execute(
+                    "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                     VALUES (?1, ?2, 'user', ?3, ?4, ?5, 0)",
+                    rusqlite::params![&msg_id, &self.session_id, message, &created_at, &request_id],
+                ) {
+                    log::warn!(
+                        "send_silent_notification: failed to save user message session={} error={}",
+                        self.session_id, e
+                    );
+                }
+            }
+        }
+
+        // 2. 调用 Claude API（无 event_tx，无 cancel_token）
+        let cancel_token = CancellationToken::new();
+        let outcome = run_query_loop(
+            &self.client,
+            &mut self.messages,
+            &self.tools,
+            &self.context,
+            &self.config,
+            self.cost_tracker.clone(),
+            None, // 不需要 event channel
+            cancel_token,
+            None,
+        )
+        .await;
+
+        // 3. 提取 assistant 回复文本并保存
+        let reply_text = match &outcome {
+            QueryOutcome::EndTurn { message, .. } => message.get_all_text(),
+            QueryOutcome::MaxTokens { partial_message, .. } => partial_message.get_all_text(),
+            _ => String::new(),
+        };
+
+        if !reply_text.trim().is_empty() {
+            // 保存 assistant 消息到数据库
+            if let Ok(pool) = crate::database::get_pool() {
+                if let Ok(conn) = pool.get() {
+                    let msg_id = format!("msg-{}", uuid::Uuid::new_v4());
+                    let created_at = chrono::Utc::now().to_rfc3339();
+                    let request_id = format!("silent-{}", uuid::Uuid::new_v4());
+                    if let Err(e) = conn.execute(
+                        "INSERT INTO messages (id, session_id, role, content, created_at, request_id, is_streaming)
+                         VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, 0)",
+                        rusqlite::params![&msg_id, &self.session_id, &reply_text, &created_at, &request_id],
+                    ) {
+                        log::warn!(
+                            "send_silent_notification: failed to save assistant message session={} error={}",
+                            self.session_id, e
+                        );
+                    }
+                }
+            }
+
+            log::info!(
+                "silent_notification_done session_id={} reply_chars={}",
+                self.session_id,
+                reply_text.chars().count()
+            );
+        }
+
+        Ok(())
     }
 
 }
