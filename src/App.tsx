@@ -1018,7 +1018,7 @@ function App() {
             </Suspense>
           ) : (
             <Suspense fallback={null}>
-              <TemplateManagerPanel onBack={() => setNavigationMode('task')} />
+              <TemplateManagerPanel />
             </Suspense>
           )}
         </div>

@@ -8,7 +8,6 @@ import type { SystemTemplate, TemplateSummary, UserTemplate } from '../types/tem
 import './TemplateManagerPanel.css';
 
 interface TemplateManagerPanelProps {
-  onBack: () => void;
   onTemplateSelected?: (template: SystemTemplate | UserTemplate) => void;
 }
 
@@ -31,7 +30,7 @@ function isSystemTemplate(template: SystemTemplate | UserTemplate): template is 
   return 'category' in template;
 }
 
-export default function TemplateManagerPanel({ onBack, onTemplateSelected }: TemplateManagerPanelProps) {
+export default function TemplateManagerPanel({ onTemplateSelected }: TemplateManagerPanelProps) {
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [availableProviders, setAvailableProviders] = useState<ProviderConfig[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -196,9 +195,6 @@ export default function TemplateManagerPanel({ onBack, onTemplateSelected }: Tem
     <div className="template-manager-panel template-manager-panel-embedded">
       <div className="template-manager-sidebar">
         <div className="template-manager-sidebar-header">
-          <button className="template-manager-back-button" onClick={onBack}>
-            ← 返回任务列表
-          </button>
           <div>
             <h2>任务模板</h2>
             <p>左侧选择模板，中间直接查看和编辑详情。</p>
@@ -288,7 +284,7 @@ export default function TemplateManagerPanel({ onBack, onTemplateSelected }: Tem
             <EditTemplateModal
               template={selectedTemplate}
               availableProviders={availableProviders}
-              onClose={onBack}
+              onClose={() => {}}
               onSaved={handleSaved}
               onDeleted={handleDeleted}
               embedded

@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-api"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-core"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -599,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-mcp"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -630,7 +630,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-plugins"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-query"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "claurst-tools"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",

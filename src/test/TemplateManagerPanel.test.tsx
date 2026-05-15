@@ -117,7 +117,7 @@ describe('TemplateManagerPanel', () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
 
-    render(<TemplateManagerPanel onBack={() => {}} />);
+    render(<TemplateManagerPanel />);
 
     expect(await screen.findByText('Dev Team')).toBeInTheDocument();
     expect(screen.getByText('My Product Team')).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('TemplateManagerPanel', () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
 
-    render(<TemplateManagerPanel onBack={() => {}} />);
+    render(<TemplateManagerPanel />);
 
     expect(await screen.findByText('development')).toBeInTheDocument();
     expect(screen.getByText('#dev')).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('TemplateManagerPanel', () => {
     listAllTemplateSummariesMock.mockResolvedValue(summaries);
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
 
-    render(<TemplateManagerPanel onBack={() => {}} />);
+    render(<TemplateManagerPanel />);
 
     fireEvent.click(await screen.findByText('Dev Team'));
 
@@ -194,7 +194,7 @@ describe('TemplateManagerPanel', () => {
       },
     ]);
 
-    render(<TemplateManagerPanel onBack={() => {}} />);
+    render(<TemplateManagerPanel />);
 
     fireEvent.click(await screen.findByText('Dev Team'));
 
@@ -234,7 +234,7 @@ describe('TemplateManagerPanel', () => {
     getSystemTemplateMock.mockResolvedValue(systemTemplateDetail);
     listUserTemplatesMock.mockResolvedValue([userTemplateDetail]);
 
-    render(<TemplateManagerPanel onBack={() => {}} />);
+    render(<TemplateManagerPanel />);
 
     fireEvent.click(await screen.findByText('My Product Team'));
 
