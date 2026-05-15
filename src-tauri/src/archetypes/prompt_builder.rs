@@ -1,4 +1,4 @@
-pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v6-structured-handoff";
+pub const TASK_PROMPT_CONTRACT_VERSION: &str = "task-role-v7-stable-handoff";
 
 #[derive(Debug, Clone)]
 pub struct TeamRolePromptContext {
@@ -55,7 +55,7 @@ pub fn build_role_system_prompt_v2(
     prompt
 }
 
-/// 生成团队配置信息（新版本，使用字母编号）
+/// 生成团队配置信息（v7，使用稳定的 role_name 和结构化 [HANDOFF] 块）
 fn build_team_composition_v2(
     role_name: &str,
     _role_identity: &str,
@@ -63,41 +63,69 @@ fn build_team_composition_v2(
 ) -> String {
     let mut section = String::from("## 当前团队配置\n\n");
 
-    // 团队成员列表（带字母编号）
+    // 团队成员列表（使用稳定的角色名称，不依赖顺序编号）
     section.push_str("**团队成员：**\n");
-    for (index, role) in ctx.roster.iter().enumerate() {
-        let letter = (b'a' + index as u8) as char;
+    for role in ctx.roster.iter() {
         if role.name == role_name {
-            section.push_str(&format!("{}. {} - {} (你)\n", letter, role.name, role.identity));
+            section.push_str(&format!("- {} - {} （你）\n", role.name, role.identity));
         } else {
-            section.push_str(&format!("{}. {} - {}\n", letter, role.name, role.identity));
+            section.push_str(&format!("- {} - {}\n", role.name, role.identity));
         }
     }
     section.push_str("\n");
 
     // 交接规则（强制要求）
     section.push_str("## 🔴 输出格式要求（必须遵守）\n\n");
-    section.push_str("**每次回答都必须包含文本响应和交接标签，这是强制要求，不可省略！**\n\n");
+    section.push_str("**每次回答都必须以结构化 [HANDOFF] 块结尾，这是强制要求，不可省略！**\n\n");
 
     section.push_str("### 关键规则\n");
     section.push_str("- ✅ **必须生成文本响应**：即使调用了工具，也必须用文字总结结果或说明下一步\n");
     section.push_str("- ✅ **不能只调用工具就结束**：工具调用后必须生成文本来解释或展示结果\n");
-    section.push_str("- ✅ **每次回答都必须包含交接标签**：标签必须在文本响应的最后一行\n\n");
+    section.push_str("- ✅ **每次回答末尾必须附上完整的 [HANDOFF] 块**\n\n");
 
-    section.push_str("### 交接标签格式\n\n");
+    section.push_str("### [HANDOFF] 块格式\n\n");
     section.push_str("**需要交接给其他成员时：**\n");
-    section.push_str("```\n<handoff>成员编号</handoff>\n```\n");
-    section.push_str("示例：`<handoff>b</handoff>` 表示交接给成员 b\n\n");
+    section.push_str("```\n");
+    section.push_str("[HANDOFF]\n");
+    section.push_str("recommended: yes\n");
+    section.push_str("target_role: 角色名称\n");
+    section.push_str("reason: 交接原因（一句话）\n");
+    section.push_str("draft_message: 给下一位成员的任务说明\n");
+    section.push_str("[/HANDOFF]\n");
+    section.push_str("```\n\n");
+
+    // 用实际成员名举例（取第一个非自己的成员）
+    let example_target = ctx.roster.iter()
+        .find(|r| r.name != role_name)
+        .map(|r| r.name.as_str())
+        .unwrap_or("其他成员名");
+    section.push_str(&format!("示例（交接给 {}）：\n", example_target));
+    section.push_str("```\n");
+    section.push_str("[HANDOFF]\n");
+    section.push_str("recommended: yes\n");
+    section.push_str(&format!("target_role: {}\n", example_target));
+    section.push_str("reason: 需要该成员继续处理后续工作\n");
+    section.push_str("draft_message: 请继续推进，已完成 X，下一步需要 Y。\n");
+    section.push_str("[/HANDOFF]\n");
+    section.push_str("```\n\n");
 
     section.push_str("**不需要交接时（工作未完成或需要用户继续输入）：**\n");
-    section.push_str("```\n<handoff></handoff>\n```\n\n");
+    section.push_str("```\n");
+    section.push_str("[HANDOFF]\n");
+    section.push_str("recommended: no\n");
+    section.push_str("target_role:\n");
+    section.push_str("reason: 当前阶段暂不交接\n");
+    section.push_str("draft_message: 当前无需发送交接消息，因为此阶段仍由我继续推进。\n");
+    section.push_str("[/HANDOFF]\n");
+    section.push_str("```\n\n");
 
     section.push_str("### 格式规则\n");
-    section.push_str("- ✅ 成员编号使用字母（a, b, c...），不是角色名称\n");
-    section.push_str("- ✅ 标签必须在回答的最后一行\n");
+    section.push_str("- ✅ `target_role` 使用团队成员列表中的**角色名称**（完全一致）\n");
+    section.push_str("- ✅ [HANDOFF] 块必须在回答的最后\n");
+    section.push_str("- ✅ 四个字段（recommended / target_role / reason / draft_message）必须全部填写\n");
     section.push_str("- ❌ 不可以省略文本响应\n");
-    section.push_str("- ❌ 不可以省略交接标签\n");
-    section.push_str("- ❌ 不可以使用角色名称代替编号\n\n");
+    section.push_str("- ❌ 不可以省略 [HANDOFF] 块\n");
+    section.push_str("- ❌ `target_role` 不可以使用不存在于团队列表中的名称\n\n");
 
     section
 }
@@ -128,13 +156,15 @@ mod tests {
     #[test]
     fn test_get_role_definition_path() {
         let path = crate::archetypes::get_role_definition_path("product_manager");
-        assert_eq!(path, "src-tauri/resources/role-definitions/product_manager.md");
+        // 路径以 role-definitions/product_manager.md 结尾（实际根目录因环境而异）
+        assert!(path.ends_with("role-definitions/product_manager.md"), "got: {}", path);
     }
 
     #[test]
     fn test_get_role_definition_path_maps_software_engineer() {
         let path = crate::archetypes::get_role_definition_path("software_engineer");
-        assert_eq!(path, "src-tauri/resources/role-definitions/backend_developer.md");
+        // software_engineer 映射到 backend_developer.md
+        assert!(path.ends_with("role-definitions/backend_developer.md"), "got: {}", path);
     }
 
     #[test]
@@ -147,7 +177,7 @@ mod tests {
             Some("/workspace"),
         );
 
-        assert!(prompt.contains("# 角色：Alice"));
+        assert!(prompt.contains("## 你的角色：Alice"));
         assert!(prompt.contains("🔴 首要任务：读取角色定义"));
         assert!(prompt.contains("务必使用 Read 工具读取"));
         assert!(prompt.contains("src-tauri/resources/role-definitions/product_manager.md"));
@@ -157,15 +187,23 @@ mod tests {
     }
 
     #[test]
-    fn test_build_team_composition_v2_uses_letter_ids() {
+    fn test_build_team_composition_v2_uses_role_names() {
         let ctx = sample_role_context();
         let composition = build_team_composition_v2("Alice", "Product Manager", &ctx);
 
+        // 使用稳定的角色名称，不再使用字母编号
         assert!(composition.contains("## 当前团队配置"));
-        assert!(composition.contains("a. Alice - Product Manager (你)"));
-        assert!(composition.contains("b. Bob - Developer"));
-        assert!(composition.contains("<handoff>成员编号</handoff>"));
-        assert!(composition.contains("每次回答都必须在末尾添加交接标签"));
+        assert!(composition.contains("- Alice - Product Manager （你）"));
+        assert!(composition.contains("- Bob - Developer"));
+        // 使用结构化 [HANDOFF] 块格式
+        assert!(composition.contains("[HANDOFF]"));
+        assert!(composition.contains("[/HANDOFF]"));
+        assert!(composition.contains("target_role:"));
+        assert!(composition.contains("recommended:"));
+        assert!(composition.contains("reason:"));
+        assert!(composition.contains("draft_message:"));
+        // 示例中包含实际的 target 成员名
+        assert!(composition.contains("target_role: Bob"));
     }
 
     #[tokio::test]

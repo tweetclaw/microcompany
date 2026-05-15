@@ -169,25 +169,12 @@ function resolveSuggestedTaskRole(
     return null;
   }
 
+  // 按 role_name 或 role_id 精确匹配（稳定标识符，不依赖顺序编号）
   const directMatch = taskRoles.find(
     (role) => role.id.toLowerCase() === normalizedSuggestedRole || role.name.toLowerCase() === normalizedSuggestedRole,
   );
 
-  if (directMatch) {
-    return directMatch;
-  }
-
-  const shorthandMatch = normalizedSuggestedRole.match(/^(?:role_)?([a-z])$/i);
-  if (!shorthandMatch) {
-    return null;
-  }
-
-  const roleIndex = shorthandMatch[1].charCodeAt(0) - 'a'.charCodeAt(0);
-  if (roleIndex < 0 || roleIndex >= taskRoles.length) {
-    return null;
-  }
-
-  return taskRoles[roleIndex] ?? null;
+  return directMatch ?? null;
 }
 
 function ChatInterface({

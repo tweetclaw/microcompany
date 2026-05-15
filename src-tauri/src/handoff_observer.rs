@@ -368,44 +368,70 @@ pub async fn extract_handoff_info(
 
 // ========== 智能路由系统结束 ==========
 
-// ========== 简单标签解析（当前使用）==========
+// ========== [HANDOFF] 块解析（当前使用）==========
 
-/// 从文本中解析 <handoff> 标签
-/// 返回：Some(成员编号) 或 None
-fn parse_handoff_tag(text: &str) -> Option<String> {
-    // 查找 <handoff> 和 </handoff> 标签
-    let start_tag = "<handoff>";
-    let end_tag = "</handoff>";
+/// 从文本中解析 [HANDOFF]...[/HANDOFF] 块，提取 target_role 和 recommended 字段。
+/// 返回：Some(role_name) 表示有推荐交接对象，None 表示无需交接或无法解析。
+fn parse_handoff_block(text: &str) -> Option<String> {
+    let start_tag = "[HANDOFF]";
+    let end_tag = "[/HANDOFF]";
 
-    let start_pos = text.find(start_tag)?;
-    let content_start = start_pos + start_tag.len();
+    // 取最后一个 [HANDOFF] 块（与 claurst/mod.rs 保持一致，用 rfind）
+    let start = text.rfind(start_tag)?;
+    let content_start = start + start_tag.len();
+    let end = text[content_start..].find(end_tag)? + content_start;
+    let block = &text[content_start..end];
 
-    let end_pos = text[content_start..].find(end_tag)?;
-    let content = &text[content_start..content_start + end_pos];
+    let mut recommended = false;
+    let mut target_role: Option<String> = None;
 
-    let trimmed = content.trim();
-
-    if trimmed.is_empty() {
-        log::info!("🔍 [Handoff Parser] 标签为空: <handoff></handoff>");
-        None
-    } else {
-        log::info!("🔍 [Handoff Parser] 解析到目标: {}", trimmed);
-        Some(trimmed.to_string())
+    for line in block.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_lowercase();
+            let value = value.trim();
+            match key.as_str() {
+                "recommended" => {
+                    recommended = matches!(value.to_lowercase().as_str(), "yes" | "true" | "是");
+                }
+                "target_role" => {
+                    if !value.is_empty() {
+                        target_role = Some(value.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
     }
+
+    if recommended {
+        if let Some(role) = target_role {
+            log::info!("🔍 [Handoff Parser] 解析到交接目标: {}", role);
+            return Some(role);
+        }
+        log::info!("🔍 [Handoff Parser] recommended=yes 但 target_role 为空");
+    } else {
+        log::info!("🔍 [Handoff Parser] recommended=no，无需交接");
+    }
+
+    None
 }
 
-/// 简单标签解析（当前使用）
+/// [HANDOFF] 块解析（当前使用的 fallback 路径）
 pub fn extract_handoff_from_tag(
     last_message: &str,
 ) -> Result<HandoffInfo> {
-    log::info!("🔍 [Handoff Parser] 开始解析标签");
+    log::info!("🔍 [Handoff Parser] 开始解析 [HANDOFF] 块");
     log::info!("🔍 [Handoff Parser] 消息长度: {} 字符", last_message.len());
 
-    let target_id = parse_handoff_tag(last_message);
+    let suggested_role = parse_handoff_block(last_message);
 
     let result = HandoffInfo {
-        has_handoff: target_id.is_some(),
-        suggested_role: target_id.clone(),
+        has_handoff: suggested_role.is_some(),
+        suggested_role: suggested_role.clone(),
         full_message: last_message.to_string(),
     };
 
@@ -423,33 +449,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_handoff_with_content() {
-        let text = "这是一些文本 <handoff>b</handoff> 更多文本";
-        assert_eq!(parse_handoff_tag(text), Some("b".to_string()));
+    fn test_parse_handoff_block_with_target() {
+        let text = "这是回答内容。\n[HANDOFF]\nrecommended: yes\ntarget_role: Developer\nreason: 需要开发\ndraft_message: 请开始实现。\n[/HANDOFF]";
+        assert_eq!(parse_handoff_block(text), Some("Developer".to_string()));
     }
 
     #[test]
-    fn test_parse_handoff_empty() {
-        let text = "这是一些文本 <handoff></handoff> 更多文本";
-        assert_eq!(parse_handoff_tag(text), None);
+    fn test_parse_handoff_block_not_recommended() {
+        let text = "这是回答。\n[HANDOFF]\nrecommended: no\ntarget_role:\nreason: 暂不交接\ndraft_message: 无需发送。\n[/HANDOFF]";
+        assert_eq!(parse_handoff_block(text), None);
     }
 
     #[test]
-    fn test_parse_handoff_no_tag() {
-        let text = "这是一些文本，没有标签";
-        assert_eq!(parse_handoff_tag(text), None);
+    fn test_parse_handoff_block_no_block() {
+        let text = "这是一些文本，没有 HANDOFF 块";
+        assert_eq!(parse_handoff_block(text), None);
     }
 
     #[test]
-    fn test_parse_handoff_whitespace() {
-        let text = "<handoff>  </handoff>";
-        assert_eq!(parse_handoff_tag(text), None);
+    fn test_parse_handoff_block_empty_target() {
+        let text = "[HANDOFF]\nrecommended: yes\ntarget_role:\nreason: 需要\ndraft_message: 请处理。\n[/HANDOFF]";
+        // target_role 为空，即使 recommended=yes 也返回 None
+        assert_eq!(parse_handoff_block(text), None);
     }
 
     #[test]
-    fn test_parse_handoff_multiple_tags() {
-        let text = "文本 <handoff>a</handoff> 中间 <handoff>b</handoff> 结尾";
-        // 应该提取第一个标签
-        assert_eq!(parse_handoff_tag(text), Some("a".to_string()));
+    fn test_parse_handoff_block_uses_last_block() {
+        // 有多个块时，取最后一个
+        let text = "[HANDOFF]\nrecommended: yes\ntarget_role: Alice\nreason: 第一次\ndraft_message: msg1\n[/HANDOFF]\n\n后续内容\n[HANDOFF]\nrecommended: yes\ntarget_role: Bob\nreason: 第二次\ndraft_message: msg2\n[/HANDOFF]";
+        assert_eq!(parse_handoff_block(text), Some("Bob".to_string()));
+    }
+
+    #[test]
+    fn test_parse_handoff_block_chinese_recommended() {
+        let text = "[HANDOFF]\nrecommended: 是\ntarget_role: 产品经理\nreason: 需要确认需求\ndraft_message: 请确认。\n[/HANDOFF]";
+        assert_eq!(parse_handoff_block(text), Some("产品经理".to_string()));
     }
 }

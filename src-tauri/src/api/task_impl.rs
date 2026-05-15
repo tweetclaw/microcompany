@@ -853,6 +853,17 @@ pub async fn add_task_role(
         handoff_enabled_val,
     );
 
+    {
+        let task_id_clone = task_id.clone();
+        let new_role_id_clone = role_id.clone();
+        let pool = crate::database::get_pool()?;
+        let _ = tokio::spawn(notify_all_active_sessions(
+            task_id_clone,
+            Some(new_role_id_clone),
+            pool,
+        ));
+    }
+
     crate::api::get_task(task_id).await
 }
 
@@ -967,6 +978,16 @@ pub async fn delete_task_role(task_id: String, role_id: String) -> Result<Task, 
         role_id,
     );
 
+    {
+        let task_id_clone = task_id.clone();
+        let pool = crate::database::get_pool()?;
+        let _ = tokio::spawn(notify_all_active_sessions(
+            task_id_clone,
+            None,
+            pool,
+        ));
+    }
+
     crate::api::get_task(task_id).await
 }
 
@@ -996,4 +1017,252 @@ pub async fn reorder_task_roles(
     );
 
     crate::api::get_task(task_id).await
+}
+
+/// 当 task 的角色发生新增或删除时，把最新团队成员信息发送给该 task 下
+/// 当前所有有活跃 AI session 的角色（排除 exclude_role_id 指定的角色）。
+/// 被通知的角色只需回复"知道了"，不做分析。
+async fn notify_all_active_sessions(
+    task_id: String,
+    exclude_role_id: Option<String>,
+    pool: r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+) -> Result<(), anyhow::Error> {
+    use crate::claurst::ClaurstSession;
+    use crate::config::AppConfig;
+
+    // ------------------------------------------------------------------
+    // Step 1: 用 spawn_blocking 在同步线程里完成所有 DB 查询，避免生命周期问题
+    // ------------------------------------------------------------------
+
+    // 1a. 查询当前 task 最新的完整成员列表
+    let pool2 = pool.clone();
+    let task_id2 = task_id.clone();
+    let member_list: Vec<(String, String)> = match tokio::task::spawn_blocking(move || {
+        let conn = pool2.get()?;
+        let mut stmt = conn.prepare(
+            "SELECT name, identity FROM roles \
+             WHERE task_id = ?1 \
+             ORDER BY display_order ASC, created_at ASC",
+        )?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map(rusqlite::params![&task_id2], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok::<_, anyhow::Error>(rows)
+    })
+    .await
+    {
+        Ok(Ok(list)) => list,
+        Ok(Err(e)) => {
+            log::warn!(
+                "notify_all_active_sessions: failed to query member list task_id={}: {}",
+                task_id, e
+            );
+            return Ok(());
+        }
+        Err(e) => {
+            log::warn!(
+                "notify_all_active_sessions: spawn_blocking panicked while querying members task_id={}: {}",
+                task_id, e
+            );
+            return Ok(());
+        }
+    };
+
+    if member_list.is_empty() {
+        return Ok(());
+    }
+
+    // 构造通知消息
+    let member_lines: Vec<String> = member_list
+        .iter()
+        .map(|(name, identity)| {
+            if identity.trim().is_empty() {
+                format!("- {}", name)
+            } else {
+                format!("- {}（{}）", name, identity)
+            }
+        })
+        .collect();
+    let notification_message = format!(
+        "[系统通知] 团队成员发生了变更，当前最新成员列表如下：\n{}\n\n请知悉，无需分析，只需回复\"知道了\"即可。",
+        member_lines.join("\n")
+    );
+
+    // 1b. 查询该 task 下所有有活跃 session 的角色（排除指定角色）
+    // 返回 (role_name, session_id) 对
+    let pool3 = pool.clone();
+    let task_id3 = task_id.clone();
+    let exclude_id3 = exclude_role_id.clone();
+    let active_roles: Vec<(String, String)> = match tokio::task::spawn_blocking(move || {
+        let conn = pool3.get()?;
+        let exclude_str: Option<String> = exclude_id3;
+        let mut stmt = conn.prepare(
+            "SELECT r.name, r.active_session_id \
+             FROM roles r \
+             WHERE r.task_id = ?1 \
+               AND r.active_session_id IS NOT NULL \
+               AND (?2 IS NULL OR r.id != ?2)",
+        )?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map(rusqlite::params![&task_id3, &exclude_str], |row| {
+                let role_name: String = row.get(0)?;
+                let session_id: String = row.get(1)?;
+                Ok((role_name, session_id))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok::<_, anyhow::Error>(rows)
+    })
+    .await
+    {
+        Ok(Ok(list)) => list,
+        Ok(Err(e)) => {
+            log::warn!(
+                "notify_all_active_sessions: failed to query active roles task_id={}: {}",
+                task_id, e
+            );
+            return Ok(());
+        }
+        Err(e) => {
+            log::warn!(
+                "notify_all_active_sessions: spawn_blocking panicked while querying active roles task_id={}: {}",
+                task_id, e
+            );
+            return Ok(());
+        }
+    };
+
+    if active_roles.is_empty() {
+        return Ok(());
+    }
+
+    // ------------------------------------------------------------------
+    // Step 2: 加载 AppConfig（同步，一次性）
+    // ------------------------------------------------------------------
+    let config = match AppConfig::load() {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("notify_all_active_sessions: failed to load AppConfig: {}", e);
+            return Ok(());
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // Step 3: 对每个角色，加载 session 并发送静默通知
+    // ------------------------------------------------------------------
+    let mut success_count = 0usize;
+    let mut failure_count = 0usize;
+
+    for (role_name, session_id) in &active_roles {
+        // 3a. 查询该 session 对应的配置（provider / model / system_prompt / working_dir）
+        let pool4 = pool.clone();
+        let sid = session_id.clone();
+        let spawn_result = tokio::task::spawn_blocking(move || {
+            let conn = pool4.get()?;
+            let result = conn.query_row(
+                "SELECT r.provider, r.model, r.system_prompt_snapshot, s.working_directory \
+                 FROM sessions s \
+                 JOIN roles r ON r.id = s.role_id \
+                 WHERE s.id = ?1",
+                rusqlite::params![&sid],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )?;
+            Ok::<_, anyhow::Error>(result)
+        })
+        .await;
+
+        let (provider_id, model, system_prompt, working_dir) = match spawn_result {
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => {
+                log::warn!(
+                    "notify_all_active_sessions: failed to load session info \
+                     role={} session={}: {}",
+                    role_name, session_id, e
+                );
+                failure_count += 1;
+                continue;
+            }
+            Err(e) => {
+                log::warn!(
+                    "notify_all_active_sessions: spawn_blocking panicked \
+                     role={} session={}: {}",
+                    role_name, session_id, e
+                );
+                failure_count += 1;
+                continue;
+            }
+        };
+
+        // 3b. 查找 provider 的 api_key / base_url
+        let provider = config.providers.iter().find(|p| p.id == provider_id);
+        let (api_key, base_url) = match provider {
+            Some(p) => (p.api_key.clone(), p.base_url.clone()),
+            None => {
+                log::warn!(
+                    "notify_all_active_sessions: provider '{}' not found \
+                     role={} session={}",
+                    provider_id, role_name, session_id
+                );
+                failure_count += 1;
+                continue;
+            }
+        };
+
+        // 3c. 创建 ClaurstSession（会自动从 DB 加载历史消息）
+        let mut session = match ClaurstSession::new(
+            session_id.clone(),
+            std::path::PathBuf::from(&working_dir),
+            api_key,
+            model,
+            base_url,
+            system_prompt,
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!(
+                    "notify_all_active_sessions: failed to create session \
+                     role={} session={}: {}",
+                    role_name, session_id, e
+                );
+                failure_count += 1;
+                continue;
+            }
+        };
+
+        // 3d. 发送静默通知
+        if let Err(e) = session.send_silent_notification(&notification_message).await {
+            log::warn!(
+                "notify_all_active_sessions: send_silent_notification failed \
+                 role={} session={}: {}",
+                role_name, session_id, e
+            );
+            failure_count += 1;
+        } else {
+            log::info!(
+                "notify_all_active_sessions: notified role={} session={}",
+                role_name, session_id
+            );
+            success_count += 1;
+        }
+    }
+
+    log::info!(
+        "notify_all_active_sessions_complete task_id={} member_count={} notified={} failed={}",
+        task_id,
+        member_list.len(),
+        success_count,
+        failure_count
+    );
+
+    Ok(())
 }
